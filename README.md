@@ -1,7 +1,7 @@
 # Aurora
 **Aurora** is a real-time path tracing renderer that leverages GPU hardware ray tracing. As a real-time renderer, it is intended to support rapid design iteration in a real-time viewport, which differs from a "final frame" production renderer like [Autodesk Arnold](https://www.arnoldrenderer.com). Aurora has a USD Hydra render delegate called [HdAurora](Doc/HdAurora.md), which allows it to be used from a USD Hydra scene delegate. It can also be used directly through its own API, which is demonstrated with a standalone sample application called [Plasma](Doc/Plasma.md).
 
-Aurora is developed and maintained by Autodesk. The software and this documentation are a work-in-progress and under active development. The contents of this repository are fully open source under [the Apache license](LICENSE.md), with [feature requests and code contributions](Doc/Contributing.md) welcome!
+Aurora is developed and maintained by Autodesk. The software and this documentation are a work-in-progress and under active development. The contents of this repository are fully open source under [the Apache license](LICENSE.md), with [feature requests and code contributions](CONTRIBUTING.md) welcome!
 
 Below you can learn about features, system requirements, how to build Aurora, how to run it, and access additional documentation.
 
