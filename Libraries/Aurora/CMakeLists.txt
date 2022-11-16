@@ -257,16 +257,18 @@ source_group("DirectX/Shaders" FILES ${DIRECTX_PRECOMPILED_SHADERS})
 source_group("HGI/Shaders" FILES ${HGI_SHADERS})
 
 if(WIN32)
-    # Create custom targets that will copy Windows-specific DLLs to the runtime folder. This
-    # includes the DirectX shader compiler and NVIDIA NRD and NRI.
+    add_custom_target(MakeRuntimeDir ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${RUNTIME_OUTPUT_DIR}
+    )
+    set_property(TARGET MakeRuntimeDir PROPERTY FOLDER "Deployment")
 
     if(ENABLE_DIRECTX_BACKEND)
-        message(${DXCOMPILER_DLLS})
+        # Create custom targets that will copy DLLs of the DirectX shader compiler to the runtime folder.
         add_custom_target(CopyDXCompilerDLLs ALL
-            COMMAND ${CMAKE_COMMAND} -E make_directory ${RUNTIME_OUTPUT_DIR}
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DXCOMPILER_DLLS} ${RUNTIME_OUTPUT_DIR}
         )
         set_property(TARGET CopyDXCompilerDLLs PROPERTY FOLDER "Deployment")
+        add_dependencies(CopyDXCompilerDLLs MakeRuntimeDir)
         add_dependencies(${PROJECT_NAME} CopyDXCompilerDLLs)
     endif()
 
