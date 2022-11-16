@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<materialx version="1.38" colorspace="lin_rec709">
+  <standard_surface name="TestMaskWithChromeKeyDecal" type="surfaceshader">
+    <input name="base" type="float" value="1" />
+    <input name="base_color" type="color3" output="basecolor_output" nodegraph="TestMaskWithChromeKeyDecal_nodegraph" />
+    <input name="opacity" type="color3" output="opacity_output" nodegraph="TestMaskWithChromeKeyDecal_nodegraph" />
+    <input name="metalness" type="float" value="0" />
+    <input name="specular" type="float" value="0.25" />
+    <input name="specular_roughness" type="float" value="0.5" />
+    <input name="specular_IOR" type="float" value="1.5" />
+    <input name="thin_walled" type="boolean" value="false" />
+  </standard_surface>
+  <surfacematerial name="TestMaskWithChromeKeyDecal_shader" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="TestMaskWithChromeKeyDecal" />
+  </surfacematerial>
+  <nodegraph name="TestMaskWithChromeKeyDecal_nodegraph">
+    <adsk:bitmap name="basecolor_bitmap" type="color3">
+      <input name="file" type="filename" value="Mr._Smiley_Face.png" colorspace="srgb_texture" />
+      <input name="realworld_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="realworld_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="uv_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="uv_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="rotation_angle" type="float" value="0" />
+      <input name="uaddressmode" type="string" value="clamp" />
+      <input name="vaddressmode" type="string" value="clamp" />
+    </adsk:bitmap>
+    <output name="basecolor_output" type="color3" nodename="basecolor_bitmap" />
+    <adsk:bitmap name="opacity_bitmap" type="color3">
+      <input name="file" type="filename" value="Mr._Smiley_Face.png" colorspace="srgb_texture" />
+      <input name="realworld_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="realworld_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="uv_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="uv_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="rotation_angle" type="float" value="0" />
+      <input name="uaddressmode" type="string" value="clamp" />
+      <input name="vaddressmode" type="string" value="clamp" />
+    </adsk:bitmap>
+    <output name="opacity_output" type="color3" nodename="convert_to_opacity_white_black" />
+    <difference name="difference_image_with_chromekey" type="color3">
+      <input name="fg" type="color3" nodename="opacity_bitmap" />
+      <input name="bg" type="color3" value="0, 0, 0" />
+      <input name="mix" type="float" value="1" />
+    </difference>
+    <convert name="convert_color3_to_vector3" type="vector3">
+      <input name="in" type="color3" nodename="difference_image_with_chromekey" />
+    </convert>
+    <magnitude name="magnitude_vector3" type="float">
+      <input name="in" type="vector3" nodename="convert_color3_to_vector3" />
+    </magnitude>
+    <ifgreater name="convert_to_opacity_white_black" type="color3">
+      <input name="value1" type="float" nodename="magnitude_vector3" />
+      <input name="value2" type="float" value="0.001" />
+      <input name="in1" type="color3" value="1, 1, 1" />
+      <input name="in2" type="color3" value="0, 0, 0" />
+    </ifgreater>
+  </nodegraph>
+</materialx>

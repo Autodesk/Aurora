@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<materialx version="1.38" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <standard_surface name="node1" type="surfaceshader">
+    <input name="base" type="float" value="1" />
+    <input name="metalness" type="float" value="0" />
+    <input name="base_color" type="color3" output="generic_diffuse_output" nodegraph="_nodegraph" />
+    <input name="specular" type="float" value="1" />
+    <input name="specular_roughness" type="float" value="0.0375" />
+    <input name="specular_IOR" type="float" value="1.5" />
+  </standard_surface>
+  <surfacematerial name="node1_shader" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="node1" />
+  </surfacematerial>
+  <nodegraph name="_nodegraph">
+    <adsk:bitmap name="generic_diffuse" type="color3">
+      <input name="file" type="filename" value="../Textures/CoatOfArms.bmp" />
+      <input name="realworld_offset" type="vector2" value="0, 0" unit="inch" unittype="distance" />
+      <input name="realworld_scale" type="vector2" value="1, 1" unit="inch" unittype="distance" />
+      <input name="uv_offset" type="vector2" value="0, 0" />
+      <input name="uv_scale" type="vector2" value="2, 2" />
+      <input name="rotation_angle" type="float" value="0" />
+      <input name="rgbamount" type="float" value="0.865" />
+      <input name="invert" type="boolean" value="false" />
+    </adsk:bitmap>
+    <output name="generic_diffuse_output" type="color3" nodename="generic_diffuse" />
+
+  </nodegraph>
+</materialx>

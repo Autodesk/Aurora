@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<materialx version="1.38" colorspace="lin_rec709">
+  <standard_surface name="FishScale" type="surfaceshader">
+    <input name="base" type="float" value="1" />
+    <input name="metalness" type="float" value="0" />
+    <input name="base_color" type="color3" output="generic_diffuse_output" nodegraph="FishScale_diffuse_nodegraph" />
+    <input name="specular" type="float" value="1" />
+    <input name="specular_roughness" type="float" value="0.2" />
+    <input name="specular_IOR" type="float" value="1.5" />
+    <input name="thin_walled" type="boolean" value="false" />
+    <input name="normal" type="vector3" output="normal_map_output" nodegraph="FishScale_normal_nodegraph" />
+  </standard_surface>
+  <surfacematerial name="FishScale_shader" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="FishScale" />
+  </surfacematerial>
+  <look name="default">
+    <materialassign name="material_assign_default" material="FishScale_shader" geom="*" />
+  </look>
+  <nodegraph name="FishScale_normal_nodegraph">
+    <adsk:normal_map name="normal_map" type="vector3">
+      <input name="file" type="filename" value="../Textures/fishscale_normal.png" colorspace="lin_rec709" />
+      <input name="realworld_scale" type="vector2" value="0.1 0.1" unit="inch" unittype="distance" />
+    </adsk:normal_map>
+    <output name="normal_map_output" type="vector3" nodename="normal_map" />
+  </nodegraph>
+  <nodegraph name="FishScale_diffuse_nodegraph">
+    <adsk:bitmap name="generic_diffuse" type="color3">
+      <input name="file" type="filename" value="../Textures/fishscale_basecolor.jpg" />
+      <input name="realworld_scale" type="vector2" value="1, 1" unit="inch" unittype="distance" />
+    </adsk:bitmap>
+    <output name="generic_diffuse_output" type="color3" nodename="generic_diffuse" />
+  </nodegraph>
+</materialx>

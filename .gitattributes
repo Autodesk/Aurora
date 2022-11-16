@@ -1,0 +1,23 @@
+###############################################################################
+# Set default behavior to automatically normalize line endings.
+###############################################################################
+* text=auto
+
+###############################################################################
+# Track large files with Git LFS.
+###############################################################################
+*.[Bb][Ii][Nn] filter=lfs diff=lfs merge=lfs -text
+*.[Dd][Oo][Cc][Xx] filter=lfs diff=lfs merge=lfs -text
+*.[Ee][Xx][Ee] filter=lfs diff=lfs merge=lfs -text
+*.[Ee][Xx][Rr] filter=lfs diff=lfs merge=lfs -text
+*.[Gg][Ll][Bb] filter=lfs diff=lfs merge=lfs -text
+*.[Gg][Ll][Tt][Ff] filter=lfs diff=lfs merge=lfs -text
+*.[Hh][Dd][Rr] filter=lfs diff=lfs merge=lfs -text
+*.[Ii][Cc][Oo] filter=lfs diff=lfs merge=lfs -text
+*.[Jj][Pp][Ee][Gg] filter=lfs diff=lfs merge=lfs -text
+*.[Jj][Pp][Gg] filter=lfs diff=lfs merge=lfs -text
+*.[Kk][Tt][Xx] filter=lfs diff=lfs merge=lfs -text
+*.[Pp][Nn][Gg] filter=lfs diff=lfs merge=lfs -text
+*.[Pp][Pp][Tt][Xx] filter=lfs diff=lfs merge=lfs -text
+*.[Rr][Cc] filter=lfs diff=lfs merge=lfs -text
+*.[Uu][Ss][Dd] filter=lfs diff=lfs merge=lfs -text

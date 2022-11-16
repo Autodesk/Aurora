@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<materialx version="1.38" colorspace="lin_rec709">
+  <standard_surface name="TestTransparentDecal" type="surfaceshader">
+    <input name="base" type="float" value="1" />
+    <input name="base_color" type="color3" output="basecolor_output" nodegraph="TestTransparentDecal_nodegraph" />
+    <input name="opacity" type="color3" output="opacity_output" nodegraph="TestTransparentDecal_nodegraph" />
+    <input name="metalness" type="float" value="0" />
+    <input name="specular" type="float" value="0.25" />
+    <input name="specular_roughness" type="float" value="0.5" />
+    <input name="specular_IOR" type="float" value="1.5" />
+    <input name="thin_walled" type="boolean" value="false" />
+  </standard_surface>
+  <surfacematerial name="TestTransparentDecal_shader" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="TestTransparentDecal" />
+  </surfacematerial>
+  <nodegraph name="TestTransparentDecal_nodegraph">
+    <adsk:bitmap name="basecolor_bitmap" type="color3">
+      <input name="file" type="filename" value="Mr._Smiley_Face.png" colorspace="srgb_texture" />
+      <input name="realworld_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="realworld_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="uv_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="uv_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="rotation_angle" type="float" value="0" />
+      <input name="uaddressmode" type="string" value="clamp" />
+      <input name="vaddressmode" type="string" value="clamp" />
+    </adsk:bitmap>
+    <output name="basecolor_output" type="color3" nodename="basecolor_bitmap" />
+    <adsk:bitmap name="opacity_bitmap" type="color4">
+      <input name="file" type="filename" value="Mr._Smiley_Face.png" colorspace="srgb_texture" />
+      <input name="realworld_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="realworld_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="uv_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="uv_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="rotation_angle" type="float" value="0" />
+      <input name="uaddressmode" type="string" value="clamp" />
+      <input name="vaddressmode" type="string" value="clamp" />
+    </adsk:bitmap>
+    <output name="opacity_output" type="color3" nodename="create_image_with_3alphas" />
+    <extract name="extract_alpha" type="float">
+      <input name="in" type="color4" nodename="opacity_bitmap" />
+      <input name="index" type="integer" value="3" />
+    </extract>
+    <combine3 name="create_image_with_3alphas" type="color3">
+      <input name="in1" type="float" nodename="extract_alpha" />
+      <input name="in2" type="float" nodename="extract_alpha" />
+      <input name="in3" type="float" nodename="extract_alpha" />
+    </combine3>
+  </nodegraph>
+</materialx>

@@ -1,0 +1,186 @@
+// Copyright 2022 Autodesk, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#pragma once
+
+#include "AssetManager.h"
+#include "Properties.h"
+
+BEGIN_AURORA
+
+class SceneBase;
+
+// Property names as constants.
+static const string kLabelIsResetHistoryEnabled    = "isResetHistoryEnabled";
+static const string kLabelIsDenoisingEnabled       = "isDenoisingEnabled";
+static const string kLabelIsDiffuseOnlyEnabled     = "isDiffuseOnlyEnabled";
+static const string kLabelDebugMode                = "debugMode";
+static const string kLabelMaxLuminance             = "maxLuminance";
+static const string kLabelTraceDepth               = "traceDepth";
+static const string kLabelIsToneMappingEnabled     = "isToneMappingEnabled";
+static const string kLabelIsGammaCorrectionEnabled = "isGammaCorrectionEnabled";
+static const string kLabelIsAlphaEnabled           = "alphaEnabled";
+static const string kLabelBrightness               = "brightness";
+static const string kLabelUnits                    = "units";
+static const string kLabelImportanceSamplingMode   = "importanceSamplingMode";
+static const string kLabelIsFlipImageYEnabled      = "isFlipImageYEnabled";
+static const string kLabelIsReferenceBSDFEnabled   = "isReferenceBSDFEnabled";
+static const string kLabelIsOpaqueShadowsEnabled   = "isOpaqueShadowsEnabled";
+
+// The debug modes include:
+// - 0 Output (accumulation)
+// - 1 Output with Errors
+// - 2 View Depth
+// - 3 Normal
+// - 4 Base Color
+// - 5 Roughness
+// - 6 Metalness
+// - 7 Diffuse
+// - 8 Diffuse Hit Distance
+// - 9 Glossy
+// - 10 Glossy Hit Distance
+static const int kDebugModeErrors = 1;
+static const int kMaxDebugMode    = 10;
+
+// Importance sampling mode options as constants.
+static const int kImportanceSamplingModeBSDF        = 0;
+static const int kImportanceSamplingModeEnvironment = 1;
+static const int kImportanceSamplingModeMIS         = 2;
+
+// A base class for implementations of IRenderer.
+class RendererBase : public IRenderer, public FixedValues
+{
+public:
+    /*** Lifetime Management ***/
+
+    RendererBase(uint32_t activeTaskCount);
+
+    /*** IRenderer Functions ***/
+
+    void setOptions(const Properties& option) override;
+    IValues& options() override { return *this; };
+    void setCamera(const mat4& view, const mat4& projection, float focalDistance = 1.0f,
+        float lensRadius = 0.0f) override;
+    void setCamera(
+        const float* view, const float* proj, float focalDistance, float lensRadius) override;
+
+    /*** Functions ***/
+
+    bool isValid() { return _isValid; }
+    void valuesToProperties(const FixedValueSet& values, Properties& props) const;
+    void propertiesToValues(const Properties& properties, IValues& values);
+
+    unique_ptr<AssetManager>& assetManager() { return _pAssetMgr; }
+
+// TODO: Destruction via shared_ptr is not safe, we should have some kind of kill list system, but
+// can't seem to get it to work.
+#if 0
+    void destroyImage(IImagePtr& pImg)
+    {
+        _imageDestroyList.push_back(pImg);
+        pImg.reset();
+    }
+#endif
+
+    // The max trace depth, for recursion in ray tracing.
+    static const int kMaxTraceDepth;
+
+protected:
+    // Per-frame GPU uniform data.
+    struct FrameData
+    {
+        mat4 cameraViewProj;
+        mat4 cameraInvView;
+        vec2 viewSize;
+        int isOrthoProjection;
+        float focalDistance;
+        float lensRadius;
+        float sceneSize;
+        vec2 _padding1;
+        vec3 lightDir;
+        float _padding2;
+        vec4 lightColorAndIntensity;
+        float lightCosRadius;
+        int isOpaqueShadowsEnabled;
+        int isDepthNDCEnabled;
+        int isDiffuseOnlyEnabled;
+        int isDisplayErrorsEnabled;
+        int isDenoisingEnabled;
+        int isDenoisingAOVsEnabled;
+        int traceDepth;
+        float maxLuminance;
+    };
+
+    // Accumulation settings GPU data.
+    struct Accumulation
+    {
+        unsigned int sampleIndex;
+        unsigned int isDenoisingEnabled;
+    };
+
+    // Post-processing settings GPU data.
+    struct PostProcessing
+    {
+        vec3 brightness;
+        int debugMode;
+        vec2 range;
+        int isDenoisingEnabled;
+        int isToneMappingEnabled;
+        int isGammaCorrectionEnabled;
+        int isAlphaEnabled;
+    };
+
+    // Sample settings GPU data.
+    struct SampleData
+    {
+        // The sample index (iteration) for the frame, for progressive rendering.
+        uint sampleIndex;
+
+        // An offset to apply to the sample index for seeding a random number generator.
+        uint seedOffset;
+    };
+
+    FrameData _frameData;
+    Accumulation _accumData;
+    SampleData _sampleData;
+    PostProcessing _postProcessingData;
+
+    bool updateFrameDataGPUStruct(FrameData* pStaging = nullptr);
+    bool updatePostProcessingGPUStruct(PostProcessing* pStaging = nullptr);
+    bool updateAccumulationGPUStruct(uint32_t sampleIndex, Accumulation* pStaging = nullptr);
+
+    /*** Protected Variables ***/
+
+// TODO: Destruction via shared_ptr is not safe, we should have some kind of kill list system, but
+// can't seem to get it to work.
+// See OGSMOD-1912
+#if 0
+    vector<IImagePtr> _imageDestroyList;
+#endif
+    shared_ptr<SceneBase> _pScene;
+
+    bool _isValid        = false;
+    uint32_t _taskCount  = 0;
+    uint32_t _taskIndex  = 0;
+    uint64_t _taskNumber = 0;
+    mat4 _cameraView;
+    mat4 _cameraProj;
+    float _focalDistance = 1.0f;
+    float _lensRadius    = 0.0f;
+
+    // Asset manager for loading external assets.
+    unique_ptr<AssetManager> _pAssetMgr;
+};
+MAKE_AURORA_PTR(RendererBase);
+
+END_AURORA

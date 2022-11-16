@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<materialx version="1.38" colorspace="lin_rec709">
+  <standard_surface name="TestNotTransparentDecal" type="surfaceshader">
+    <input name="base" type="float" value="1" />
+    <input name="base_color" type="color3" output="basecolor_output" nodegraph="TestNotTransparentDecal_nodegraph" />
+    <input name="metalness" type="float" value="0" />
+    <input name="specular" type="float" value="0.25" />
+    <input name="specular_roughness" type="float" value="0.5" />
+    <input name="specular_IOR" type="float" value="1.5" />
+    <input name="thin_walled" type="boolean" value="false" />
+  </standard_surface>
+  <surfacematerial name="TestNotTransparentDecal_shader" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="TestNotTransparentDecal" />
+  </surfacematerial>
+  <nodegraph name="TestNotTransparentDecal_nodegraph">
+    <adsk:bitmap name="basecolor" type="color3">
+      <input name="file" type="filename" value="Mr._Smiley_Face.png" colorspace="srgb_texture" />
+      <input name="realworld_offset" type="vector2" value="0, 0" unit="centimeter" unittype="distance" />
+      <input name="realworld_scale" type="vector2" value="1, 1" unit="centimeter" unittype="distance" />
+      <input name="uv_offset" type="vector2" value="-5, -2" unit="centimeter" unittype="distance" />
+      <input name="uv_scale" type="vector2" value="1.2, 1.2" unit="centimeter" unittype="distance" />
+      <input name="rotation_angle" type="float" value="0" />
+      <input name="uaddressmode" type="string" value="clamp" />
+      <input name="vaddressmode" type="string" value="clamp" />
+    </adsk:bitmap>
+    <output name="basecolor_output" type="color3" nodename="basecolor" />
+  </nodegraph>
+</materialx>

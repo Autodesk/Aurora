@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<materialx version="1.38" colorspace="lin_rec709">
+  <standard_surface name="XID_Glazed_3A80854909DB4E729708854BABEB782B" type="surfaceshader">
+    <input name="base" type="float" value="1" />
+    <input name="metalness" type="float" value="0" />
+    <input name="base_color" type="color3" value="0.391672, 0.276884, 0.168972" colorspace="lin_rec709" />
+    <input name="specular" type="float" value="1" />
+    <input name="specular_roughness" type="float" value="0.452277" />
+    <input name="specular_IOR" type="float" value="1.5" />
+    <input name="normal" type="vector3" output="normal_map_output" nodegraph="XID_Glazed_3A80854909DB4E729708854BABEB782B_nodegraph" />
+    <input name="thin_walled" type="boolean" value="false" />
+  </standard_surface>
+  <surfacematerial name="XID_Glazed_3A80854909DB4E729708854BABEB782B_shader" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="XID_Glazed_3A80854909DB4E729708854BABEB782B" />
+  </surfacematerial>
+  <look name="default">
+    <materialassign name="material_assign_default" material="XID_Glazed_3A80854909DB4E729708854BABEB782B_shader" geom="*" />
+  </look>
+  <nodegraph name="XID_Glazed_3A80854909DB4E729708854BABEB782B_nodegraph">
+    <adsk:normal_map name="normal_map" type="vector3">
+      <input name="file" type="filename" value="fishscale_normal.png" colorspace="lin_rec709" />
+      <input name="realworld_offset" type="vector2" value="0, 0" unit="inch" unittype="distance" />
+      <input name="realworld_scale" type="vector2" value="0.568047, 0.378698" unit="centimeter" unittype="distance" />
+      <input name="uv_offset" type="vector2" value="0, 0" />
+      <input name="uv_scale" type="vector2" value="1, 1" />
+      <input name="rotation_angle" type="float" value="0" />
+      <input name="normal_scale" type="float" value="0.2" />
+    </adsk:normal_map>
+    <output name="normal_map_output" type="vector3" nodename="normal_map" />
+  </nodegraph>
+</materialx>

@@ -1,0 +1,32 @@
+---
+# "Cpp11" includes C++14 in the version of clang-format (9) used in Visual Studio.
+BasedOnStyle: Microsoft
+Standard: Cpp11
+
+# The following options override those from the Microsoft style.
+AccessModifierOffset: -4
+AlignAfterOpenBracket: DontAlign
+AlignConsecutiveAssignments: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AlignOperands: false
+AllowShortFunctionsOnASingleLine : Inline
+AlwaysBreakBeforeMultilineStrings: true
+AlwaysBreakTemplateDeclarations: Yes
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterUnion: true
+  # Enable this when when clang-format version in Visual Studio supports it.
+  # BeforeLambdaBody: true
+BreakConstructorInitializers: AfterColon
+ColumnLimit: 100
+CompactNamespaces: true
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+Cpp11BracedListStyle: false
+PointerBindsToType: true
+SpaceBeforeCpp11BracedList: true
+
+# Do NOT disable SortIncludes like this. If you get a compile error after sorting includes, then
+# use blank lines to separate the includes into blocks and include a comment to explain it. This
+# should happen rarely.
+# SortIncludes: false
+...

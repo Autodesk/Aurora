@@ -1,0 +1,8 @@
+# Ignore build directories.
+Build/
+_build/
+
+# Ignore IDE cache folders
+.vs/
+.vscode/
+.idea/
