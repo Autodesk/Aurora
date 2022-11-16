@@ -22,7 +22,7 @@ The provided Python script [deployHdAurora.py](../Scripts/deployHdAurora.py) can
 Run the following command to create a new USD installation located at *../USD* relative to the Aurora repository root and deploy **HdAurora** to it.  Creating a new USD installation requires a command prompt with compiler tools, such as "x64 Native Tools Command Prompt for VS 2019", and should be run from the root of the Aurora repository (this will take up to an hour to complete):
 
 ```
-python Scripts/deployHdAurora.py ../USD --externals_folder ../AuroraExternals --config=Release --build
+python Scripts/deployHdAurora.py ../USD --externals_folder=../AuroraExternals --config=Release --build
 ```
 
 You can then run **usdview** from the bin subfolder within that installed USD folder, replacing *AssetFolder* with the folder the [Autodesk Telescope USD model](https://drive.google.com/file/d/1RM09qDOGcRinLJTbXCsiRfQrHmKA-1aN/view?usp=share_link) was unzipped into.
