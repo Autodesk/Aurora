@@ -226,7 +226,7 @@ static HgiTextureUsage _getTextureUsage(HdFormat format, TfToken const& name)
 {
     if (HdAovHasDepthSemantic(name))
     {
-        if (format == HdFormatFloat32UInt8)
+        if (format == HdFormatFloat32UInt8 || format == HdFormatFloat32)
         {
             return HgiTextureUsageBitsDepthTarget | HgiTextureUsageBitsStencilTarget;
         }
