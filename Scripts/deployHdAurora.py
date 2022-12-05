@@ -61,7 +61,13 @@ aurora_mtlx_folder = os.path.join(aurora_build_bin_folder, "MaterialX")
 if(args.build):
     externals_path = pathlib.Path(args.externals_folder)
     externals_folder = str(externals_path.expanduser())
-    usd_repo_root = os.path.join(externals_folder,"src","USD")
+    # find usd src folder : e.g. USD-22.08-Aurora-v22.11
+    usd_paths = [f.name for f in os.scandir(os.path.join(externals_folder,"src")) if f.is_dir() and f.name.startswith("USD")]
+    if (len(usd_paths)==0):
+        raise Exception("[Error] Fail to find usd folder.")  
+    if (len(usd_paths)>1):
+        print("[Warning] More than one usd folders, use {}.", usd_paths[0])
+    usd_repo_root = os.path.join(externals_folder,"src", usd_paths[0])
     print("Build flag is set, building Aurora in "+aurora_build_folder+" and building+installing USD from "+usd_repo_root+" into "+args.usd_root+" (With externals from "+externals_folder+")")
     print("- Installing externals.")
     if(subprocess.run(["python","Scripts/installExternals.py",externals_folder],cwd=args.aurora_root).returncode!=0):
