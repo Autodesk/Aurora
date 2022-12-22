@@ -56,7 +56,7 @@ public:
     // Is active resource list empty?
     bool empty() const { return _resourceData.empty(); }
 
-    // Have changes been made to any resouces this frame?
+    // Have changes been made to any resources this frame?
     bool modified() const { return _modified; }
 
     // Get the index for the provided resource implentation within active list.
@@ -144,13 +144,13 @@ public:
 
     // Update the list of active resource implementations for this frame.
     // Will clear the resources for this frame, will do nothing (but will maintain the active
-    // resouce list) if no changes recorded in the tracker for this frame.
+    // resource list) if no changes recorded in the tracker for this frame.
     bool update()
     {
         _modifiedNotifier.clear();
 
         // If tracker not changed, do nothing.
-        // This keeps active resouce list from previous frame but clears the modified flag.
+        // This keeps active resource list from previous frame but clears the modified flag.
         if (!changed())
         {
             _activeNotifier.clearModifiedFlag();

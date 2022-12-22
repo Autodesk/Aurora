@@ -24,11 +24,8 @@ if(ENABLE_HGI_BACKEND)
     add_compile_definitions(HGI_SUPPORT=1)
 
     find_package(pxr REQUIRED) # Pixar Universal Scene Description
-    # Alias the namespace to meet the cmake convention on imported targets
-    add_library(pxr::usd ALIAS usd)
-    add_library(pxr::hgi ALIAS hgi)
 
-    if (NOT PXR_hgiVulkan_LIBRARY)
+    if (NOT TARGET pxr::hgiVulkan)
         message(FATAL_ERROR "USD hgiVulkan library is required to build Aurora with HGI backend enabled.")
     endif()
 
@@ -272,41 +269,51 @@ if(WIN32)
         add_dependencies(${PROJECT_NAME} CopyDXCompilerDLLs)
     endif()
 
-    # Copy all dlls of the externals to our runtime directory
-    # TODO: this is kinda a hack. This assumes all dlls are stored in the installation tree created by
-    #       our build script. But what if users build with custom external libraries (for example,
-    #       "-D ZLIB_ROOT=my_ZLIB_build")? Better way seems to be letting cmake to copy the dlls of
-    #       the dependent targets as in the following custom command. Does not seems to work on the
-    #       dependencies of the dependencies. Need to research on this.
-    # add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    #   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    #   COMMAND_EXPAND_LISTS
-    # )
-    if(DEFINED EXTERNALS_DIR)
-        file(GLOB EXTERNAL_LIB_DLLS ${EXTERNALS_DIR}/lib/*.dll)
-        file(GLOB EXTERNAL_BIN_DLLS ${EXTERNALS_DIR}/bin/*.dll)
-    add_custom_target(CopyExternalDLLs ALL
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXTERNAL_LIB_DLLS} ${RUNTIME_OUTPUT_DIR}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXTERNAL_BIN_DLLS} ${RUNTIME_OUTPUT_DIR}
-    )
-    set_property(TARGET CopyExternalDLLs PROPERTY FOLDER "Deployment")
+    # Copy dlls of the aurora dependencies to our runtime directory
+    if(DEFINED AURORA_DEPENDENCIES)
+        set(COMMON_DEPENDENCIES ${AURORA_DEPENDENCIES})
+        # Exclude NRD and NRI as they will be handled separatly
+        list(REMOVE_ITEM COMMON_DEPENDENCIES ${NRD_ROOT} ${NRI_ROOT})
+
+        # Create a do-nothing command so we can append copy commands later
+        add_custom_command(OUTPUT CopyPackageDLLs
+            COMMAND ${CMAKE_COMMAND} -E true
+        )
+        # CopyPackageDLLs is not actually generated so set it to symbolic
+        set_source_files_properties(CopyPackageDLLs PROPERTIES SYMBOLIC "true")
+        foreach(pkg ${COMMON_DEPENDENCIES})
+            file(GLOB LIB_DLLS ${pkg}/lib/*.dll)
+            if(LIB_DLLS)
+                add_custom_command(OUTPUT CopyPackageDLLs APPEND
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIB_DLLS} ${RUNTIME_OUTPUT_DIR}
+                )
+            endif()
+            file(GLOB BIN_DLLS ${pkg}/bin/*.dll)
+            if (BIN_DLLS)
+                add_custom_command(OUTPUT CopyPackageDLLs APPEND
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BIN_DLLS} ${RUNTIME_OUTPUT_DIR}
+                )
+            endif()
+        endforeach()
+        add_custom_target(CopyExternalDLLs ALL DEPENDS CopyPackageDLLs)
+        set_property(TARGET CopyExternalDLLs PROPERTY FOLDER "Deployment")
         add_dependencies(CopyExternalDLLs MakeRuntimeDir)
-    add_dependencies(${PROJECT_NAME} CopyExternalDLLs)
+        add_dependencies(${PROJECT_NAME} CopyExternalDLLs)
     endif()
 
     # Create a custom target that will copy NVIDIA NRD and NRI DLLs to the runtime folder, if the
     # denoiser is enabled.
     if(ENABLE_DENOISER)
         add_custom_target(CopyNvidiaDenoiserDLLs ALL
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NRD_LIBRARY_DLL} ${RUNTIME_OUTPUT_DIR}
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NRI_LIBRARY_DLL} ${RUNTIME_OUTPUT_DIR}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NRD_LIBRARY_DLLS} ${RUNTIME_OUTPUT_DIR}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NRI_LIBRARY_DLLS} ${RUNTIME_OUTPUT_DIR}
         )
         set_property(TARGET CopyNvidiaDenoiserDLLs PROPERTY FOLDER "Deployment")
         add_dependencies(CopyNvidiaDenoiserDLLs MakeRuntimeDir)
         add_dependencies(${PROJECT_NAME} CopyNvidiaDenoiserDLLs)
     endif()
 
-    # Create a custom target that will copy MaterialX DLLs to the runtime folder, if MaterialX
+    # Create a custom target that will copy MaterialX libraries to the runtime folder, if MaterialX
     # is enabled.
     if(ENABLE_MATERIALX)
         add_custom_target(CopyMaterialXLibrary ALL
@@ -318,12 +325,8 @@ if(WIN32)
     endif()
 
     if(ENABLE_HGI_BACKEND)
-        # Copy additional HGI dlls of the Pixar USD to our runtime directory
-        file(GLOB USD_LIB_DLLs ${pxr_DIR}/lib/*.dll)
-        file(GLOB USD_BIN_DLLs ${pxr_DIR}/bin/*.dll)
+        # Copy additional HGI files of the Pixar USD to our runtime directory
         add_custom_target(CopyUSDDLLs ALL
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${USD_LIB_DLLs} ${RUNTIME_OUTPUT_DIR}
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${USD_BIN_DLLs} ${RUNTIME_OUTPUT_DIR}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${RUNTIME_OUTPUT_DIR}/usd/hgiVulkan/resources
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pxr_DIR}/lib/usd/plugInfo.json ${RUNTIME_OUTPUT_DIR}/usd
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pxr_DIR}/lib/usd/hgiVulkan/resources/plugInfo.json ${RUNTIME_OUTPUT_DIR}/usd/hgiVulkan/resources

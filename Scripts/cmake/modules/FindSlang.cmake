@@ -1,3 +1,8 @@
+# Prevent re-defining the package target
+if(TARGET Slang::Slang)
+  return()
+endif()
+
 if(WIN32)
     set(Slang_BUILD_CONFIG "windows-x64")
 elseif(UNIX)

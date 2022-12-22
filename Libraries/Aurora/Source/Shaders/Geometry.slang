@@ -14,7 +14,6 @@
 #ifndef __GEOMETRY_H__
 #define __GEOMETRY_H__
 
-
 interface IGeometry
 {
     uint3 getIndices(int bufferLocation);
@@ -124,22 +123,22 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
     // normal using the vertex positions; this will yield flat shading.
     // NOTE: If a provided normal has zero length, then the normal will have undefined components
     // (likely NaN), leading to rendering artifacts (likely black pixels) along any path that
-    // acceseses the normal.
-    shading.normal =
-        normalize(geometry.hasNormals() ? shading.normal
-                             : cross(positions[1] - positions[0], positions[2] - positions[0]));
+    // accesses the normal.
+    shading.normal = normalize(geometry.hasNormals()
+            ? shading.normal
+            : cross(positions[1] - positions[0], positions[2] - positions[0]));
 
     // Compute the shading position from the geometry position and vertex data. If no normals are
     // provided, use the geometric position.
-    shading.position = geometry.hasNormals() ? computeShadingPosition(shading.geomPosition, shading.normal,
-                                        positions, normals, barycentrics)
-                                  : shading.geomPosition;
+    shading.position = geometry.hasNormals() ? computeShadingPosition(shading.geomPosition,
+                                                   shading.normal, positions, normals, barycentrics)
+                                             : shading.geomPosition;
 
     // Transform the position, geometric position, and normal to world space.
+    // NOTE: Renormalize the normal as the object-to-world matrix can have a scale.
     shading.position     = mul(objToWorld, float4(shading.position, 1.0f));
     shading.geomPosition = mul(objToWorld, float4(shading.geomPosition, 1.0f));
-    shading.normal    = normalize(
-        mul((float3x3)objToWorld, shading.normal)); // Re-normalize as world matrix can have scale.
+    shading.normal       = normalize(mul((float3x3)objToWorld, shading.normal));
 
     // Generate automatic tangent / bitangent vector from the shading normal.
     // TODO: Use tangent vectors from the host instead of this.

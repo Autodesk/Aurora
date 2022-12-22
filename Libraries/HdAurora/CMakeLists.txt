@@ -7,11 +7,6 @@ find_package(Vulkan REQUIRED)
 find_package(GLEW REQUIRED)
 
 find_package(pxr REQUIRED) # Find the Universal Scene Description (USD) library
-# Add namespace to the imported usd targets
-add_library(pxr::usd ALIAS usd)
-add_library(pxr::hf ALIAS hf)
-add_library(pxr::hd ALIAS hd)
-add_library(pxr::hdx ALIAS hdx)
 
 # Add shard library with all source files.
 add_library(${PROJECT_NAME} SHARED

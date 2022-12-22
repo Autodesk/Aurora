@@ -74,10 +74,10 @@ public:
     struct Result
     {
         /// Unique hash for the generated code.
-        size_t functionHash;
+        size_t functionHash = 0;
         /// \brief The generated GLSL code for material setup function.
         /// \desc The setup function takes a set of material inputs from CPU and outputs the
-        /// parameters of the standard surface material, based on a materialX network.
+        /// parameters of the Standard Surface material, based on a MaterialX network.
         string materialSetupCode;
         /// \desc The name of the setup function .
         string setupFunctionName;

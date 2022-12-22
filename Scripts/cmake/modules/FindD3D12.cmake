@@ -1,8 +1,21 @@
+# Prevent re-defining the package target
+if(TARGET D3D12::D3D12)
+  return()
+endif()
+
 # Work out Windows 10 SDK path and version
 # NOTE: Based on https://github.com/microsoft/DirectXShaderCompiler/blob/master/cmake/modules/FindD3D12.cmake
 if("$ENV{WINDOWS_SDK_PATH}$ENV{WINDOWS_SDK_VERSION}" STREQUAL "" )
-    get_filename_component(WINDOWS_SDK_PATH "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots;KitsRoot10]" ABSOLUTE CACHE)
-    set (WINDOWS_SDK_VERSION ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})
+    if(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
+        get_filename_component(WINDOWS_SDK_PATH "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots;KitsRoot10]" ABSOLUTE CACHE)
+        set (WINDOWS_SDK_VERSION ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})
+    else()
+        message(FATAL_ERROR
+            "The Windows SDK cannot be found and it is required to build the DirectX backend for "
+            "Aurora. If you have the Windows SDK installed, set these environment variables with "
+            "values for your installation: WINDOWS_SDK_PATH and WINDOWS_SDK_VERSION."
+        )
+    endif()
 else()
     set (WINDOWS_SDK_PATH $ENV{WINDOWS_SDK_PATH})
     set (WINDOWS_SDK_VERSION $ENV{WINDOWS_SDK_VERSION})

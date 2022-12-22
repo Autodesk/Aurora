@@ -166,7 +166,7 @@ bool MaterialGenerator::generate(
                 // Strip the top level material name (and following underscore) from the input name.
                 string nameStripped = name.substr(topLevelShaderName.size() + 1);
 
-                // If this is one of the standard surface inputs then map to that.
+                // If this is one of the Standard Surface inputs then map to that.
                 auto iter = _materialXOutputParamMapping.find(nameStripped);
                 if (iter != _materialXOutputParamMapping.end())
                     return iter->second;
@@ -309,7 +309,7 @@ bool MaterialGenerator::generate(
         // Code generator returns input and output values, we only care about inputs.
         if (!arg.isOutput)
         {
-            // For all standard surface inputs, remap back to snake case.
+            // For all Standard Surface inputs, remap back to snake case.
             string remappedName = arg.name;
 
             // We need to collate the seperate sampler properties (vaddressmode or uaddressmode)
@@ -376,7 +376,7 @@ bool MaterialGenerator::generate(
                 }
                 else
                 {
-                    // For standard surface inputs, remap back to snake case.
+                    // For Standard Surface inputs, remap back to snake case.
                     remappedName = remappedInputs[arg.name];
                 }
 

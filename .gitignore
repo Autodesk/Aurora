@@ -1,6 +1,12 @@
 # Ignore build directories.
 Build/
 _build/
+Externals/
+_externals/
+
+# Ignore script generated files
+Scripts/cmake/externalsConfig.cmake
+
 
 # Ignore IDE cache folders
 .vs/

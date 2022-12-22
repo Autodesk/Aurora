@@ -24,8 +24,8 @@
 #
 
 from __future__ import print_function
+
 import argparse
-import codecs
 import contextlib
 import datetime
 import fnmatch
@@ -42,9 +42,9 @@ import sys
 import sysconfig
 import tarfile
 import zipfile
-
-from urllib.request import urlopen
+import pathlib
 from shutil import which
+from urllib.request import urlopen
 
 if sys.version_info.major < 3:
     raise Exception("Python 3 or a more recent version is required.")
@@ -141,7 +141,7 @@ def Run(cmd, logCommandOutput = True):
     """
     PrintInfo('Running "{cmd}"'.format(cmd=cmd))
 
-    with codecs.open("log.txt", "a", "utf-8") as logfile:
+    with open("log.txt", mode="a", encoding="utf-8") as logfile:
         logfile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
         logfile.write("\n")
         logfile.write(cmd)
@@ -183,7 +183,20 @@ def CurrentWorkingDirectory(dir):
     try: yield
     finally: os.chdir(curdir)
 
-def CopyFiles(context, src, dest, destPrefix):
+def MakeSymLink(context, src):
+    """
+    Create a symbolic file of dest to src
+    """
+    patternToLinkTo = src
+    filesToLinkTo = glob.glob(patternToLinkTo)
+    for linkTo in filesToLinkTo:
+        symlink = pathlib.Path(linkTo).with_suffix('')
+        if symlink.exists():
+            os.remove(symlink)
+        PrintCommandOutput(f"Create symlink {symlink} to {linkTo}\n")
+        os.symlink(linkTo, symlink)
+
+def CopyFiles(context, src, dest, destPrefix = ''):
     """
     Copy files like shutil.copy, but src may be a glob pattern.
     """
@@ -200,7 +213,7 @@ def CopyFiles(context, src, dest, destPrefix):
                            .format(file=f, destDir=instDestDir))
         shutil.copy(f, instDestDir)
 
-def CopyDirectory(context, srcDir, destDir, destPrefix):
+def CopyDirectory(context, srcDir, destDir, destPrefix = ''):
     """
     Copy directory like shutil.copytree.
     """
@@ -230,7 +243,9 @@ def BuildConfigs(context):
         configs.append("RelWithDebInfo")
     return configs
 
-def RunCMake(context, force, extraArgs = None,  configExtraArgs = None, install = True):
+cmakePrefixPaths = set()
+
+def RunCMake(context, force, instFolder= None, extraArgs = None,  configExtraArgs = None, install = True):
     """
     Invoke CMake to configure, build, and install a library whose
     source code is located in the current working directory.
@@ -249,7 +264,6 @@ def RunCMake(context, force, extraArgs = None,  configExtraArgs = None, install 
     if toolset is not None:
         toolset = '-T "{toolset}"'.format(toolset=toolset)
 
-
     for config in BuildConfigs(context):
         buildDir = os.path.join(context.buildDir, os.path.split(srcDir)[1], config)
         if force and os.path.isdir(buildDir):
@@ -257,7 +271,10 @@ def RunCMake(context, force, extraArgs = None,  configExtraArgs = None, install 
         if not os.path.isdir(buildDir):
             os.makedirs(buildDir)
 
-        instDir = os.path.join(context.externalsInstDir, config)
+        subFolder = instFolder if instFolder else os.path.basename(srcDir)
+        instDir = os.path.join(context.externalsInstDir, subFolder)
+
+        cmakePrefixPaths.add(instDir)
 
         with CurrentWorkingDirectory(buildDir):
             # We use -DCMAKE_BUILD_TYPE for single-configuration generators
@@ -266,14 +283,16 @@ def RunCMake(context, force, extraArgs = None,  configExtraArgs = None, install 
             # time, but specifying both is simpler than branching
             Run('cmake '
                 '-DCMAKE_INSTALL_PREFIX="{instDir}" '
-                '-DCMAKE_PREFIX_PATH="{instDir}" '
+                '-DCMAKE_PREFIX_PATH="{prefixPaths}" '
                 '-DCMAKE_BUILD_TYPE={config} '
+                '-DCMAKE_DEBUG_POSTFIX="d" '
                 '{generator} '
                 '{toolset} '
                 '{extraArgs} '
                 '{configExtraArgs} '
                 '"{srcDir}"'
                 .format(instDir=instDir,
+                        prefixPaths=';'.join(cmakePrefixPaths),
                         config=config,
                         srcDir=srcDir,
                         generator=(generator or ""),
@@ -327,6 +346,16 @@ def PatchFile(filename, patches, multiLineMatches=False):
                   .format(filename=filename, oldFilename=filename + ".old"))
         shutil.copy(filename, filename + ".old")
         open(filename, 'w').writelines(newLines)
+
+def ApplyGitPatch(patchfile):
+    try:
+        patch = os.path.normpath(os.path.join(context.auroraSrcDir, "Scripts", "Patches", patchfile))
+        PrintStatus(f"Applying {patchfile} ...")
+        Run(f'git apply "{patch}"')
+    except Exception as e:
+        PrintWarning(f"Failed to apply {patchfile}. Skipped\n")
+
+
 
 def DownloadFileWithUrllib(url, outputFilename):
     r = urlopen(url)
@@ -475,6 +504,43 @@ def GitClone(url, tag, cloneDir, context):
         raise RuntimeError("Failed to clone repo {url} ({tag}): {err}".format(
                             url=url, tag=tag, err=e))
 
+def WriteExternalsConfig(context, externals):
+    win32Header = """
+# Build configurations: {buildConfiguration}
+if(WIN32)
+  message(STATUS "Supported build configurations: {buildConfiguration}")
+endif()
+""".format(buildConfiguration=";".join(context.buildConfigs))
+
+    header = """
+# Auto-generated by installExternals.py. Any modification will be overridden
+# by the next run of installExternals.py.
+{win32Header}
+
+if(NOT DEFINED EXTERNALS_ROOT)
+    set(EXTERNALS_ROOT "{externalsRoot}")
+endif()
+
+set(AURORA_DEPENDENCIES "")
+""".format(externalsRoot=pathlib.Path(context.externalsInstDir).as_posix(),
+           win32Header=win32Header if Windows() else "")
+
+    package = """
+if(NOT DEFINED {packageName}_ROOT)
+    set({packageName}_ROOT "${{EXTERNALS_ROOT}}/{installFolder}")
+endif()
+list(APPEND AURORA_DEPENDENCIES "${{{packageName}_ROOT}}")
+# find_package_verbose({packageName})
+"""
+    packages = ""
+    for ext in externals:
+        packages += package.format(packageName=ext.packageName, installFolder=ext.installFolder)
+
+    externalConfig = os.path.join(context.auroraSrcDir, "Scripts", "cmake", "externalsConfig.cmake")
+    with open(externalConfig, "w") as f:
+        f.write(header)
+        f.write(packages)
+
 
 ############################################################
 # External dependencies required by Aurora
@@ -483,34 +549,39 @@ AllDependencies = list()
 AllDependenciesByName = dict()
 
 class Dependency(object):
-    def __init__(self, name, installer, *files):
+    def __init__(self, name, packageName, installer, *files):
         self.name = name
+        self.packageName = packageName # cmake package name
         self.installer = installer
+        self.installFolder = name
         self.filesToCheck = files
 
         AllDependencies.append(self)
         AllDependenciesByName.setdefault(name.lower(), self)
 
     def Exists(self, context):
-        return all([os.path.isfile(os.path.join(context.externalsInstDir, config, f))
-                    for f in self.filesToCheck for config in BuildConfigs(context)])
+        return all([os.path.isfile(os.path.join(context.externalsInstDir, self.installFolder, f))
+                    for f in self.filesToCheck])
 
 ############################################################
 # zlib
 
 ZLIB_URL = "https://github.com/madler/zlib/archive/v1.2.11.zip"
+ZLIB_INSTALL_FOLDER = "zlib"
+ZLIB_PACKAGE_NAME = "ZLIB"
 
 def InstallZlib(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ZLIB_URL, context, force)):
-        RunCMake(context, force, buildArgs)
+        RunCMake(context, force, ZLIB_INSTALL_FOLDER, buildArgs)
 
-ZLIB = Dependency("zlib", InstallZlib, "include/zlib.h")
+ZLIB = Dependency(ZLIB_INSTALL_FOLDER, ZLIB_PACKAGE_NAME, InstallZlib, "include/zlib.h")
 
 ############################################################
 # boost
 
+BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.70.0/source/boost_1_70_0.tar.gz"
+
 if Linux():
-    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.70.0/source/boost_1_70_0.tar.gz"
     BOOST_VERSION_FILE = "include/boost/version.hpp"
 elif Windows():
     # The default installation of boost on Windows puts headers in a versioned
@@ -520,8 +591,10 @@ elif Windows():
     #
     # boost 1.70 is required for Visual Studio 2019. For simplicity, we use
     # this version for all older Visual Studio versions as well.
-    BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.70.0/source/boost_1_70_0.tar.gz"
     BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
+
+BOOST_INSTALL_FOLDER = "boost"
+BOOST_PACKAGE_NAME = "Boost"
 
 def InstallBoost_Helper(context, force, buildArgs):
     # Documentation files in the boost archive can have exceptionally
@@ -558,6 +631,7 @@ def InstallBoost_Helper(context, force, buildArgs):
 
         # Required by OpenImageIO
         b2Settings.append("--with-date_time")
+        b2Settings.append("--with-chrono")
         b2Settings.append("--with-system")
         b2Settings.append("--with-thread")
         b2Settings.append("--with-filesystem")
@@ -584,13 +658,13 @@ def InstallBoost_Helper(context, force, buildArgs):
         b2ExtraSettings = []
         if context.buildDebug:
             b2ExtraSettings.append('--prefix="{}" variant=debug --debug-configuration'.format(
-                os.path.join(context.externalsInstDir, 'Debug')))
+                os.path.join(context.externalsInstDir, BOOST_INSTALL_FOLDER)))
         if context.buildRelease:
             b2ExtraSettings.append('--prefix="{}" variant=release'.format(
-                os.path.join(context.externalsInstDir, 'Release')))
+                os.path.join(context.externalsInstDir, BOOST_INSTALL_FOLDER)))
         if context.buildRelWithDebInfo:
             b2ExtraSettings.append('--prefix="{}" variant=profile'.format(
-                os.path.join(context.externalsInstDir, 'RelWithDebInfo')))
+                os.path.join(context.externalsInstDir, BOOST_INSTALL_FOLDER)))
 
         for extraSettings in b2ExtraSettings:
             b2Settings.append(extraSettings)
@@ -612,7 +686,7 @@ def InstallBoost(context, force, buildArgs):
                 except: pass
         raise
 
-BOOST = Dependency("boost", InstallBoost, BOOST_VERSION_FILE)
+BOOST = Dependency(BOOST_INSTALL_FOLDER, BOOST_PACKAGE_NAME, InstallBoost, BOOST_VERSION_FILE)
 
 ############################################################
 # Intel TBB
@@ -622,6 +696,9 @@ if Windows():
     TBB_ROOT_DIR_NAME = "tbb2019_20190410oss"
 else:
     TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/2019_U6.tar.gz"
+
+TBB_INSTALL_FOLDER = "tbb"
+TBB_PACKAGE_NAME = "TBB"
 
 def InstallTBB(context, force, buildArgs):
     if Windows():
@@ -638,11 +715,10 @@ def InstallTBB_Windows(context, force, buildArgs):
                          "not built from source on this platform."
                          .format(buildArgs))
 
-        for config in BuildConfigs(context):
-            CopyFiles(context, "bin/intel64/vc14/*.*", "bin", config)
-            CopyFiles(context, "lib/intel64/vc14/*.*", "lib", config)
-            CopyDirectory(context, "include/serial", "include/serial", config)
-            CopyDirectory(context, "include/tbb", "include/tbb", config)
+        CopyFiles(context, "bin/intel64/vc14/*.*", "bin", TBB_INSTALL_FOLDER)
+        CopyFiles(context, "lib/intel64/vc14/*.*", "lib", TBB_INSTALL_FOLDER)
+        CopyDirectory(context, "include/serial", "include/serial", TBB_INSTALL_FOLDER)
+        CopyDirectory(context, "include/tbb", "include/tbb", TBB_INSTALL_FOLDER)
 
 def InstallTBB_Linux(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TBB_URL, context, force)):
@@ -652,30 +728,37 @@ def InstallTBB_Linux(context, force, buildArgs):
                     buildArgs=" ".join(buildArgs)))
 
         for config in BuildConfigs(context):
-            if (config == "Release" or config == "RelWithDebInfo"):
-                CopyFiles(context, "build/*_release/libtbb*.*", "lib", config)
             if (config == "Debug"):
-                CopyFiles(context, "build/*_debug/libtbb*.*", "lib", config)
-            CopyDirectory(context, "include/serial", "include/serial", config)
-            CopyDirectory(context, "include/tbb", "include/tbb", config)
+                CopyFiles(context, "build/*_debug/libtbb*.2", "lib", TBB_INSTALL_FOLDER)
+            if (config == "Release" or config == "RelWithDebInfo"):
+                CopyFiles(context, "build/*_release/libtbb*.2", "lib", TBB_INSTALL_FOLDER)
+            installLibDir = os.path.join(context.externalsInstDir, TBB_INSTALL_FOLDER, "lib")
+            with CurrentWorkingDirectory(installLibDir):
+                MakeSymLink(context, f"*.2")
+            CopyDirectory(context, "include/serial", "include/serial", TBB_INSTALL_FOLDER)
+            CopyDirectory(context, "include/tbb", "include/tbb", TBB_INSTALL_FOLDER)
 
-TBB = Dependency("TBB", InstallTBB, "include/tbb/tbb.h")
+TBB = Dependency(TBB_INSTALL_FOLDER, TBB_PACKAGE_NAME, InstallTBB, "include/tbb/tbb.h")
 
 ############################################################
 # JPEG
 
 JPEG_URL = "https://github.com/libjpeg-turbo/libjpeg-turbo/archive/1.5.1.zip"
+JPEG_INSTALL_FOLDER = "libjpeg"
+JPEG_PACKAGE_NAME = "JPEG"
 
 def InstallJPEG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(JPEG_URL, context, force)):
-        RunCMake(context, force, buildArgs)
+        RunCMake(context, force, JPEG_INSTALL_FOLDER, buildArgs)
 
-JPEG = Dependency("JPEG", InstallJPEG, "include/jpeglib.h")
+JPEG = Dependency(JPEG_INSTALL_FOLDER, JPEG_PACKAGE_NAME, InstallJPEG, "include/jpeglib.h")
 
 ############################################################
 # TIFF
 
 TIFF_URL = "https://gitlab.com/libtiff/libtiff/-/archive/v4.0.7/libtiff-v4.0.7.tar.gz"
+TIFF_INSTALL_FOLDER = "libtiff"
+TIFF_PACKAGE_NAME = "TIFF"
 
 def InstallTIFF(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TIFF_URL, context, force)):
@@ -700,68 +783,75 @@ def InstallTIFF(context, force, buildArgs):
         else:
             extraArgs = []
         extraArgs += buildArgs
-        RunCMake(context, force, extraArgs)
+        RunCMake(context, force, TIFF_INSTALL_FOLDER, extraArgs)
 
-TIFF = Dependency("TIFF", InstallTIFF, "include/tiff.h")
+TIFF = Dependency(TIFF_INSTALL_FOLDER, TIFF_PACKAGE_NAME, InstallTIFF, "include/tiff.h")
 
 ############################################################
 # PNG
 
 PNG_URL = "https://github.com/glennrp/libpng/archive/refs/tags/v1.6.29.tar.gz"
+PNG_INSTALL_FOLDER = "libpng"
+PNG_PACKAGE_NAME = "PNG"
 
 def InstallPNG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(PNG_URL, context, force)):
-        RunCMake(context, force, buildArgs)
+        RunCMake(context, force, PNG_INSTALL_FOLDER, buildArgs)
 
-PNG = Dependency("PNG", InstallPNG, "include/png.h")
+PNG = Dependency(PNG_INSTALL_FOLDER, PNG_PACKAGE_NAME, InstallPNG, "include/png.h")
 
 ############################################################
 # GLM
 
 GLM_URL = "https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.zip"
+GLM_INSTALL_FOLDER = "glm"
+GLM_PACKAGE_NAME = "glm"
 
-# TODO is the install structure proper?
 def InstallGLM(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(GLM_URL, context, force)):
-        for config in BuildConfigs(context):
-            CopyDirectory(context, "glm", "glm", config)
-            CopyDirectory(context, "cmake/glm", "cmake/glm", config)
+        CopyDirectory(context, "glm", "glm", GLM_INSTALL_FOLDER)
+        CopyDirectory(context, "cmake/glm", "cmake/glm", GLM_INSTALL_FOLDER)
 
-GLM = Dependency("GLM", InstallGLM, "glm/glm.hpp")
+GLM = Dependency(GLM_INSTALL_FOLDER, GLM_PACKAGE_NAME, InstallGLM, "glm/glm.hpp")
 
 ############################################################
 # STB
 
 STB_URL = "https://github.com/nothings/stb/archive/refs/heads/master.zip"
+STB_INSTALL_FOLDER = "stb"
+STB_PACKAGE_NAME = "stb"
 
 def InstallSTB(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(STB_URL, context, force)):
-        for config in BuildConfigs(context):
-            CopyFiles(context, "*.h", "include", config)
+        CopyFiles(context, "*.h", "include", STB_INSTALL_FOLDER)
 
-STB = Dependency("STB", InstallSTB, "include/stb_image.h")
+STB = Dependency(STB_INSTALL_FOLDER, STB_PACKAGE_NAME, InstallSTB, "include/stb_image.h")
 
 ############################################################
 # TinyGLTF
 
 TinyGLTF_URL = "https://github.com/syoyo/tinygltf/archive/refs/tags/v2.5.0.zip"
+TinyGLTF_INSTALL_FOLDER = "tinygltf"
+TinyGLTF_PACKAGE_NAME = "TinyGLTF"
 
 def InstallTinyGLTF(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TinyGLTF_URL, context, force)):
-        RunCMake(context, force, buildArgs)
+        RunCMake(context, force, TinyGLTF_INSTALL_FOLDER, buildArgs)
 
-TINYGLTF = Dependency("TinyGLTF", InstallTinyGLTF, "include/tiny_gltf.h")
+TINYGLTF = Dependency(TinyGLTF_INSTALL_FOLDER, TinyGLTF_PACKAGE_NAME, InstallTinyGLTF, "include/tiny_gltf.h")
 
 ############################################################
 # TinyObjLoader
 
 TinyObjLoader_URL = "https://github.com/tinyobjloader/tinyobjloader/archive/refs/tags/v2.0-rc1.zip"
+TinyObjLoader_INSTALL_FOLDER = "tinyobjloader"
+TinyObjLoader_PACKAGE_NAME = "tinyobjloader"
 
 def InstallTinyObjLoader(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TinyObjLoader_URL, context, force)):
-        RunCMake(context, force, buildArgs)
+        RunCMake(context, force, TinyObjLoader_INSTALL_FOLDER, buildArgs)
 
-TINYOBJLOADER = Dependency("TinyObjLoader", InstallTinyObjLoader, "include/tiny_obj_loader.h")
+TINYOBJLOADER = Dependency(TinyObjLoader_INSTALL_FOLDER, TinyObjLoader_PACKAGE_NAME, InstallTinyObjLoader, "include/tiny_obj_loader.h")
 
 ############################################################
 # IlmBase/OpenEXR
@@ -771,38 +861,38 @@ if Windows():
 else:
     OPENEXR_URL = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v2.4.3.zip"
 
+OPENEXR_INSTALL_FOLDER = "OpenEXR"
+OPENEXR_PACKAGE_NAME = "OpenEXR"
+
 def InstallOpenEXR(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OPENEXR_URL, context, force)):
         extraArgs = [
             '-DPYILMBASE_ENABLE=OFF',
             '-DOPENEXR_VIEWERS_ENABLE=OFF',
             '-DBUILD_TESTING=OFF',
-            '-DOPENEXR_BUILD_PYTHON_LIBS=OFF'
+            '-DOPENEXR_BUILD_PYTHON_LIBS=OFF',
+            '-DOPENEXR_PACKAGE_PREFIX="{}"'.format(
+                os.path.join(context.externalsInstDir, OPENEXR_INSTALL_FOLDER))
         ]
 
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
 
-        packageConfigs = {
-            "Debug": '-DOPENEXR_PACKAGE_PREFIX="{}"'.format(
-                os.path.join(context.externalsInstDir, 'Debug')),
-            "Release": '-DOPENEXR_PACKAGE_PREFIX="{}"'.format(
-                os.path.join(context.externalsInstDir, 'Release')),
-            "RelWithDebInfo": '-DOPENEXR_PACKAGE_PREFIX="{}"'.format(
-                os.path.join(context.externalsInstDir, 'RelWithDebInfo'))
-        }
+        RunCMake(context, force, OPENEXR_INSTALL_FOLDER, extraArgs)
 
-        RunCMake(context, force, extraArgs, configExtraArgs = packageConfigs)
-
-OPENEXR = Dependency("OpenEXR", InstallOpenEXR, "include/OpenEXR/ImfVersion.h")
+OPENEXR = Dependency(OPENEXR_INSTALL_FOLDER, OPENEXR_PACKAGE_NAME, InstallOpenEXR, "include/OpenEXR/ImfVersion.h")
 
 ############################################################
 # OpenImageIO
+OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/refs/tags/v2.4.5.0.zip"
 
-OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/Release-2.1.16.0.zip"
+OIIO_INSTALL_FOLDER = "OpenImageIO"
+OIIO_PACKAGE_NAME = "OpenImageIO"
 
 def InstallOpenImageIO(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OIIO_URL, context, force)):
+        ApplyGitPatch("OpenImageIO.patch")
+
         extraArgs = ['-DOIIO_BUILD_TOOLS=OFF',
                      '-DOIIO_BUILD_TESTS=OFF',
                      '-DUSE_PYTHON=OFF',
@@ -824,24 +914,25 @@ def InstallOpenImageIO(context, force, buildArgs):
         # normally be picked up when we specify CMAKE_PREFIX_PATH.
         # This may lead to undefined symbol errors at build or runtime.
         # So, we explicitly specify the OpenEXR we want to use here.
-        openEXRConfigs = {
-            "Debug": '-DOPENEXR_ROOT="{}"'.format(
-                os.path.join(context.externalsInstDir, 'Debug')),
-            "Release": '-DOPENEXR_ROOT="{}"'.format(
-                os.path.join(context.externalsInstDir, 'Release')),
-            "RelWithDebInfo": '-DOPENEXR_ROOT="{}"'.format(
-                os.path.join(context.externalsInstDir, 'RelWithDebInfo')),
+        extraArgs.append('-DOPENEXR_ROOT="{}"'.format(
+                os.path.join(context.externalsInstDir, OPENEXR_INSTALL_FOLDER)))
+
+        tbbConfigs = {
+            "Debug": '-DTBB_USE_DEBUG_BUILD=ON',
+            "Release": '-DTBB_USE_DEBUG_BUILD=OFF',
+            "RelWithDebInfo": '-DTBB_USE_DEBUG_BUILD=OFF',
         }
 
-        RunCMake(context, force, extraArgs, configExtraArgs = openEXRConfigs)
+        RunCMake(context, force, OIIO_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
 
-OPENIMAGEIO = Dependency("OpenImageIO", InstallOpenImageIO,
-                         "include/OpenImageIO/oiioversion.h")
+OPENIMAGEIO = Dependency(OIIO_INSTALL_FOLDER, OIIO_PACKAGE_NAME, InstallOpenImageIO, "include/OpenImageIO/oiioversion.h")
 
 ############################################################
 # OpenSubdiv
 
 OPENSUBDIV_URL = "https://github.com/PixarAnimationStudios/OpenSubdiv/archive/v3_4_4.zip"
+OPENSUBDIV_INSTALL_FOLDER = "OpenSubdiv"
+OPENSUBDIV_PACKAGE_NAME = "OpenSubdiv"
 
 def InstallOpenSubdiv(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OPENSUBDIV_URL, context, force)):
@@ -881,39 +972,51 @@ def InstallOpenSubdiv(context, force, buildArgs):
         oldNumJobs = context.numJobs
 
         try:
-            RunCMake(context, force, extraArgs)
+            RunCMake(context, force, OPENSUBDIV_INSTALL_FOLDER, extraArgs)
         finally:
             context.cmakeGenerator = oldGenerator
             context.numJobs = oldNumJobs
 
-OPENSUBDIV = Dependency("OpenSubdiv", InstallOpenSubdiv,
+OPENSUBDIV = Dependency(OPENSUBDIV_INSTALL_FOLDER, OPENSUBDIV_PACKAGE_NAME, InstallOpenSubdiv,
                         "include/opensubdiv/version.h")
 
 ############################################################
 # MaterialX
 
 MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.5.zip"
+MATERIALX_INSTALL_FOLDER = "MaterialX"
+MATERIALX_PACKAGE_NAME = "MaterialX"
 
 def InstallMaterialX(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(MATERIALX_URL, context, force)):
-        cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON']
-
+        cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON', '-DMATERIALX_BUILD_TESTS=OFF']
         cmakeOptions += buildArgs
 
-        RunCMake(context, force, cmakeOptions)
+        RunCMake(context, force, MATERIALX_INSTALL_FOLDER, cmakeOptions)
 
-MATERIALX = Dependency("MaterialX", InstallMaterialX, "include/MaterialXCore/Library.h")
+MATERIALX = Dependency(MATERIALX_INSTALL_FOLDER, MATERIALX_PACKAGE_NAME, InstallMaterialX, "include/MaterialXCore/Library.h")
 
 ############################################################
 # USD
 USD_URL = "https://github.com/autodesk-forks/USD/archive/refs/tags/v22.08-Aurora-v22.11.zip"
+USD_INSTALL_FOLDER = "USD"
+USD_PACKAGE_NAME = "pxr"
+
 def InstallUSD(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(USD_URL, context, force)):
+
 # USD_URL = "https://github.com/autodesk-forks/USD.git"
 # USD_TAG = "v22.08-Aurora-v22.11"
+# USD_INSTALL_FOLDER = "USD"
+# USD_PACKAGE_NAME = "pxr"
+
 # def InstallUSD(context, force, buildArgs):
 #     USD_FOLDER = "USD-"+USD_TAG
 #     with CurrentWorkingDirectory(GitClone(USD_URL, USD_TAG, USD_FOLDER, context)):
+
+        # We need to apply patch to make USD build with our externals configuration
+        ApplyGitPatch("USD.patch")
+
         extraArgs = []
 
         if Linux():
@@ -971,9 +1074,9 @@ def InstallUSD(context, force, buildArgs):
             "Release": '-DTBB_USE_DEBUG_BUILD=OFF',
             "RelWithDebInfo": '-DTBB_USE_DEBUG_BUILD=OFF',
         }
-        RunCMake(context, force, extraArgs, configExtraArgs=tbbConfigs)
+        RunCMake(context, force, USD_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
 
-USD = Dependency("USD", InstallUSD, "include/pxr/pxr.h")
+USD = Dependency(USD_INSTALL_FOLDER, USD_PACKAGE_NAME, InstallUSD, "include/pxr/pxr.h")
 
 ############################################################
 # Slang
@@ -982,126 +1085,129 @@ if Windows():
     Slang_URL = "https://github.com/shader-slang/slang/releases/download/v0.24.35/slang-0.24.35-win64.zip"
 else:
     Slang_URL = "https://github.com/shader-slang/slang/releases/download/v0.24.35/slang-0.24.35-linux-x86_64.zip"
+Slang_INSTALL_FOLDER = "Slang"
+Slang_PACKAGE_NAME = "Slang"
 
 def InstallSlang(context, force, buildArgs):
-    Slang_FOLDER = DownloadURL(Slang_URL, context, force, destDir="Slang")
-    for config in BuildConfigs(context):
-        CopyDirectory(context, Slang_FOLDER, "Slang", config)
+    Slang_SRC_FOLDER = DownloadURL(Slang_URL, context, force, destDir="Slang")
+    CopyDirectory(context, Slang_SRC_FOLDER, Slang_INSTALL_FOLDER)
 
-SLANG = Dependency("Slang", InstallSlang, "Slang/slang.h")
+SLANG = Dependency(Slang_INSTALL_FOLDER, Slang_PACKAGE_NAME, InstallSlang, "slang.h")
 
 ############################################################
 # NRD
 
 NRD_URL = "https://github.com/NVIDIAGameWorks/RayTracingDenoiser.git"
 NRD_TAG = "v3.8.0"
+NRD_INSTALL_FOLDER = "NRD"
+NRD_PACKAGE_NAME = "NRD"
 
 def InstallNRD(context, force, buildArgs):
     NRD_FOLDER = "NRD-"+NRD_TAG
     with CurrentWorkingDirectory(GitClone(NRD_URL, NRD_TAG, NRD_FOLDER, context)):
-        RunCMake(context, force, buildArgs, install=False)
+        RunCMake(context, force, NRD_INSTALL_FOLDER, buildArgs, install=False)
 
-        for config in BuildConfigs(context):
-            CopyDirectory(context, "Include", "NRD/Include", config)
-            CopyDirectory(context, "Integration", "NRD/Integration", config)
-            if context.buildRelease or context.buildRelWithDebInfo :
-                if Windows():
-                    CopyFiles(context, "_Build/Release/*.dll", "bin", config)
-                CopyDirectory(context, "_Build/Release", "NRD/Lib/Release", config)
-            if context.buildDebug:
-                if Windows():
-                    CopyFiles(context, "_Build/Debug/*.dll", "bin", config)
-                CopyDirectory(context, "_Build/Debug", "NRD/Lib/Debug", config)
+        CopyDirectory(context, "Include", "include", NRD_INSTALL_FOLDER)
+        CopyDirectory(context, "Integration", "Integration", NRD_INSTALL_FOLDER)
+        if context.buildRelease or context.buildRelWithDebInfo :
+            if Windows():
+                CopyFiles(context, "_Build/Release/*.dll", "bin", NRD_INSTALL_FOLDER)
+            CopyFiles(context, "_Build/Release/*", "lib", NRD_INSTALL_FOLDER)
+        if context.buildDebug:
+            if Windows():
+                CopyFiles(context, "_Build/Debug/*.dll", "bin", NRD_INSTALL_FOLDER)
+            CopyFiles(context, "_Build/Debug/*", "lib", NRD_INSTALL_FOLDER)
 
-            # NRD v2.x.x #TODO need to use config as part of installation path
-            # CopyDirectory(context, "Shaders", "NRD/Shaders", config)
-            # CopyFiles(context, "Source/Shaders/Include/*.*", "NRD/Shaders", config)
-            # CopyFiles(context, "External/MathLib/*.*", "NRD/Shaders", config)
-            # CopyFiles(context, "Include/*.*", "NRD/Shaders", config)
+        # NRD v3.x.x
+        CopyDirectory(context, "Shaders", "Shaders", NRD_INSTALL_FOLDER)
+        CopyFiles(context, "Shaders/Include/NRD.hlsli", "Shaders/Include", NRD_INSTALL_FOLDER)
+        CopyFiles(context, "External/MathLib/*.hlsli", "Shaders/Source", NRD_INSTALL_FOLDER)
 
-            # NRD v3.x.x
-            CopyDirectory(context, "Shaders", "NRD/Shaders", config)
-            CopyFiles(context, "Shaders/Include/NRD.hlsli", "NRD/Shaders/Include", config)
-            CopyFiles(context, "External/MathLib/*.hlsli", "NRD/Shaders/Source", config)
-
-NRD = Dependency("NRD", InstallNRD, "NRD/Include/NRD.h")
+NRD = Dependency(NRD_INSTALL_FOLDER, NRD_PACKAGE_NAME, InstallNRD, "include/NRD.h")
 
 ############################################################
 # NRI
 
 NRI_URL = "https://github.com/NVIDIAGameWorks/NRI.git"
 NRI_TAG = "v1.87"
+NRI_INSTALL_FOLDER = "NRI"
+NRI_PACKAGE_NAME = "NRI"
 
 def InstallNRI(context, force, buildArgs):
     NRI_FOLDER = "NRI-"+NRI_TAG
     with CurrentWorkingDirectory(GitClone(NRI_URL, NRI_TAG, NRI_FOLDER, context)):
-        RunCMake(context, force, buildArgs, install=False)
+        RunCMake(context, force, NRI_INSTALL_FOLDER, buildArgs, install=False)
 
-        for config in BuildConfigs(context):
-            CopyDirectory(context, "Include", "NRI/Include", config)
-            CopyDirectory(context, "Include/Extensions", "NRI/Include/Extensions", config)
-            if context.buildRelease or context.buildRelWithDebInfo :
-                if Windows():
-                    CopyFiles(context, "_Build/Release/*.dll", "bin", config)
-                CopyDirectory(context, "_Build/Release", "NRI/Lib/Release", config)
-            if context.buildDebug:
-                if Windows():
-                    CopyFiles(context, "_Build/Debug/*.dll", "bin", config)
-                CopyDirectory(context, "_Build/Debug", "NRI/Lib/Debug", config)
+        CopyDirectory(context, "Include", "include", NRI_INSTALL_FOLDER)
+        CopyDirectory(context, "Include/Extensions", "include/Extensions", NRI_INSTALL_FOLDER)
+        if context.buildRelease or context.buildRelWithDebInfo :
+            if Windows():
+                CopyFiles(context, "_Build/Release/*.dll", "bin", NRI_INSTALL_FOLDER)
+            CopyFiles(context, "_Build/Release/*", "lib", NRI_INSTALL_FOLDER)
+        if context.buildDebug:
+            if Windows():
+                CopyFiles(context, "_Build/Debug/*.dll", "bin", NRI_INSTALL_FOLDER)
+            CopyFiles(context, "_Build/Debug/*", "lib", NRI_INSTALL_FOLDER)
 
-NRI = Dependency("NRI", InstallNRI, "NRI/Include/NRI.h")
+NRI = Dependency(NRI_INSTALL_FOLDER, NRI_PACKAGE_NAME, InstallNRI, "include/NRI.h")
 
 ############################################################
 # GLEW
 
 GLEW_URL = "https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0-win32.zip"
+GLEW_INSTALL_FOLDER = "glew"
+GLEW_PACKAGE_NAME = "GLEW"
 
 def InstallGLEW(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(GLEW_URL, context, force)):
-        for config in BuildConfigs(context):
-            CopyDirectory(context, "include/GL", "include/GL", config)
-            CopyFiles(context, "bin/Release/x64/*.dll", "bin", config)
-            CopyFiles(context, "lib/Release/x64/*.lib", "lib", config)
-            # TODO: shall we support Debug build of glew?
-            # buildVariant=("Debug" if context.buildDebug or context.buildRelWithDebInfo else "Release"),
-            # CopyFiles(context, f'bin/{buildVariant}/x64/*.dll', "bin")
-            # CopyFiles(context, f'lib/{buildVariant}/x64/*.lib', "lib")
+        CopyDirectory(context, "include/GL", "include/GL", GLEW_INSTALL_FOLDER)
+        CopyFiles(context, "bin/Release/x64/*.dll", "bin", GLEW_INSTALL_FOLDER)
+        CopyFiles(context, "lib/Release/x64/*.lib", "lib", GLEW_INSTALL_FOLDER)
 
-GLEW = Dependency("GLEW", InstallGLEW, "include/GL/glew.h")
+GLEW = Dependency(GLEW_INSTALL_FOLDER, GLEW_PACKAGE_NAME, InstallGLEW, "include/GL/glew.h")
 
 ############################################################
 # GLFW
 
 GLFW_URL = "https://github.com/glfw/glfw/archive/refs/tags/3.3.8.zip"
+GLFW_INSTALL_FOLDER = "GLFW"
+GLFW_PACKAGE_NAME = "glfw3"
 
 def InstallGLFW(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(GLFW_URL, context, force)):
-        RunCMake(context, force, buildArgs)
+        cmakeOptions = ['-DGLFW_BUILD_EXAMPLES=OFF', '-DGLFW_BUILD_TESTS=OFF', '-DGLFW_BUILD_DOCS=OFF']
+        cmakeOptions += buildArgs
 
-GLFW = Dependency("GLFW", InstallGLFW, "include/GLFW/glfw3.h")
+        RunCMake(context, force, GLFW_INSTALL_FOLDER, cmakeOptions)
+
+GLFW = Dependency(GLFW_INSTALL_FOLDER, GLFW_PACKAGE_NAME, InstallGLFW, "include/GLFW/glfw3.h")
 
 ############################################################
 # CXXOPTS
 
 CXXOPTS_URL = "https://github.com/jarro2783/cxxopts/archive/refs/tags/v3.0.0.zip"
+CXXOPTS_INSTALL_FOLDER = "cxxopts"
+CXXOPTS_PACKAGE_NAME = "cxxopts"
 
 def InstallCXXOPTS(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(CXXOPTS_URL, context, force)):
-        RunCMake(context, force, buildArgs)
+        RunCMake(context, force, CXXOPTS_INSTALL_FOLDER, buildArgs)
 
-CXXOPTS = Dependency("CXXOPTS", InstallCXXOPTS, "include/cxxopts.hpp")
+CXXOPTS = Dependency(CXXOPTS_INSTALL_FOLDER, CXXOPTS_PACKAGE_NAME, InstallCXXOPTS, "include/cxxopts.hpp")
 
 ############################################################
 # GTEST
 
 GTEST_URL = "https://github.com/google/googletest/archive/refs/tags/release-1.12.1.zip"
+GTEST_INSTALL_FOLDER = "gtest"
+GTEST_PACKAGE_NAME = "GTest"
 
 def InstallGTEST(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(GTEST_URL, context, force)):
         extraArgs = [*buildArgs, '-Dgtest_force_shared_crt=ON']
-        RunCMake(context, force, extraArgs)
+        RunCMake(context, force, GTEST_INSTALL_FOLDER, extraArgs)
 
-GTEST = Dependency("GTEST", InstallGTEST, "include/gtest/gtest.h")
+GTEST = Dependency(GTEST_INSTALL_FOLDER, GTEST_PACKAGE_NAME, InstallGTEST, "include/gtest/gtest.h")
 
 ############################################################
 # Installation script
@@ -1178,12 +1284,11 @@ group.add_argument("--src", type=str,
 BUILD_DEBUG = "Debug"
 BUILD_RELEASE = "Release"
 BUILD_DEBUG_AND_RELEASE = "All"
-BUILD_RELWITHDEBINFO  = "relwithdebuginfo"
-if Windows():
-    group.add_argument("--build-variant", default=BUILD_RELEASE,
-                    choices=[BUILD_DEBUG, BUILD_RELEASE, BUILD_RELWITHDEBINFO, BUILD_DEBUG_AND_RELEASE],
-                    help=("Build variant for external libraries. "
-                            "(default: {})".format(BUILD_RELEASE)))
+BUILD_RELWITHDEBINFO  = "RelWithDebInfo"
+group.add_argument("--build-variant", default=BUILD_RELEASE,
+                choices=[BUILD_DEBUG, BUILD_RELEASE, BUILD_DEBUG_AND_RELEASE],
+                help=("Build variant for external libraries. "
+                        "(default: {})".format(BUILD_RELEASE)))
 
 group.add_argument("--build-args", type=str, nargs="*", default=[],
                    help=("Custom arguments to pass to build system when "
@@ -1249,18 +1354,19 @@ class InstallContext:
 
             self.buildArgs.setdefault(depName.lower(), []).append(arg)
 
+        self.buildConfigs = []
+
         # Build type
-        if Linux():
-            # There is a cmake bug in the debug build of OpenImageIO on Linux. That bug fails the Aurora
-            # build if Aurora links to the debug build of OpenImageIO. Untill it is fixed by OpenImageIO,
-            # we can only build release build of externals on Linux.
-            self.buildDebug = False
-            self.buildRelease = True
-            self.buildRelWithDebInfo = False
-        else:
-            self.buildDebug = (args.build_variant == BUILD_DEBUG) or (args.build_variant == BUILD_DEBUG_AND_RELEASE)
-            self.buildRelease = (args.build_variant == BUILD_RELEASE) or (args.build_variant == BUILD_DEBUG_AND_RELEASE)
-            self.buildRelWithDebInfo  = (args.build_variant == BUILD_RELWITHDEBINFO)
+        self.buildDebug = (args.build_variant == BUILD_DEBUG) or (args.build_variant == BUILD_DEBUG_AND_RELEASE)
+        self.buildRelease = (args.build_variant == BUILD_RELEASE) or (args.build_variant == BUILD_DEBUG_AND_RELEASE)
+        self.buildRelWithDebInfo  = (args.build_variant == BUILD_RELWITHDEBINFO)
+
+        if self.buildRelease:
+            self.buildConfigs.append("Release")
+        if self.buildDebug:
+            self.buildConfigs.append("Debug")
+        if self.buildRelWithDebInfo:
+            self.buildConfigs.append("RelWithDebInfo")
 
         # Dependencies that are forced to be built
         self.forceBuildAll = args.force_all
@@ -1329,6 +1435,8 @@ if Linux():
     for lib in excludes:
         requiredDependencies.remove(lib)
     print(requiredDependencies)
+
+cmakePrefixPaths = set(map(lambda lib: os.path.join(context.externalsInstDir, lib.installFolder), requiredDependencies))
 
 dependenciesToBuild = []
 for dep in requiredDependencies:
@@ -1452,28 +1560,24 @@ except Exception as e:
     PrintError(str(e))
     sys.exit(1)
 
+WriteExternalsConfig(context, requiredDependencies)
+
 if Windows():
     buildStepsMsg = """
 Success!
 
-To use the external libraries, please configure Aurora build with:
-    cmake -S . -B Build -D CMAKE_BUILD_TYPE={buildVariant} -D EXTERNALS_DIR={externalsDir}
-    cmake --build Build --config {buildVariant}
-"""
-    buildStepsMsg = buildStepsMsg.format(
-        buildVariant=("Release" if context.buildRelease or context.buildRelWithDebInfo else "Debug"),
-        externalsDir=context.externalsInstDir
-    )
+To use the external libraries, please configure Aurora build in "x64 Native Tools Command Prompt for VS 2019" with:
+    cmake -S . -B Build [-D EXTERNALS_ROOT={externalsDir}]
+    cmake --build Build --config {buildConfigs}
+""".format(externalsDir=context.externalsInstDir,
+           buildConfigs="|".join(context.buildConfigs))
 else:
     buildStepsMsg = """
 Success!
 
 To use the external libraries, you can now configure and build Aurora with:
-    cmake -S . -B Build -D EXTERNALS_DIR={externalsDir}/Release
+    cmake -S . -B Build [-D CMAKE_BUILD_TYPE=Release|Debug] [-D EXTERNALS_ROOT={externalsDir}]
     cmake --build Build
-"""
-    buildStepsMsg = buildStepsMsg.format(
-        externalsDir=context.externalsInstDir
-    )
+""".format(externalsDir=context.externalsInstDir)
 
 Print(buildStepsMsg)

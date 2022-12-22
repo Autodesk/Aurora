@@ -382,7 +382,7 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
             // parameter for that input.
             _pGenerator->emitVariableDeclaration(input, "", *_pGeneratorContext, ps, false);
 
-            // End the decleration scope.
+            // End the declaration scope.
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL).addValue("//");
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL)
                 .endScope(MaterialX::Syntax::CURLY_BRACKETS);
@@ -640,7 +640,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
         // Regular expression to find strings in the form:
         //     <materialx version="1.38" colorspace="lin_rec709">  <standard_surface name =
         //     "XID_PlasticBlack"
-        // and then retreive document name: XID_PlasticBlack
+        // and then retrieve document name: XID_PlasticBlack
         std::regex rgx("<\\s*materialx[^>]+>\\s*<\\s*\\S+\\s+name=\"([^\"]+)\"");
         std::smatch match;
 
@@ -650,10 +650,10 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
         // Search for matches to the document name reg exp.
         if (std::regex_search(processedMtlXDocument, match, rgx))
         {
-            // Retreive the sub-expression with the document name.
+            // Retrieve the sub-expression with the document name.
             string documentName = match[1];
 
-            // Replace all occurrences of document name with the overide value.
+            // Replace all occurrences of document name with the override value.
             processedMtlXDocument =
                 Foundation::replace(processedMtlXDocument, documentName, overrideDocumentName);
         }

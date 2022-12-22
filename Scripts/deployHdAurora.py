@@ -43,7 +43,13 @@ parser.add_argument("-b", "--build", dest="build", action="store_true", default=
 
 args = parser.parse_args()
 
-    
+# Paths can be specified as relate path to the root of Aurora. We convert them to absolute
+# path to avoid build issues after changing working directory.
+args.aurora_root = os.path.abspath(args.aurora_root)
+args.usd_root = os.path.abspath(args.usd_root)
+args.aurora_cmake_build_folder = os.path.abspath(args.aurora_cmake_build_folder)
+args.externals_folder = os.path.abspath(args.externals_folder)
+
 # Get the USD target folders.
 usd_bin_folder = os.path.join(args.usd_root,"bin")
 usd_lib_folder = os.path.join(args.usd_root,"lib")
@@ -61,17 +67,22 @@ aurora_mtlx_folder = os.path.join(aurora_build_bin_folder, "MaterialX")
 if(args.build):
     externals_path = pathlib.Path(args.externals_folder)
     externals_folder = str(externals_path.expanduser())
-    usd_repo_root = os.path.join(externals_folder,"src","USD")
+    externals_src = os.path.join(externals_folder, "src")
+    # USD dir has the format of 'USD-git-tag' where 'git-tag' is the git commit tag (for example '22.08')
+    # There is only one USD dir so we can just take the first directory that matches the format
+    usd_dir = [dir for dir in os.listdir(externals_src) if dir.startswith('USD')][0]
+    usd_repo_root = os.path.join(externals_src, usd_dir)
+
     print("Build flag is set, building Aurora in "+aurora_build_folder+" and building+installing USD from "+usd_repo_root+" into "+args.usd_root+" (With externals from "+externals_folder+")")
     print("- Installing externals.")
     if(subprocess.run(["python","Scripts/installExternals.py",externals_folder],cwd=args.aurora_root).returncode!=0):
         sys.exit("Failed to install externals")
     print("- Running Cmake.")
     if(subprocess.run(["cmake","-S",args.aurora_root,"-B",aurora_build_folder,"-D","EXTERNALS_DIR="+externals_folder,"-D","CMAKE_BUILD_TYPE="+args.config],cwd=args.aurora_root).returncode!=0):
-        sys.exit("Failed to run Cmake")    
+        sys.exit("Failed to run Cmake")
     print("- Building Aurora.")
     if(subprocess.run(["cmake","--build",aurora_build_folder,"--config",args.config],cwd=args.aurora_root).returncode!=0):
-        sys.exit("Failed to build Aurora")        
+        sys.exit("Failed to build Aurora")
     print("- Building USD.")
     if(subprocess.run(["python","build_scripts/build_usd.py","--python",args.usd_root],cwd=usd_repo_root).returncode!=0):
         sys.exit("Failed to build USD")
@@ -84,7 +95,7 @@ def copy_if_changed(src, dst):
     if (not os.path.exists(dst)) or (os.stat(src).st_mtime != os.stat(dst).st_mtime):
         print("Copying "+src+" to "+dst)
         shutil.copy2 (src, dst)
-        
+
 # Copy a file from src_folder to dst_folder if it has changed.
 def copy_file(src_folder,dst_folder,name):
     copy_if_changed(os.path.join(src_folder,name), os.path.join(dst_folder,name))
@@ -107,14 +118,23 @@ copy_file(aurora_build_bin_folder,usd_lib_folder,"Aurora.dll")
 copy_file(aurora_build_bin_folder,usd_lib_folder,"Aurora.pdb")
 
 # Copy compiler DLLs.
-copy_file(aurora_build_bin_folder,usd_lib_folder,"d3dcompiler_47.dll")
 copy_file(aurora_build_bin_folder,usd_lib_folder,"dxcompiler.dll")
 copy_file(aurora_build_bin_folder,usd_lib_folder,"dxil.dll")
 copy_file(aurora_build_bin_folder,usd_lib_folder,"slang.dll")
 copy_file(aurora_build_bin_folder,usd_lib_folder,"msvcp140.dll")
 copy_file(aurora_build_bin_folder,usd_lib_folder,"glew32.dll")
 
-# Copy MtlX library folder.
+# Copy MtlX libraries and library folders.
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXCore.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXFormat.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXGenGlsl.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXGenMdl.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXGenOsl.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXGenShader.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXRender.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXRenderGlsl.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXRenderHw.dll")
+copy_file(aurora_build_bin_folder,usd_lib_folder,"MaterialXRenderOsl.dll")
 if(not os.path.exists(usd_mtlx_folder)):
     os.makedirs(aurora_mtlx_folder, exist_ok=True)
     mtlx_files = glob.glob(os.path.join(aurora_mtlx_folder, "**"), recursive=True)

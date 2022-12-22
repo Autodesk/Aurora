@@ -66,7 +66,7 @@ struct HitGroupShaderRecord
         D3D12_GPU_DESCRIPTOR_HANDLE texturesHeapAddress,
         D3D12_GPU_DESCRIPTOR_HANDLE samplersHeapAddress, int materialLayerCount)
     {
-        ::memcpy_s(&ShaderIdentifer, SHADER_ID_SIZE, pShaderIdentifier, SHADER_ID_SIZE);
+        ::memcpy_s(&ShaderIdentifier, SHADER_ID_SIZE, pShaderIdentifier, SHADER_ID_SIZE);
         IndexBufferAddress             = geometry.IndexBuffer;
         PositionBufferAddress          = geometry.PositionBuffer;
         HasNormals                     = geometry.NormalBuffer ? 1 : 0;
@@ -97,7 +97,7 @@ struct HitGroupShaderRecord
     // These are the hit group arguments, in the order declared in the associated local root
     // signature. These must be aligned by their size, e.g. a root descriptor must be aligned on an
     // 8-byte (its size) boundary.
-    array<uint8_t, SHADER_ID_SIZE> ShaderIdentifer;
+    array<uint8_t, SHADER_ID_SIZE> ShaderIdentifier;
     D3D12_GPU_VIRTUAL_ADDRESS IndexBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS PositionBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS NormalBufferAddress;
@@ -688,7 +688,7 @@ void PTScene::updateShaderTables()
                 parentInstanceData.pGeometry->buffers();
             if (layerData.instanceData.pGeometry)
             {
-                // Enure the layer geometry matches parent geometry
+                // Ensure the layer geometry matches parent geometry
                 if (layerData.instanceData.pGeometry->vertexCount() !=
                     parentInstanceData.pGeometry->vertexCount())
                 {
@@ -701,7 +701,8 @@ void PTScene::updateShaderTables()
                         layerData.instanceData.pGeometry->vertexCount(),
                         parentInstanceData.pGeometry->name().c_str(),
                         parentInstanceData.pGeometry->vertexCount(), layerData.index);
-                    // This will be caught by try statment around render.
+
+                    // This will be caught by the try statement around render().
                     AU_FAIL("Invalid geometry");
                 }
 

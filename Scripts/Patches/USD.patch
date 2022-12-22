@@ -1,0 +1,31 @@
+diff --git a/cmake/modules/FindOpenSubdiv.cmake b/cmake/modules/FindOpenSubdiv.cmake
+index 686af9b16..26b71e6fa 100644
+--- a/cmake/modules/FindOpenSubdiv.cmake
++++ b/cmake/modules/FindOpenSubdiv.cmake
+@@ -27,16 +27,18 @@ IF(NOT OPENSUBDIV_ROOT_DIR AND NOT $ENV{OPENSUBDIV_ROOT_DIR} STREQUAL "")
+     SET(OPENSUBDIV_ROOT_DIR $ENV{OPENSUBDIV_ROOT_DIR})
+ ENDIF()
+ 
+-SET(_opensubdiv_FIND_COMPONENTS
+-    osdCPU
+-)
+-if(OPENSUBDIV_USE_GPU)
+-    list(APPEND
+-        _opensubdiv_FIND_COMPONENTS
+-        osdGPU)
++if(CMAKE_BUILD_TYPE STREQUAL Debug)
++  SET(_opensubdiv_FIND_COMPONENTS osdCPUd)
++  if(OPENSUBDIV_USE_GPU)
++      list(APPEND _opensubdiv_FIND_COMPONENTS osdGPUd)
++  endif()
++else()
++  SET(_opensubdiv_FIND_COMPONENTS osdCPU)
++  if(OPENSUBDIV_USE_GPU)
++      list(APPEND _opensubdiv_FIND_COMPONENTS osdGPU)
++  endif()
+ endif()
+ 
+-
+ SET(_opensubdiv_SEARCH_DIRS
+     ${OPENSUBDIV_ROOT_DIR}
+     /usr/local

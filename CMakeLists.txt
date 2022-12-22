@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.24)
+# 3.24 is required to have Vulkan::shaderc_combined
+
 
 # Forbid the in-source build
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
@@ -54,7 +56,15 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wno-unknown-pragmas -Wno-gnu-zero-variadic-macro-arguments)
 endif()
 
-include(externals)
+include(externalsConfig OPTIONAL RESULT_VARIABLE EXTERNALS_CONFIG)
+if (NOT EXTERNALS_CONFIG AND DEFINED EXTERNALS_ROOT)
+    include(externalsDefaultConfig RESULT_VARIABLE EXTERNALS_CONFIG)
+endif()
+if (EXTERNALS_CONFIG)
+    message(STATUS "Load externals config file: ${EXTERNALS_CONFIG}")
+else()
+    message(FATAL_ERROR "Failed to load externals config file. If you have run `installExternals.py` from an early release, please re-run the script to generate the externals and the config file. Run `python Scripts/installExternals.py -h` to learn more options.")
+endif()
 
 #Setup the backend flags used by Aurora libray and tests.
 if(WIN32)

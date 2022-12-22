@@ -1,0 +1,96 @@
+diff --git a/src/cmake/externalpackages.cmake b/src/cmake/externalpackages.cmake
+index 3ca046b2..36faf2d0 100644
+--- a/src/cmake/externalpackages.cmake
++++ b/src/cmake/externalpackages.cmake
+@@ -185,7 +185,6 @@ checked_find_package (OpenCV 3.0
+                    DEFINITIONS  -DUSE_OPENCV=1)
+ 
+ # Intel TBB
+-set (TBB_USE_DEBUG_BUILD OFF)
+ checked_find_package (TBB 2017
+                       SETVARIABLES OIIO_TBB
+                       PREFER_CONFIG)
+diff --git a/src/cmake/modules/FindJPEGTurbo.cmake b/src/cmake/modules/FindJPEGTurbo.cmake
+index a6fb7560..36a4f99a 100644
+--- a/src/cmake/modules/FindJPEGTurbo.cmake
++++ b/src/cmake/modules/FindJPEGTurbo.cmake
+@@ -5,51 +5,8 @@
+ #  JPEG_INCLUDE_DIRS - the libjpeg-turbo include directories
+ #  JPEG_LIBRARIES - link these to use libjpeg-turbo
+ #
+-
+-include (FindPackageHandleStandardArgs)
+-
+-find_path(JPEG_INCLUDE_DIR turbojpeg.h
+-          HINTS /usr/local/opt/jpeg-turbo/include
+-          PATH_SUFFIXES include)
+-set(JPEG_NAMES ${JPEG_NAMES} jpeg libjpeg turbojpeg libturbojpeg)
+-
+-find_library(JPEG_LIBRARY NAMES ${JPEG_NAMES}
+-             HINTS ${JPEG_INCLUDE_DIR}/..
+-                   /usr/local/opt/jpeg-turbo
+-                   /opt/libjpeg-turbo
+-             PATH_SUFFIXES lib lib64
+-             NO_DEFAULT_PATH)
+-if (NOT JPEG_LIBRARY)
+-    find_library(JPEG_LIBRARY NAMES ${JPEG_NAMES}
+-                 HINTS ${JPEG_INCLUDE_DIR}/..
+-                       /usr/local/opt/jpeg-turbo
+-                 PATH_SUFFIXES lib lib64)
+-endif ()
+-
+-if (JPEG_INCLUDE_DIR AND JPEG_LIBRARY)
+-  set (JPEG_INCLUDE_DIRS ${JPEG_INCLUDE_DIR} CACHE PATH "JPEG include dirs")
+-  set (JPEG_LIBRARIES ${JPEG_LIBRARY} CACHE STRING "JPEG libraries")
+-  file(STRINGS "${JPEG_INCLUDE_DIR}/jconfig.h"
+-                jpeg_lib_version REGEX "^#define[\t ]+JPEG_LIB_VERSION[\t ]+.*")
+-  if (jpeg_lib_version)
+-      string(REGEX REPLACE "^#define[\t ]+JPEG_LIB_VERSION[\t ]+([0-9]+).*"
+-              "\\1" JPEG_VERSION "${jpeg_lib_version}")
+-  endif ()
+-endif ()
+-
+-# handle the QUIETLY and REQUIRED arguments and set JPEG_FOUND to TRUE if
+-# all listed variables are TRUE
+-FIND_PACKAGE_HANDLE_STANDARD_ARGS(JPEG DEFAULT_MSG JPEG_LIBRARIES JPEG_INCLUDE_DIRS)
++find_package(JPEG ${ARGN})
+ 
+ if (JPEG_FOUND)
+     set (JPEGTURBO_FOUND true)
+-
+-    # Use an intermediary target named "JPEG::JPEG" to match libjpeg's export
+-    if(NOT TARGET JPEG::JPEG)
+-      add_library(JPEG::JPEG INTERFACE IMPORTED)
+-      target_link_libraries(JPEG::JPEG INTERFACE ${JPEG_LIBRARY})
+-    endif()
+ endif ()
+-
+-mark_as_advanced(JPEG_LIBRARIES JPEG_INCLUDE_DIRS )
+-
+diff --git a/src/cmake/modules/FindOpenEXR.cmake b/src/cmake/modules/FindOpenEXR.cmake
+index 3ade82e9..e37d43f8 100644
+--- a/src/cmake/modules/FindOpenEXR.cmake
++++ b/src/cmake/modules/FindOpenEXR.cmake
+@@ -219,15 +219,18 @@ endif ()
+ # Look for the libraries themselves, for all the components.
+ # This is complicated because the OpenEXR libraries may or may not be
+ # built with version numbers embedded.
++if (CMAKE_BUILD_TYPE STREQUAL "Debug")
++    set(LIB_POSTFIX "d")
++else()
++    set(LIB_POSTFIX "")
++endif()
+ set (_openexr_components IlmThread IlmImf Imath Iex Half)
+ foreach (COMPONENT ${_openexr_components})
+     string (TOUPPER ${COMPONENT} UPPERCOMPONENT)
+     # First try with the version embedded
+     find_library (OPENEXR_${UPPERCOMPONENT}_LIBRARY
+-                  NAMES ${COMPONENT}-${OpenEXR_VERSION_MAJOR}_${OpenEXR_VERSION_MINOR}
+-                        ${COMPONENT}
+-                        ${COMPONENT}-${OpenEXR_VERSION_MAJOR}_${OpenEXR_VERSION_MINOR}_d
+-                        ${COMPONENT}_d
++                  NAMES ${COMPONENT}-${OPENEXR_VERSION_MAJOR}_${OPENEXR_VERSION_MINOR}${LIB_POSTFIX}
++                        ${COMPONENT}${LIB_POSTFIX}
+                   HINTS ${OPENEXR_LIBRARY_DIR} $ENV{OPENEXR_LIBRARY_DIR}
+                         ${GENERIC_LIBRARY_PATHS} )
+ endforeach ()

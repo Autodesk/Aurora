@@ -50,12 +50,12 @@ EnvironmentResource::EnvironmentResource(const Aurora::Path& path, const Resourc
             [this](string propName, glm::vec3 val) {
                 _resource->values().setFloat3(propName, (const float*)&val);
             } },
-        // Apply the top backgound color.
+        // Apply the top background color.
         { Names::EnvironmentProperties::kBackgroundTop,
             [this](string propName, glm::vec3 val) {
                 _resource->values().setFloat3(propName, (const float*)&val);
             } },
-        // Apply the bottom backgound color.
+        // Apply the bottom background color.
         { Names::EnvironmentProperties::kBackgroundBottom, [this](string propName, glm::vec3 val) {
              _resource->values().setFloat3(propName, (const float*)&val);
          } } });
@@ -170,7 +170,7 @@ SamplerResource::SamplerResource(const Aurora::Path& path, const ResourceMap& co
 
 void SamplerResource::createResource()
 {
-    // Create sampler directly from the resouce properties.
+    // Create sampler directly from the resource properties.
     _resource = _pRenderer->createSamplerPointer(this->properties());
 }
 
@@ -247,7 +247,7 @@ InstanceResource::InstanceResource(const Path& path, const ResourceMap& containe
     // resource.
     initializePathApplicators(
         { // Apply the geometry property. This is treated as a property internally, but will trigger
-          // resource invalidation if changed (i.e. will force recreation of the resouce)
+          // resource invalidation if changed (i.e. will force recreation of the resource)
             { Names::InstanceProperties::kGeometry,
                 [this](string propName, Aurora::Path) {
                     IGeometryPtr pGeom =

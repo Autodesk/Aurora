@@ -61,8 +61,8 @@ class ResourceStub;
 /// A resource stub becomes active when it is added to the scene, or something referencing it
 /// becomes active (e.g. an image becomes active when it is added to a material, that is set on an
 /// instance in the scene.)  When a resource stub is activated the actual renderer resource
-/// associated with it is created. A resource stub becomes inactive when it is no longer refenced by
-/// something in the scene, and its renderer resource is destroyed.
+/// associated with it is created. A resource stub becomes inactive when it is no longer referenced
+/// by something in the scene, and its renderer resource is destroyed.
 ///
 /// It is also possible to manually activate a resource stub before it is added to the scene, by
 /// incrementing the permanent reference count of the stub. Any stub with a permanent reference
@@ -70,11 +70,11 @@ class ResourceStub;
 /// not.
 ///
 /// The stub contains all the required data to create the actual resource when the stub becomes
-/// active but none of the large data buffers, which should be retreived via callback function.
+/// active but none of the large data buffers, which should be retrieved via callback function.
 ///
 /// This class should be sub-classed by the various resource types (Material, Image, Geometry,
 /// Instance, etc.) to implement the specifics of creating and destroying that resource. The sub
-/// class should also set up the applicator funcitons that define how the stubs properties are
+/// class should also set up the applicator functions that define how the stubs properties are
 /// applied to the actual renderer resource.
 class ResourceStub
 {
@@ -89,18 +89,18 @@ public:
     ResourceStub(const ResourceStub& s) = delete;
 
     /// Creates the actual renderer resource for this resource stub when activated.  Should be
-    /// overriden by specific resource sub-class.
+    /// overridden by specific resource sub-class.
     virtual void createResource() = 0;
 
     /// Destroys the actual renderer resource for this resource stub when deactivated.  Should be
-    /// overriden by specific resource sub-class.
+    /// overridden by specific resource sub-class.
     virtual void destroyResource() = 0;
 
     virtual const ResourceType& type() = 0;
 
     /// Set some or all of the properties of this resource.
     ///
-    /// Modifiying path properties will also result adding a reference from this resource stub to
+    /// Modifying path properties will also result adding a reference from this resource stub to
     /// the one referenced by the path.
     ///
     /// If the resource stub is currently active this will also apply to the properties to the

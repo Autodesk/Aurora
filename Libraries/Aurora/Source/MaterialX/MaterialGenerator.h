@@ -41,7 +41,7 @@ private:
     // Code generator used to generate MaterialX files.
     unique_ptr<MaterialXCodeGen::BSDFCodeGenerator> _pCodeGenerator;
 
-    // Mapping from MaterialX output parameter to Aurora standard surface parameter.
+    // Mapping from a MaterialX output property to a Standard Surface property.
     map<string, string> _materialXOutputParamMapping;
 
     IRenderer* _pRenderer;

@@ -11,18 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * Copyright 2020 Autodesk, Inc.
- * All rights reserved.
- *
- * This computer source code and related instructions and comments are the unpublished confidential
- * and proprietary information of Autodesk, Inc. and are protected under Federal copyright and state
- * trade secret law. They may not be disclosed to, copied or used by any third party without the
- * prior written consent of Autodesk, Inc.
- *
- * @file AuroraMain.cpp
- * @brief Unit test entry point for  Aurora library
- */
 
 #include <gtest/gtest.h>
 

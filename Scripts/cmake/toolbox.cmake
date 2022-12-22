@@ -23,6 +23,14 @@ function(find_package_verbose PKG_NAME)
   endforeach()
 endfunction()
 
+function(strip_path PATHLIST FILELIST)
+    set(_files "")
+    foreach(_path ${PATHLIST})
+        cmake_path(GET _path FILENAME _file)
+        list(APPEND _files ${_file})
+    endforeach()
+    set(${FILELIST} ${_files} PARENT_SCOPE)
+endfunction()
 
 find_package(Python3 REQUIRED) # Required to minify shaders
 # Macro to setup custom command and custom build tool that minifies all of them if any has changed.

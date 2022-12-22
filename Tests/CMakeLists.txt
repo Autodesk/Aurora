@@ -8,10 +8,6 @@ find_package(GTest REQUIRED) # Find the GoogleTest unit test package.
 
 find_package(Vulkan REQUIRED)
 find_package(pxr REQUIRED)
-add_library(pxr::usd ALIAS usd)
-add_library(pxr::hgi ALIAS hgi)
-add_library(pxr::usdImagingGL ALIAS usdImagingGL)
-
 
 # Build list of backends
 set(AURORA_BACKENDS_LIST "")
@@ -37,12 +33,9 @@ add_compile_definitions(AURORA_BACKENDS=${AURORA_BACKENDS_DEFINE})
 
 
 if(WIN32)
-    if(NOT DEFINED OpenImageIO_ROOT)
-        cmake_path(GET OpenImageIO_LIB_DIR PARENT_PATH OpenImageIO_ROOT)
-    endif()
     add_custom_target(CopyOpenImageIODLLs ALL
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OpenImageIO_ROOT}/bin/OpenImageIO_Util.dll ${RUNTIME_OUTPUT_DIR}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OpenImageIO_ROOT}/bin/OpenImageIO.dll ${RUNTIME_OUTPUT_DIR}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:OpenImageIO::OpenImageIO> ${RUNTIME_OUTPUT_DIR}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:OpenImageIO::OpenImageIO_Util> ${RUNTIME_OUTPUT_DIR}
     )
     set_property(TARGET CopyOpenImageIODLLs PROPERTY FOLDER "Deployment")
 endif()

@@ -53,7 +53,7 @@ static const wchar_t* gBackgroundMissEntryPoint = L"BackgroundMissShader";
 static const wchar_t* gRadianceMissEntryPoint   = L"RadianceMissShader";
 static const wchar_t* gShadowMissEntryPoint     = L"ShadowMissShader";
 
-// Combine the source code for the reference and standard surface BSDF to produce the default built
+// Combine the source code for the reference and Standard Surface BSDF to produce the default built
 // in material type. Use USE_REFERENCE_BSDF ifdef so that the material's BSDF can be selected via an
 // option.
 
@@ -434,7 +434,7 @@ ID3D12RootSignaturePtr PTShaderLibrary::createRootSignature(const D3D12_ROOT_SIG
 void PTShaderLibrary::initRootSignatures()
 {
     // Specify the global root signature for all shaders. This includes a global static sampler
-    // which shaders can use by default, as well as dynamic samplers per-meterial.
+    // which shaders can use by default, as well as dynamic samplers per-material.
     CD3DX12_DESCRIPTOR_RANGE texRange;
     CD3DX12_DESCRIPTOR_RANGE samplerRange;
 
@@ -777,9 +777,9 @@ void PTShaderLibrary::rebuild()
     // NOTE: Tracing beyond this depth leads to undefined behavior, e.g. incorrect rendering or
     // device removal. The shaders track the depth to ensure it is not exceeded. We allow one more
     // than the maximum to so that shadow rays can still be traced at the maximum trace depth.
-    auto* pPipelineConfigSuboject =
+    auto* pPipelineConfigSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
-    pPipelineConfigSuboject->Config(PTRenderer::kMaxTraceDepth + 1);
+    pPipelineConfigSubobject->Config(PTRenderer::kMaxTraceDepth + 1);
 
     // Create the DXC library, linker, and compiler.
     // NOTE: DXCompiler.dll is set DELAYLOAD in the linker settings, so this will abort if DLL
@@ -977,17 +977,17 @@ void PTShaderLibrary::rebuild()
     // with specific shaders (which would use CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT).
 
     // Create the global root signature subobject.
-    auto* pGlobalRootSignatureSuboject =
+    auto* pGlobalRootSignatureSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
-    pGlobalRootSignatureSuboject->SetRootSignature(_pGlobalRootSignature.Get());
+    pGlobalRootSignatureSubobject->SetRootSignature(_pGlobalRootSignature.Get());
 
     // Create the local root signature subobject associated with the ray generation shader.
-    auto* pRayGenRootSignatureSuboject =
+    auto* pRayGenRootSignatureSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-    pRayGenRootSignatureSuboject->SetRootSignature(_pRayGenRootSignature.Get());
+    pRayGenRootSignatureSubobject->SetRootSignature(_pRayGenRootSignature.Get());
     auto* pAssociationSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-    pAssociationSubobject->SetSubobjectToAssociate(*pRayGenRootSignatureSuboject);
+    pAssociationSubobject->SetSubobjectToAssociate(*pRayGenRootSignatureSubobject);
     pAssociationSubobject->AddExport(gRayGenEntryPoint);
 
     // Keep track of number of active material types.
@@ -1012,13 +1012,13 @@ void PTShaderLibrary::rebuild()
 
             // Create the local root signature subobject associated with the hit group.
             // All material types are based on the same radiance hit root signature currently.
-            auto* pRadianceHitRootSignatureSuboject =
+            auto* pRadianceHitRootSignatureSubobject =
                 pipelineStateDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-            pRadianceHitRootSignatureSuboject->SetRootSignature(_pRadianceHitRootSignature.Get());
+            pRadianceHitRootSignatureSubobject->SetRootSignature(_pRadianceHitRootSignature.Get());
             pAssociationSubobject =
                 pipelineStateDesc
                     .CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-            pAssociationSubobject->SetSubobjectToAssociate(*pRadianceHitRootSignatureSuboject);
+            pAssociationSubobject->SetSubobjectToAssociate(*pRadianceHitRootSignatureSubobject);
 
             // Create the radiance hit group subobject, which aggregates closest hit, any hit, and
             // intersection shaders as a group. In this case, there is a closest hit shader for
@@ -1029,19 +1029,19 @@ void PTShaderLibrary::rebuild()
             // have to be created, and referenced with an offset in the related TraceRay() calls.
 
             // Create hit group (required even if only has miss shader.)
-            auto* pMaterialTypeSuboject =
+            auto* pMaterialTypeSubobject =
                 pipelineStateDesc.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
-            pMaterialTypeSuboject->SetHitGroupExport(pMaterialType->exportName().c_str());
+            pMaterialTypeSubobject->SetHitGroupExport(pMaterialType->exportName().c_str());
             pAssociationSubobject->AddExport(pMaterialType->exportName().c_str());
 
             if (pMaterialType->refCount(PTMaterialType::EntryPoint::kRadianceHit) > 0)
             {
 
-                pMaterialTypeSuboject->SetClosestHitShaderImport(
+                pMaterialTypeSubobject->SetClosestHitShaderImport(
                     pMaterialType->closestHitEntryPoint().c_str());
-                pMaterialTypeSuboject->SetAnyHitShaderImport(
+                pMaterialTypeSubobject->SetAnyHitShaderImport(
                     pMaterialType->shadowAnyHitEntryPoint().c_str());
-                pMaterialTypeSuboject->SetHitGroupType(D3D12_HIT_GROUP_TYPE_TRIANGLES);
+                pMaterialTypeSubobject->SetHitGroupType(D3D12_HIT_GROUP_TYPE_TRIANGLES);
 
                 pAssociationSubobject->AddExport(pMaterialType->exportName().c_str());
             }
@@ -1049,13 +1049,13 @@ void PTShaderLibrary::rebuild()
             if (pMaterialType->refCount(PTMaterialType::EntryPoint::kLayerMiss) > 0)
             {
 
-                auto* pLayerMissRootSignatureSuboject =
+                auto* pLayerMissRootSignatureSubobject =
                     pipelineStateDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-                pLayerMissRootSignatureSuboject->SetRootSignature(_pLayerMissRootSignature.Get());
+                pLayerMissRootSignatureSubobject->SetRootSignature(_pLayerMissRootSignature.Get());
                 pAssociationSubobject =
                     pipelineStateDesc
                         .CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-                pAssociationSubobject->SetSubobjectToAssociate(*pLayerMissRootSignatureSuboject);
+                pAssociationSubobject->SetSubobjectToAssociate(*pLayerMissRootSignatureSubobject);
                 pAssociationSubobject->AddExport(
                     pMaterialType->materialLayerMissEntryPoint().c_str());
             }

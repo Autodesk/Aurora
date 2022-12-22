@@ -1,10 +1,15 @@
+# Prevent re-defining the package target
+if(TARGET stb::stb)
+  return()
+endif()
+
 # Find the stb include path
 if (DEFINED stb_ROOT)
     # Prioritize the stb installed at ${stb_ROOT}
     find_path(stb_INCLUDE_DIR      # Set variable stb_INCLUDE_DIR
               stb_image.h          # Find a path with stb_image.h
               NO_DEFAULT_PATH
-              PATHS "${NRI_ROOT}"
+              PATHS "${stb_ROOT}"
     )
 endif()
 # Once the privous find_path succeeds the result variable will be set and stored in the cache

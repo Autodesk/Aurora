@@ -41,6 +41,7 @@ struct ProcessedMaterialNetwork
     std::map<std::string, HdMaterialRelationship*> relationships;
 };
 
+// Properties require a value to be added to a Uniform block.
 static const string paramBindingTemplate = R"(
       <input name="%s" type="%s" />)";
 
@@ -421,7 +422,7 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         { TfToken("roughness"),             "specular_roughness", setF1Value },
         { TfToken("ior"),                   "specular_IOR",       setF1Value },
         { TfToken("emissiveColor"),         "emission_color",     setF3Value },
-        { TfToken("opacity"),               "transmission",       setF1Value },// Map UsdPreviewSurface opacity to standard surface transmission.
+        { TfToken("opacity"),               "transmission",       setF1Value },// Map UsdPreviewSurface opacity to Standard Surface transmission.
         { TfToken("clearcoat"),             "coat",               setF1Value },
         { TfToken("clearcoatColor"),        "coat_color",         setF3Value },
         { TfToken("clearcoatRoughness"),    "coat_roughness",     setF1Value },
@@ -571,7 +572,7 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         { TfToken("roughness"),             "specular_roughness", setF1Value },
         { TfToken("ior"),                   "specular_IOR",       setF1Value },
         { TfToken("emissiveColor"),         "emission_color",     setF3Value },
-        { TfToken("opacity"),               "transmission",       setTransmissionFromOpacity },// Map UsdPreviewSurface opacity to standard surface transmission.
+        { TfToken("opacity"),               "transmission",       setTransmissionFromOpacity },// Map UsdPreviewSurface opacity to Standard Surface transmission.
         { TfToken("clearcoat"),             "coat",               setF1Value },
         { TfToken("clearcoatColor"),        "coat_color",         setF3Value },
         { TfToken("clearcoatRoughness"),    "coat_roughness",     setF1Value },
