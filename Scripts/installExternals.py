@@ -52,6 +52,9 @@ if sys.version_info.major < 3:
 # Helpers for printing output
 verbosity = 1
 
+# Script version, incrementing this will force re-installation of all packages.
+scriptVersion = "00001"
+
 def Print(msg):
     if verbosity > 0:
         print(msg)
@@ -128,6 +131,100 @@ def IsVisualStudioVersionOrGreater(desiredVersion):
 def IsVisualStudio2019OrGreater():
     VISUAL_STUDIO_2019_VERSION = (16, 0)
     return IsVisualStudioVersionOrGreater(VISUAL_STUDIO_2019_VERSION)
+
+def GetPythonInfo(context):
+    """Returns a tuple containing the path to the Python executable, shared
+    library, and include directory corresponding to the version of Python
+    currently running. Returns None if any path could not be determined.
+
+    This function is used to extract build information from the Python
+    interpreter used to launch this script. This information is used
+    in the Boost and USD builds. By taking this approach we can support
+    having USD builds for different Python versions built on the same
+    machine. This is very useful, especially when developers have multiple
+    versions installed on their machine, which is quite common now with
+    Python2 and Python3 co-existing.
+    """
+
+    # If we were given build python info then just use it.
+    if context.build_python_info:
+        return (context.build_python_info['PYTHON_EXECUTABLE'],
+                context.build_python_info['PYTHON_LIBRARY'],
+                context.build_python_info['PYTHON_INCLUDE_DIR'],
+                context.build_python_info['PYTHON_VERSION'])
+
+    # First we extract the information that can be uniformly dealt with across
+    # the platforms:
+    pythonExecPath = sys.executable
+    pythonVersion = sysconfig.get_config_var("py_version_short")  # "2.7"
+
+    # Lib path is unfortunately special for each platform and there is no
+    # config_var for it. But we can deduce it for each platform, and this
+    # logic works for any Python version.
+    def _GetPythonLibraryFilename(context):
+        if Windows():
+            return "python{version}.lib".format(
+                version=sysconfig.get_config_var("py_version_nodot"))
+        elif Linux():
+            return sysconfig.get_config_var("LDLIBRARY")
+        else:
+            raise RuntimeError("Platform not supported")
+
+    pythonIncludeDir = sysconfig.get_path("include")
+    if not pythonIncludeDir or not os.path.isdir(pythonIncludeDir):
+        # as a backup, and for legacy reasons - not preferred because
+        # it may be baked at build time
+        pythonIncludeDir = sysconfig.get_config_var("INCLUDEPY")
+
+    # if in a venv, installed_base will be the "original" python,
+    # which is where the libs are ("base" will be the venv dir)
+    pythonBaseDir = sysconfig.get_config_var("installed_base")
+    if not pythonBaseDir or not os.path.isdir(pythonBaseDir):
+        # for python-2.7
+        pythonBaseDir = sysconfig.get_config_var("base")
+
+    if Windows():
+        pythonLibPath = os.path.join(pythonBaseDir, "libs",
+                                     _GetPythonLibraryFilename(context))
+    elif Linux():
+        pythonMultiarchSubdir = sysconfig.get_config_var("multiarchsubdir")
+        # Try multiple ways to get the python lib dir
+        for pythonLibDir in (sysconfig.get_config_var("LIBDIR"),
+                             os.path.join(pythonBaseDir, "lib")):
+            if pythonMultiarchSubdir:
+                pythonLibPath = \
+                    os.path.join(pythonLibDir + pythonMultiarchSubdir,
+                                 _GetPythonLibraryFilename(context))
+                if os.path.isfile(pythonLibPath):
+                    break
+            pythonLibPath = os.path.join(pythonLibDir,
+                                         _GetPythonLibraryFilename(context))
+            if os.path.isfile(pythonLibPath):
+                break
+    else:
+        raise RuntimeError("Platform not supported")
+
+    return (pythonExecPath, pythonLibPath, pythonIncludeDir, pythonVersion)
+
+# Check the installed version of a package, using generated .version.txt file.
+def CheckVersion(context, packageName, versionString):
+    fullVersionString = scriptVersion+":"+versionString
+    versionTextFilename = os.path.join(context.externalsInstDir, packageName+".version.txt")
+    if(not os.path.exists(versionTextFilename)):
+        return False
+
+    versionTxt = pathlib.Path(versionTextFilename).read_text()
+    return versionTxt==fullVersionString
+    
+# Update generated .version.txt file for a package.
+def UpdateVersion(context, packageName, versionString):
+    if(CheckVersion(context, packageName, versionString)):
+        return
+    fullVersionString = scriptVersion+":"+versionString
+    versionTextFilename = os.path.join(context.externalsInstDir, packageName+".version.txt")
+    versionFile= open(versionTextFilename, "wt")
+    versionFile.write(fullVersionString)
+    versionFile.close()
 
 def GetCPUCount():
     try:
@@ -504,6 +601,22 @@ def GitClone(url, tag, cloneDir, context):
         raise RuntimeError("Failed to clone repo {url} ({tag}): {err}".format(
                             url=url, tag=tag, err=e))
 
+def GitCloneSHA(url, sha, cloneDir, context):
+    try:
+        with CurrentWorkingDirectory(context.externalsSrcDir):
+            # TODO check if cloneDir is a cloned folder of url
+            if not os.path.exists(cloneDir):
+                Run("git clone --recurse-submodules {url} {folder}".format(url=url, folder=cloneDir))
+                with CurrentWorkingDirectory(os.path.join(context.externalsSrcDir, cloneDir)):
+                    Run("git checkout {sha}".format(sha=sha))
+            elif not IsGitFolder(cloneDir):
+                raise RuntimeError("Failed to clone repo {url} ({tag}): non-git folder {folder} exists".format(
+                                    url=url, tag=tag, folder=cloneDir))
+            return os.path.abspath(cloneDir)
+    except Exception as e:
+        raise RuntimeError("Failed to clone repo {url} ({tag}): {err}".format(
+                            url=url, tag=tag, err=e))
+
 def WriteExternalsConfig(context, externals):
     win32Header = """
 # Build configurations: {buildConfiguration}
@@ -549,11 +662,12 @@ AllDependencies = list()
 AllDependenciesByName = dict()
 
 class Dependency(object):
-    def __init__(self, name, packageName, installer, *files):
+    def __init__(self, name, packageName, installer, versionString, *files):
         self.name = name
         self.packageName = packageName # cmake package name
         self.installer = installer
         self.installFolder = name
+        self.versionString = versionString
         self.filesToCheck = files
 
         AllDependencies.append(self)
@@ -563,10 +677,18 @@ class Dependency(object):
         return all([os.path.isfile(os.path.join(context.externalsInstDir, self.installFolder, f))
                     for f in self.filesToCheck])
 
+    def UpdateVersion(self, context):
+        UpdateVersion(context, self.packageName, self.versionString)
+
+    def IsUpToDate(self, context):
+        if(not self.Exists(context)):
+            return False
+        return CheckVersion(context, self.packageName, self.versionString)
+
 ############################################################
 # zlib
 
-ZLIB_URL = "https://github.com/madler/zlib/archive/v1.2.11.zip"
+ZLIB_URL = "https://github.com/madler/zlib/archive/v1.2.13.zip"
 ZLIB_INSTALL_FOLDER = "zlib"
 ZLIB_PACKAGE_NAME = "ZLIB"
 
@@ -574,12 +696,12 @@ def InstallZlib(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ZLIB_URL, context, force)):
         RunCMake(context, force, ZLIB_INSTALL_FOLDER, buildArgs)
 
-ZLIB = Dependency(ZLIB_INSTALL_FOLDER, ZLIB_PACKAGE_NAME, InstallZlib, "include/zlib.h")
+ZLIB = Dependency(ZLIB_INSTALL_FOLDER, ZLIB_PACKAGE_NAME, InstallZlib, ZLIB_URL, "include/zlib.h")
 
 ############################################################
 # boost
 
-BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.70.0/source/boost_1_70_0.tar.gz"
+BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.tar.gz"
 
 if Linux():
     BOOST_VERSION_FILE = "include/boost/version.hpp"
@@ -588,10 +710,7 @@ elif Windows():
     # subdirectory, which we have to account for here. In theory, specifying
     # "layout=system" would make the Windows install match Linux, but that
     # causes problems for other dependencies that look for boost.
-    #
-    # boost 1.70 is required for Visual Studio 2019. For simplicity, we use
-    # this version for all older Visual Studio versions as well.
-    BOOST_VERSION_FILE = "include/boost-1_70/boost/version.hpp"
+    BOOST_VERSION_FILE = "include/boost-1_78/boost/version.hpp"
 
 BOOST_INSTALL_FOLDER = "boost"
 BOOST_PACKAGE_NAME = "Boost"
@@ -628,6 +747,27 @@ def InstallBoost_Helper(context, force, buildArgs):
             '--with-program_options',
             '--with-regex'
         ]
+
+        # Required by USD built with python support
+        b2Settings.append("--with-python")
+        pythonInfo = GetPythonInfo(context)
+        # This is the only platform-independent way to configure these
+        # settings correctly and robustly for the Boost jam build system.
+        # There are Python config arguments that can be passed to bootstrap
+        # but those are not available in boostrap.bat (Windows) so we must
+        # take the following approach:
+        projectPath = 'python-config.jam'
+        with open(projectPath, 'w') as projectFile:
+            # Note that we must escape any special characters, like
+            # backslashes for jam, hence the mods below for the path
+            # arguments. Also, if the path contains spaces jam will not
+            # handle them well. Surround the path parameters in quotes.
+            projectFile.write('using python : %s\n' % pythonInfo[3])
+            projectFile.write('  : "%s"\n' % pythonInfo[0].replace("\\","/"))
+            projectFile.write('  : "%s"\n' % pythonInfo[2].replace("\\","/"))
+            projectFile.write('  : "%s"\n' % os.path.dirname(pythonInfo[1]).replace("\\","/"))
+            projectFile.write('  ;\n')
+        b2Settings.append("--user-config=python-config.jam")
 
         # Required by OpenImageIO
         b2Settings.append("--with-date_time")
@@ -686,7 +826,7 @@ def InstallBoost(context, force, buildArgs):
                 except: pass
         raise
 
-BOOST = Dependency(BOOST_INSTALL_FOLDER, BOOST_PACKAGE_NAME, InstallBoost, BOOST_VERSION_FILE)
+BOOST = Dependency(BOOST_INSTALL_FOLDER, BOOST_PACKAGE_NAME, InstallBoost, BOOST_URL, BOOST_VERSION_FILE)
 
 ############################################################
 # Intel TBB
@@ -738,7 +878,7 @@ def InstallTBB_Linux(context, force, buildArgs):
             CopyDirectory(context, "include/serial", "include/serial", TBB_INSTALL_FOLDER)
             CopyDirectory(context, "include/tbb", "include/tbb", TBB_INSTALL_FOLDER)
 
-TBB = Dependency(TBB_INSTALL_FOLDER, TBB_PACKAGE_NAME, InstallTBB, "include/tbb/tbb.h")
+TBB = Dependency(TBB_INSTALL_FOLDER, TBB_PACKAGE_NAME, InstallTBB, TBB_URL, "include/tbb/tbb.h")
 
 ############################################################
 # JPEG
@@ -751,7 +891,7 @@ def InstallJPEG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(JPEG_URL, context, force)):
         RunCMake(context, force, JPEG_INSTALL_FOLDER, buildArgs)
 
-JPEG = Dependency(JPEG_INSTALL_FOLDER, JPEG_PACKAGE_NAME, InstallJPEG, "include/jpeglib.h")
+JPEG = Dependency(JPEG_INSTALL_FOLDER, JPEG_PACKAGE_NAME, InstallJPEG, JPEG_URL, "include/jpeglib.h")
 
 ############################################################
 # TIFF
@@ -785,7 +925,7 @@ def InstallTIFF(context, force, buildArgs):
         extraArgs += buildArgs
         RunCMake(context, force, TIFF_INSTALL_FOLDER, extraArgs)
 
-TIFF = Dependency(TIFF_INSTALL_FOLDER, TIFF_PACKAGE_NAME, InstallTIFF, "include/tiff.h")
+TIFF = Dependency(TIFF_INSTALL_FOLDER, TIFF_PACKAGE_NAME, InstallTIFF, TIFF_URL, "include/tiff.h")
 
 ############################################################
 # PNG
@@ -798,7 +938,7 @@ def InstallPNG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(PNG_URL, context, force)):
         RunCMake(context, force, PNG_INSTALL_FOLDER, buildArgs)
 
-PNG = Dependency(PNG_INSTALL_FOLDER, PNG_PACKAGE_NAME, InstallPNG, "include/png.h")
+PNG = Dependency(PNG_INSTALL_FOLDER, PNG_PACKAGE_NAME, InstallPNG, PNG_URL, "include/png.h")
 
 ############################################################
 # GLM
@@ -812,20 +952,22 @@ def InstallGLM(context, force, buildArgs):
         CopyDirectory(context, "glm", "glm", GLM_INSTALL_FOLDER)
         CopyDirectory(context, "cmake/glm", "cmake/glm", GLM_INSTALL_FOLDER)
 
-GLM = Dependency(GLM_INSTALL_FOLDER, GLM_PACKAGE_NAME, InstallGLM, "glm/glm.hpp")
+GLM = Dependency(GLM_INSTALL_FOLDER, GLM_PACKAGE_NAME, InstallGLM, GLM_URL, "glm/glm.hpp")
 
 ############################################################
 # STB
 
-STB_URL = "https://github.com/nothings/stb/archive/refs/heads/master.zip"
+STB_URL = "https://github.com/nothings/stb.git"
+STB_SHA = "5736b15f7ea0ffb08dd38af21067c314d6a3aae9" # master on 2023-01-29
 STB_INSTALL_FOLDER = "stb"
 STB_PACKAGE_NAME = "stb"
 
 def InstallSTB(context, force, buildArgs):
-    with CurrentWorkingDirectory(DownloadURL(STB_URL, context, force)):
+    STB_FOLDER="stb-"+STB_SHA
+    with CurrentWorkingDirectory(GitCloneSHA(STB_URL, STB_SHA, STB_FOLDER, context)):
         CopyFiles(context, "*.h", "include", STB_INSTALL_FOLDER)
 
-STB = Dependency(STB_INSTALL_FOLDER, STB_PACKAGE_NAME, InstallSTB, "include/stb_image.h")
+STB = Dependency(STB_INSTALL_FOLDER, STB_PACKAGE_NAME, InstallSTB, STB_SHA, "include/stb_image.h")
 
 ############################################################
 # TinyGLTF
@@ -838,7 +980,7 @@ def InstallTinyGLTF(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TinyGLTF_URL, context, force)):
         RunCMake(context, force, TinyGLTF_INSTALL_FOLDER, buildArgs)
 
-TINYGLTF = Dependency(TinyGLTF_INSTALL_FOLDER, TinyGLTF_PACKAGE_NAME, InstallTinyGLTF, "include/tiny_gltf.h")
+TINYGLTF = Dependency(TinyGLTF_INSTALL_FOLDER, TinyGLTF_PACKAGE_NAME, InstallTinyGLTF, TinyGLTF_URL, "include/tiny_gltf.h")
 
 ############################################################
 # TinyObjLoader
@@ -851,7 +993,7 @@ def InstallTinyObjLoader(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TinyObjLoader_URL, context, force)):
         RunCMake(context, force, TinyObjLoader_INSTALL_FOLDER, buildArgs)
 
-TINYOBJLOADER = Dependency(TinyObjLoader_INSTALL_FOLDER, TinyObjLoader_PACKAGE_NAME, InstallTinyObjLoader, "include/tiny_obj_loader.h")
+TINYOBJLOADER = Dependency(TinyObjLoader_INSTALL_FOLDER, TinyObjLoader_PACKAGE_NAME, InstallTinyObjLoader, TinyObjLoader_URL, "include/tiny_obj_loader.h")
 
 ############################################################
 # IlmBase/OpenEXR
@@ -880,7 +1022,7 @@ def InstallOpenEXR(context, force, buildArgs):
 
         RunCMake(context, force, OPENEXR_INSTALL_FOLDER, extraArgs)
 
-OPENEXR = Dependency(OPENEXR_INSTALL_FOLDER, OPENEXR_PACKAGE_NAME, InstallOpenEXR, "include/OpenEXR/ImfVersion.h")
+OPENEXR = Dependency(OPENEXR_INSTALL_FOLDER, OPENEXR_PACKAGE_NAME, InstallOpenEXR, OPENEXR_URL, "include/OpenEXR/ImfVersion.h")
 
 ############################################################
 # OpenImageIO
@@ -925,7 +1067,7 @@ def InstallOpenImageIO(context, force, buildArgs):
 
         RunCMake(context, force, OIIO_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
 
-OPENIMAGEIO = Dependency(OIIO_INSTALL_FOLDER, OIIO_PACKAGE_NAME, InstallOpenImageIO, "include/OpenImageIO/oiioversion.h")
+OPENIMAGEIO = Dependency(OIIO_INSTALL_FOLDER, OIIO_PACKAGE_NAME, InstallOpenImageIO, OIIO_URL, "include/OpenImageIO/oiioversion.h")
 
 ############################################################
 # OpenSubdiv
@@ -977,7 +1119,7 @@ def InstallOpenSubdiv(context, force, buildArgs):
             context.cmakeGenerator = oldGenerator
             context.numJobs = oldNumJobs
 
-OPENSUBDIV = Dependency(OPENSUBDIV_INSTALL_FOLDER, OPENSUBDIV_PACKAGE_NAME, InstallOpenSubdiv,
+OPENSUBDIV = Dependency(OPENSUBDIV_INSTALL_FOLDER, OPENSUBDIV_PACKAGE_NAME, InstallOpenSubdiv, OPENSUBDIV_URL,
                         "include/opensubdiv/version.h")
 
 ############################################################
@@ -994,7 +1136,7 @@ def InstallMaterialX(context, force, buildArgs):
 
         RunCMake(context, force, MATERIALX_INSTALL_FOLDER, cmakeOptions)
 
-MATERIALX = Dependency(MATERIALX_INSTALL_FOLDER, MATERIALX_PACKAGE_NAME, InstallMaterialX, "include/MaterialXCore/Library.h")
+MATERIALX = Dependency(MATERIALX_INSTALL_FOLDER, MATERIALX_PACKAGE_NAME, InstallMaterialX, MATERIALX_URL, "include/MaterialXCore/Library.h")
 
 ############################################################
 # USD
@@ -1032,7 +1174,7 @@ def InstallUSD(context, force, buildArgs):
 
         extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=ON')
 
-        extraArgs.append('-DPXR_BUILD_USD_TOOLS=OFF')
+        extraArgs.append('-DPXR_BUILD_USD_TOOLS=ON')
 
         extraArgs.append('-DPXR_BUILD_IMAGING=ON')
         extraArgs.append('-DPXR_ENABLE_PTEX_SUPPORT=OFF')
@@ -1044,17 +1186,29 @@ def InstallUSD(context, force, buildArgs):
 
         extraArgs.append('-DPXR_BUILD_USD_IMAGING=ON')
 
-        extraArgs.append('-DPXR_BUILD_USDVIEW=OFF')
+        extraArgs.append('-DPXR_BUILD_USDVIEW=ON')
 
         extraArgs.append('-DPXR_BUILD_ALEMBIC_PLUGIN=OFF')
         extraArgs.append('-DPXR_BUILD_DRACO_PLUGIN=OFF')
 
         extraArgs.append('-DPXR_ENABLE_MATERIALX_SUPPORT=OFF')
 
-        extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=OFF')
-
         # Turn off the text system in USD (Autodesk extension)
         extraArgs.append('-DPXR_ENABLE_TEXT_SUPPORT=OFF')
+
+        extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=ON')
+        extraArgs.append('-DPXR_USE_PYTHON_3=ON')
+        pythonInfo = GetPythonInfo(context)
+        if pythonInfo:
+            # According to FindPythonLibs.cmake these are the variables
+            # to set to specify which Python installation to use.
+            extraArgs.append('-DPYTHON_EXECUTABLE="{pyExecPath}"'
+                                .format(pyExecPath=pythonInfo[0]))
+            extraArgs.append('-DPYTHON_LIBRARY="{pyLibPath}"'
+                                .format(pyLibPath=pythonInfo[1]))
+            extraArgs.append('-DPYTHON_INCLUDE_DIR="{pyIncPath}"'
+                                .format(pyIncPath=pythonInfo[2]))
+            extraArgs.append('-DPXR_USE_DEBUG_PYTHON=OFF')
 
         if Windows():
             # Increase the precompiled header buffer limit.
@@ -1076,7 +1230,7 @@ def InstallUSD(context, force, buildArgs):
         }
         RunCMake(context, force, USD_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
 
-USD = Dependency(USD_INSTALL_FOLDER, USD_PACKAGE_NAME, InstallUSD, "include/pxr/pxr.h")
+USD = Dependency(USD_INSTALL_FOLDER, USD_PACKAGE_NAME, InstallUSD, USD_URL, "include/pxr/pxr.h")
 
 ############################################################
 # Slang
@@ -1092,7 +1246,7 @@ def InstallSlang(context, force, buildArgs):
     Slang_SRC_FOLDER = DownloadURL(Slang_URL, context, force, destDir="Slang")
     CopyDirectory(context, Slang_SRC_FOLDER, Slang_INSTALL_FOLDER)
 
-SLANG = Dependency(Slang_INSTALL_FOLDER, Slang_PACKAGE_NAME, InstallSlang, "slang.h")
+SLANG = Dependency(Slang_INSTALL_FOLDER, Slang_PACKAGE_NAME, InstallSlang, Slang_URL, "slang.h")
 
 ############################################################
 # NRD
@@ -1123,7 +1277,7 @@ def InstallNRD(context, force, buildArgs):
         CopyFiles(context, "Shaders/Include/NRD.hlsli", "Shaders/Include", NRD_INSTALL_FOLDER)
         CopyFiles(context, "External/MathLib/*.hlsli", "Shaders/Source", NRD_INSTALL_FOLDER)
 
-NRD = Dependency(NRD_INSTALL_FOLDER, NRD_PACKAGE_NAME, InstallNRD, "include/NRD.h")
+NRD = Dependency(NRD_INSTALL_FOLDER, NRD_PACKAGE_NAME, InstallNRD, NRD_URL, "include/NRD.h")
 
 ############################################################
 # NRI
@@ -1149,7 +1303,7 @@ def InstallNRI(context, force, buildArgs):
                 CopyFiles(context, "_Build/Debug/*.dll", "bin", NRI_INSTALL_FOLDER)
             CopyFiles(context, "_Build/Debug/*", "lib", NRI_INSTALL_FOLDER)
 
-NRI = Dependency(NRI_INSTALL_FOLDER, NRI_PACKAGE_NAME, InstallNRI, "include/NRI.h")
+NRI = Dependency(NRI_INSTALL_FOLDER, NRI_PACKAGE_NAME, InstallNRI, NRI_URL, "include/NRI.h")
 
 ############################################################
 # GLEW
@@ -1164,7 +1318,7 @@ def InstallGLEW(context, force, buildArgs):
         CopyFiles(context, "bin/Release/x64/*.dll", "bin", GLEW_INSTALL_FOLDER)
         CopyFiles(context, "lib/Release/x64/*.lib", "lib", GLEW_INSTALL_FOLDER)
 
-GLEW = Dependency(GLEW_INSTALL_FOLDER, GLEW_PACKAGE_NAME, InstallGLEW, "include/GL/glew.h")
+GLEW = Dependency(GLEW_INSTALL_FOLDER, GLEW_PACKAGE_NAME, InstallGLEW, GLEW_URL, "include/GL/glew.h")
 
 ############################################################
 # GLFW
@@ -1180,7 +1334,7 @@ def InstallGLFW(context, force, buildArgs):
 
         RunCMake(context, force, GLFW_INSTALL_FOLDER, cmakeOptions)
 
-GLFW = Dependency(GLFW_INSTALL_FOLDER, GLFW_PACKAGE_NAME, InstallGLFW, "include/GLFW/glfw3.h")
+GLFW = Dependency(GLFW_INSTALL_FOLDER, GLFW_PACKAGE_NAME, InstallGLFW, GLFW_URL, "include/GLFW/glfw3.h")
 
 ############################################################
 # CXXOPTS
@@ -1193,7 +1347,7 @@ def InstallCXXOPTS(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(CXXOPTS_URL, context, force)):
         RunCMake(context, force, CXXOPTS_INSTALL_FOLDER, buildArgs)
 
-CXXOPTS = Dependency(CXXOPTS_INSTALL_FOLDER, CXXOPTS_PACKAGE_NAME, InstallCXXOPTS, "include/cxxopts.hpp")
+CXXOPTS = Dependency(CXXOPTS_INSTALL_FOLDER, CXXOPTS_PACKAGE_NAME, InstallCXXOPTS, CXXOPTS_URL, "include/cxxopts.hpp")
 
 ############################################################
 # GTEST
@@ -1207,7 +1361,7 @@ def InstallGTEST(context, force, buildArgs):
         extraArgs = [*buildArgs, '-Dgtest_force_shared_crt=ON']
         RunCMake(context, force, GTEST_INSTALL_FOLDER, extraArgs)
 
-GTEST = Dependency(GTEST_INSTALL_FOLDER, GTEST_PACKAGE_NAME, InstallGTEST, "include/gtest/gtest.h")
+GTEST = Dependency(GTEST_INSTALL_FOLDER, GTEST_PACKAGE_NAME, InstallGTEST, GTEST_URL, "include/gtest/gtest.h")
 
 ############################################################
 # Installation script
@@ -1293,6 +1447,9 @@ group.add_argument("--build-variant", default=BUILD_RELEASE,
 group.add_argument("--build-args", type=str, nargs="*", default=[],
                    help=("Custom arguments to pass to build system when "
                          "building libraries (see docs above)"))
+group.add_argument("--build-python-info", type=str, nargs=4, default=[],
+                   metavar=('PYTHON_EXECUTABLE', 'PYTHON_INCLUDE_DIR', 'PYTHON_LIBRARY', 'PYTHON_VERSION'),
+                   help=("Specify a custom python to use during build"))
 group.add_argument("--force", type=str, action="append", dest="force_build",
                    default=[],
                    help=("Force download and build of specified library "
@@ -1355,6 +1512,14 @@ class InstallContext:
             self.buildArgs.setdefault(depName.lower(), []).append(arg)
 
         self.buildConfigs = []
+
+        # Build python info
+        self.build_python_info = dict()
+        if args.build_python_info:
+            self.build_python_info['PYTHON_EXECUTABLE'] = args.build_python_info[0]
+            self.build_python_info['PYTHON_INCLUDE_DIR'] = args.build_python_info[1]
+            self.build_python_info['PYTHON_LIBRARY'] = args.build_python_info[2]
+            self.build_python_info['PYTHON_VERSION'] = args.build_python_info[3]
 
         # Build type
         self.buildDebug = (args.build_variant == BUILD_DEBUG) or (args.build_variant == BUILD_DEBUG_AND_RELEASE)
@@ -1440,7 +1605,7 @@ cmakePrefixPaths = set(map(lambda lib: os.path.join(context.externalsInstDir, li
 
 dependenciesToBuild = []
 for dep in requiredDependencies:
-    if context.ForceBuildDependency(dep) or not dep.Exists(context):
+    if context.ForceBuildDependency(dep) or not dep.IsUpToDate(context):
         if dep not in dependenciesToBuild:
             dependenciesToBuild.append(dep)
 
@@ -1556,6 +1721,7 @@ try:
         dep.installer(context,
                       buildArgs=context.GetBuildArguments(dep),
                       force=context.ForceBuildDependency(dep))
+        dep.UpdateVersion(context)
 except Exception as e:
     PrintError(str(e))
     sys.exit(1)

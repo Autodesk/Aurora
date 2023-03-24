@@ -20,8 +20,14 @@
 
 #include "TeapotModel.h"
 #include "TestHelpers.h"
+
+#pragma warning(push)
+// Disabe type conversion warnings intruduced from stb master.
+// refer to the commit in stb https://github.com/nothings/stb/commit/b15b04321dfd8a2307c49ad9c5bf3c0c6bcc04cc
+#pragma warning(disable : 4244)
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#pragma warning(pop)
 
 using namespace Aurora::Foundation;
 using namespace Aurora;

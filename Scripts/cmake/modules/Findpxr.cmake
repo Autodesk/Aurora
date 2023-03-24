@@ -3,10 +3,37 @@ if(TARGET pxr::usd)
   return()
 endif()
 
+find_library(USD_usdviewq_LIBRARY_RELEASE usd_usdviewq)
+find_library(USD_usdviewq_LIBRARY_DEBUG usd_usdviewqd)
+if(USD_usdviewq_LIBRARY_RELEASE OR USD_usdviewq_LIBRARY_DEBUG)
+  # USD requires Python for usdview. If usdview librray exists, Aurora would
+  # need to link to Boost python component and python librray as well.
+  set(USD_COMPOMPONENTS_USDVIEW "True")
 
-if(NOT Boost_FOUND)
-    find_package(Boost REQUIRED)
+  set(Boost_USE_STATIC_LIBS OFF)
+  set(Boost_NO_BOOST_CMAKE ON)
+
+  # Iterate through the potential python3 versions to locate the Boost python component.
+  set(PYTHON_MINOR_VERSIONS 12 11 10 9 8 7)
+  foreach(_ver ${PYTHON_MINOR_VERSIONS})
+    set(PYTHON_COMPONENT python3${_ver})
+    find_package(Boost REQUIRED OPTIONAL_COMPONENTS ${PYTHON_COMPONENT})
+
+    if(Boost_${PYTHON_COMPONENT}_FOUND)
+      #  With the found Boost python component, we can now locate the python library to link to.
+      add_library(Boost::python ALIAS Boost::${PYTHON_COMPONENT})
+      find_package(Python3 3.${_ver} EXACT COMPONENTS Development)
+
+      set(PYTHON_INCLUDE_DIRS "${Python3_INCLUDE_DIRS}")
+      set(PYTHON_LIBRARIES ${Python3_LIBRARIES})
+
+      break()
+    endif()
+  endforeach()
+else()
+  set(USD_COMPOMPONENTS_USDVIEW "False")
 endif()
+
 if(NOT TBB_FOUND)
     find_package(TBB REQUIRED)
 endif()
@@ -33,6 +60,10 @@ set(PXR_LIBRARY_DIRS "${PXR_LIBRARY_DIR}")
 
 # Configure all USD targets
 set(USD_COMPOMPONENTS arch tf gf js trace work plug vt ar kind sdf ndr sdr pcp usd usdGeom usdVol usdMedia usdShade usdLux usdProc usdRender usdHydra usdRi usdSkel usdUI usdUtils usdPhysics garch hf hio cameraUtil pxOsd glf hgi hgiGL hgiVulkan hgiInterop hd hdGp hdsi hdSt hdx usdImaging usdImagingGL usdProcImaging usdRiImaging usdSkelImaging usdVolImaging usdAppUtils)
+
+if(USD_COMPOMPONENTS_USDVIEW)
+  list(APPEND USD_COMPOMPONENTS "usdviewq")
+endif()
 
 foreach(_comp ${USD_COMPOMPONENTS})
   add_library(${_comp} SHARED IMPORTED)
@@ -98,7 +129,9 @@ foreach(_comp ${USD_COMPOMPONENTS})
     endif()
   endif()
 
-  add_library(pxr::${_comp} ALIAS ${_comp})
+  if (USD_${_comp}_LIBRARY_RELEASE OR USD_${_comp}_LIBRARY_DEBUG)
+    add_library(pxr::${_comp} ALIAS ${_comp})
+  endif()
 endforeach()
 
 if (USD_LIBRARIES_RELEASE)
@@ -114,9 +147,9 @@ if(WIN32)
     INTERFACE_LINK_LIBRARIES "Ws2_32.lib;Dbghelp.lib"
   )
   set_target_properties(tf PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-    INTERFACE_LINK_LIBRARIES "arch;Shlwapi.lib;TBB::tbb"
-    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
+    INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};$<$<TARGET_EXISTS:Boost::python>:${PYTHON_INCLUDE_DIRS}>;${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES "arch;Shlwapi.lib;TBB::tbb;$<$<TARGET_EXISTS:Boost::python>:${PYTHON_LIBRARIES};Boost::python>"
+    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "$<$<TARGET_EXISTS:Boost::python>:${PYTHON_INCLUDE_DIRS}>;${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
   )
 else()
   set_target_properties(arch PROPERTIES
@@ -124,9 +157,9 @@ else()
     INTERFACE_LINK_LIBRARIES "dl;m"
   )
   set_target_properties(tf PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-    INTERFACE_LINK_LIBRARIES "arch;TBB::tbb"
-    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
+    INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};$<$<TARGET_EXISTS:Boost::python>:${PYTHON_INCLUDE_DIRS}>;${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES "arch;TBB::tbb;$<$<TARGET_EXISTS:Boost::python>:${PYTHON_LIBRARIES};Boost::python>"
+    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "$<$<TARGET_EXISTS:Boost::python>:${PYTHON_INCLUDE_DIRS}>;${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 endif()
 set_target_properties(gf PROPERTIES
@@ -140,7 +173,7 @@ set_target_properties(js PROPERTIES
 )
 set_target_properties(trace PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;js;tf;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "arch;js;tf;TBB::tbb;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(work PROPERTIES
@@ -150,17 +183,17 @@ set_target_properties(work PROPERTIES
 )
 set_target_properties(plug PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;tf;js;trace;work;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "arch;tf;js;trace;work;TBB::tbb;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(vt PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;tf;gf;trace;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "arch;tf;gf;trace;TBB::tbb;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(ar PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;js;tf;plug;vt"
+  INTERFACE_LINK_LIBRARIES "arch;js;tf;plug;vt;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
 set_target_properties(kind PROPERTIES
@@ -169,32 +202,32 @@ set_target_properties(kind PROPERTIES
 )
 set_target_properties(sdf PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;tf;gf;trace;vt;work;ar"
+  INTERFACE_LINK_LIBRARIES "arch;tf;gf;trace;vt;work;ar;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
 set_target_properties(ndr PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "tf;plug;vt;work;ar;sdf"
+  INTERFACE_LINK_LIBRARIES "tf;plug;vt;work;ar;sdf;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
 set_target_properties(sdr PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "tf;vt;ar;ndr;sdf"
+  INTERFACE_LINK_LIBRARIES "tf;vt;ar;ndr;sdf;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
 set_target_properties(pcp PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "tf;trace;vt;sdf;work;ar;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "tf;trace;vt;sdf;work;ar;$<$<TARGET_EXISTS:Boost::python>:Boost::python>;TBB::tbb"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(usd PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;kind;pcp;sdf;ar;plug;tf;trace;vt;work;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "arch;kind;pcp;sdf;ar;plug;tf;trace;vt;work;$<$<TARGET_EXISTS:Boost::python>:Boost::python>;TBB::tbb"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(usdGeom PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "js;tf;plug;vt;sdf;trace;usd;work;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "js;tf;plug;vt;sdf;trace;usd;work;$<$<TARGET_EXISTS:Boost::python>:Boost::python>;TBB::tbb"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(usdVol PROPERTIES
@@ -227,12 +260,12 @@ set_target_properties(usdHydra PROPERTIES
 )
 set_target_properties(usdRi PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "tf;vt;sdf;usd;usdShade;usdGeom"
+  INTERFACE_LINK_LIBRARIES "tf;vt;sdf;usd;usdShade;usdGeom;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
 set_target_properties(usdSkel PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;gf;tf;trace;vt;work;sdf;usd;usdGeom;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "arch;gf;tf;trace;vt;work;sdf;usd;usdGeom;$<$<TARGET_EXISTS:Boost::python>:Boost::python>;TBB::tbb"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(usdUI PROPERTIES
@@ -241,12 +274,12 @@ set_target_properties(usdUI PROPERTIES
 )
 set_target_properties(usdUtils PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "arch;tf;gf;sdf;usd;usdGeom"
+  INTERFACE_LINK_LIBRARIES "arch;tf;gf;sdf;usd;usdGeom;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
 set_target_properties(usdPhysics PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "tf;plug;vt;sdf;trace;usd;usdGeom;usdShade;work;TBB::tbb"
+  INTERFACE_LINK_LIBRARIES "tf;plug;vt;sdf;trace;usd;usdGeom;usdShade;work;$<$<TARGET_EXISTS:Boost::python>:Boost::python>;TBB::tbb"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(garch PROPERTIES
@@ -269,12 +302,12 @@ set_target_properties(cameraUtil PROPERTIES
 )
 set_target_properties(pxOsd PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${OPENSUBDIV_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "tf;gf;vt;OpenSubdiv::OpenSubdiv"
+  INTERFACE_LINK_LIBRARIES "tf;gf;vt;OpenSubdiv::OpenSubdiv;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${OPENSUBDIV_INCLUDE_DIRS}"
 )
 set_target_properties(glf PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "ar;arch;garch;gf;hf;hio;plug;tf;trace;sdf;OpenGL::GL"
+  INTERFACE_LINK_LIBRARIES "ar;arch;garch;gf;hf;hio;plug;tf;trace;sdf;$<$<TARGET_EXISTS:Boost::python>:Boost::python>;OpenGL::GL"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
 set_target_properties(hgi PROPERTIES
@@ -314,9 +347,9 @@ set_target_properties(usdImaging PROPERTIES
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(usdImagingGL PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${TBB_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "gf;tf;plug;trace;vt;work;hio;garch;glf;hd;hdx;pxOsd;sdf;sdr;usd;usdGeom;usdHydra;usdShade;usdImaging;ar;TBB::tbb"
-  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${TBB_INCLUDE_DIRS}"
+  INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};$<$<TARGET_EXISTS:Boost::python>:${PYTHON_INCLUDE_DIRS}>;${TBB_INCLUDE_DIRS}"
+  INTERFACE_LINK_LIBRARIES "gf;tf;plug;trace;vt;work;hio;garch;glf;hd;hdx;pxOsd;sdf;sdr;usd;usdGeom;usdHydra;usdShade;usdImaging;ar;$<$<TARGET_EXISTS:Boost::python>:Boost::python>;TBB::tbb"
+  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "$<$<TARGET_EXISTS:Boost::python>:${PYTHON_INCLUDE_DIRS}>;${TBB_INCLUDE_DIRS}"
 )
 set_target_properties(usdProcImaging PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS}"
@@ -337,9 +370,17 @@ set_target_properties(usdVolImaging PROPERTIES
 )
 set_target_properties(usdAppUtils PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
-  INTERFACE_LINK_LIBRARIES "garch;gf;hio;sdf;tf;usd;usdGeom;usdImagingGL"
+  INTERFACE_LINK_LIBRARIES "garch;gf;hio;sdf;tf;usd;usdGeom;usdImagingGL;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
 )
+
+if(USD_COMPOMPONENTS_USDVIEW)
+  set_target_properties(usdviewq PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${PXR_INCLUDE_DIRS};${Boost_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES "tf;usd;usdGeom;$<$<TARGET_EXISTS:Boost::python>:Boost::python>"
+    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
+  )
+endif()
 
 if(USD_hgiVulkan_LIBRARY_RELEASE OR USD_hgiVulkan_LIBRARY_DEBUG)
   set_target_properties(hgiVulkan PROPERTIES

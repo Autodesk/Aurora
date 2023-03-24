@@ -12,9 +12,24 @@ project(Aurora VERSION 0.0.0.1)
 
 set(AURORA_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
+# install path if the user did not explicitly specify one.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${PROJECT_BINARY_DIR}/Installed" CACHE PATH "..." FORCE)
+endif()
+
+# Set the default install directories
+set(INSTALL_BIN "$<CONFIG>/bin")
+set(INSTALL_LIB "$<CONFIG>/lib")
+set(INSTALL_INC "$<CONFIG>/include")
+
 # Set the default output directories
 set(RUNTIME_OUTPUT_DIR "${PROJECT_BINARY_DIR}/bin/$<CONFIG>")
 set(LIBRARY_OUTPUT_DIR "${PROJECT_BINARY_DIR}/lib/$<CONFIG>")
+
+add_custom_target(MakeRuntimeDir ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${RUNTIME_OUTPUT_DIR}
+)
+set_property(TARGET MakeRuntimeDir PROPERTY FOLDER "Deployment")
 
 # Set scripts folder.
 set(SCRIPTS_DIR ${AURORA_ROOT_DIR}/Scripts)
@@ -24,6 +39,10 @@ list(APPEND CMAKE_MODULE_PATH
     "${SCRIPTS_DIR}/cmake"
     "${SCRIPTS_DIR}/cmake/modules"
 )
+
+option(ENABLE_TESTS "Build unit tests" ON)
+option(ENABLE_APPLICATIONS "Build Applications" ON)
+option(ENABLE_USDVIEW "Build usdview with python" ON)
 
 # Import the cmake utility functions
 include(toolbox)
@@ -51,6 +70,8 @@ if(MSVC)
     add_compile_options(/W4 /WX -wd4068) # -wd4068 disables unknown-pragmas warnings
     # Enable multiple-processor compilation
     add_compile_options(/MP)
+    # Add INSTALL project to solution by default.
+    set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
 else()
     # Enables strict standard conformance and warning as errors
     add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wno-unknown-pragmas -Wno-gnu-zero-variadic-macro-arguments)
@@ -78,5 +99,12 @@ else()
 endif()
 
 add_subdirectory(Libraries)
-add_subdirectory(Tests)
-add_subdirectory(Applications)
+
+# Unit tests
+if (ENABLE_TESTS)
+    add_subdirectory(Tests)
+endif()
+
+if (ENABLE_APPLICATIONS)
+    add_subdirectory(Applications)
+endif()

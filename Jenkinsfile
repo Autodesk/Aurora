@@ -50,6 +50,11 @@ def windowsBuild() {
     if not exist ${EXTERNALS_DIR}\\nasm-2.15.05 call 7z x -y -aoa ${EXTERNALS_DIR}\\nasm-2.15.05-win64.zip -o${EXTERNALS_DIR}
     call set PATH=${EXTERNALS_DIR}\\nasm-2.15.05;%PATH%
 
+    :: Set up Pyside6/PyOpenGL
+    call python -m pip install --upgrade pip
+    call python -m pip install PySide6
+    call python -m pip install PyOpenGL
+
     :: Set up Vulkan SDK
     :: We need to install Vulkan SDK silently. For more details please refer to https://vulkan.lunarg.com/doc/view/latest/windows/getting_started.html
     if not exist ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe call curl -o ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe https://sdk.lunarg.com/sdk/download/1.3.231.1/windows/VulkanSDK-1.3.231.1-Installer.exe

@@ -1,4 +1,38 @@
 # Building
+
+## Prerequisites
+
+Several prerequisites must be installed before building Aurora.
+
+### Windows
+On windows the following packages should be installed and added to the system PATH environment variable:
+* Microsoft Visual Studio 2019 (https://my.visualstudio.com/Downloads?q=visual%20studio%202019)
+* CMake 3.26.11 (https://github.com/Kitware/CMake/releases/download/v3.26.1/cmake-3.26.1-windows-x86_64.msi)
+* Python 3.9.13 (https://www.python.org/downloads/release/python-3913/)
+* PySide6 python package (install with `pip3 install pyside6`)
+* PyOpenGL python package (install with `pip3 install PyOpenGL`)
+* NASM 2.16 (https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/win64/nasm-2.16.01-installer-x64.exe)
+* Vulkan SDK (https://vulkan.lunarg.com/sdk/home#windows).  Should be accessible via the VULKAN_SDK environment variable.
+
+### Linux
+The following dependencies are required on Linux.  The versions listed are the recommended version for Ubuntu 20.04:
+* zlib1g-dev: 1.2.11
+* libjpeg-turbo8-dev: 2.0.3
+* libtiff-dev: 4.1.0
+* libpng-dev: 1.6.37
+* libglm-dev: 0.9.9.7
+* libglew-dev: 2.1.0
+* libglfw3-dev: 3.3.2
+* libgtest-dev: 1.10.0
+* libgmock-dev: 1.10.0
+
+On Ubuntu 20.04, these can be installed with the following Advanced Package Tool command:
+```
+sudo apt-get -y install zlib1g-dev libjpeg-turbo8-dev libtiff-dev libpng-dev libglm-dev libglew-dev libglfw3-dev libgtest-dev libgmock-dev
+```
+
+## Building Aurora
+
 Aurora includes a script that retrieves and builds dependencies ("externals") from source. This script is based on the [USD build script](https://github.com/PixarAnimationStudios/USD/tree/release/build_scripts). CMake is used to build Aurora directly, or to create an IDE project which can then be used to build and debug Aurora.
 
 1. **Download or clone** the contents of this repository to a location of your choice. Cloning with Git is not strictly necessary as Aurora does not currently use submodules. We refer to this location as *AURORA_DIR*.

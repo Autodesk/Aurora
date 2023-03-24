@@ -254,11 +254,6 @@ source_group("DirectX/Shaders" FILES ${DIRECTX_PRECOMPILED_SHADERS})
 source_group("HGI/Shaders" FILES ${HGI_SHADERS})
 
 if(WIN32)
-    add_custom_target(MakeRuntimeDir ALL
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${RUNTIME_OUTPUT_DIR}
-    )
-    set_property(TARGET MakeRuntimeDir PROPERTY FOLDER "Deployment")
-
     if(ENABLE_DIRECTX_BACKEND)
         # Create custom targets that will copy DLLs of the DirectX shader compiler to the runtime folder.
         add_custom_target(CopyDXCompilerDLLs ALL
@@ -328,8 +323,8 @@ if(WIN32)
         # Copy additional HGI files of the Pixar USD to our runtime directory
         add_custom_target(CopyUSDDLLs ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory ${RUNTIME_OUTPUT_DIR}/usd/hgiVulkan/resources
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pxr_DIR}/lib/usd/plugInfo.json ${RUNTIME_OUTPUT_DIR}/usd
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pxr_DIR}/lib/usd/hgiVulkan/resources/plugInfo.json ${RUNTIME_OUTPUT_DIR}/usd/hgiVulkan/resources
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PXR_LIBRARY_DIR}/usd/plugInfo.json ${RUNTIME_OUTPUT_DIR}/usd
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PXR_LIBRARY_DIR}/usd/hgiVulkan/resources/plugInfo.json ${RUNTIME_OUTPUT_DIR}/usd/hgiVulkan/resources
         )
         set_property(TARGET CopyUSDDLLs PROPERTY FOLDER "Deployment")
         add_dependencies(CopyUSDDLLs MakeRuntimeDir)
@@ -425,3 +420,10 @@ if(ENABLE_DIRECTX_BACKEND)
 
     # TODO: do we have Vulkan computer shaders amd need to do similiar things for them?
 endif()
+
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION "${INSTALL_BIN}"
+    ARCHIVE DESTINATION "${INSTALL_LIB}"
+    LIBRARY DESTINATION "${INSTALL_LIB}"
+    COMPONENT ${PROJECT_NAME}
+)

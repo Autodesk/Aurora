@@ -60,3 +60,41 @@ PRIVATE
 
 # Add default compile definitions (set in root CMakefile)
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${DEFAULT_COMPILE_DEFINITIONS})
+
+if(WIN32)
+    # Create a custom target that will copy USD executables to the runtime folder.
+    file(GLOB USD_EXECUTABLES ${pxr_ROOT}/bin/*)
+    set(USD_PYTHON_LIB_DIR "${pxr_ROOT}/lib/python")
+    set(USD_LIB_PLUGIN_DIR "${pxr_ROOT}/lib/usd")
+    set(USD_PLUGIN_DIR "${pxr_ROOT}/plugin/usd")
+    add_custom_target(CopyUSDExecutables ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${USD_EXECUTABLES} ${RUNTIME_OUTPUT_DIR}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${USD_LIB_PLUGIN_DIR} ${RUNTIME_OUTPUT_DIR}/usd
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${USD_PLUGIN_DIR} ${RUNTIME_OUTPUT_DIR}/usd
+    )
+    set_property(TARGET CopyUSDExecutables PROPERTY FOLDER "Deployment")
+    add_dependencies(CopyUSDExecutables MakeRuntimeDir)
+    add_dependencies(${PROJECT_NAME} CopyUSDExecutables)
+
+    if(ENABLE_USDVIEW)
+        add_custom_target(CopyUSDPythonExecutables ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${USD_PYTHON_LIB_DIR} ${RUNTIME_OUTPUT_DIR}/python
+        )
+        set_property(TARGET CopyUSDPythonExecutables PROPERTY FOLDER "Deployment")
+        add_dependencies(CopyUSDPythonExecutables MakeRuntimeDir)
+        add_dependencies(${PROJECT_NAME} CopyUSDPythonExecutables)
+    endif()
+
+    set(HDAURORA_PLUGIN_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> $<$<CONFIG:Debug>:$<TARGET_PDB_FILE:${PROJECT_NAME}>> ${RUNTIME_OUTPUT_DIR}/usd
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${HDAURORA_PLUGIN_RESOURCES_DIR} ${RUNTIME_OUTPUT_DIR}/usd/hdAurora/resources
+    )
+
+else() # Linux
+    #TODO anything we need to set to support the Aurora execution?
+endif()
+
+# Install the binaries.
+install(TARGETS ${PROJECT_NAME}  DESTINATION ${INSTALL_BIN}/usd)
+install(FILES "resources/plugInfo.json" DESTINATION ${INSTALL_BIN}/usd/hdAurora/resources)
