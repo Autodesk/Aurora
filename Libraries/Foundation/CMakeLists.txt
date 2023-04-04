@@ -1,5 +1,7 @@
 project(Foundation)
 
+find_package(glm REQUIRED) # Find the GLM vector maths package.
+
 add_library(${PROJECT_NAME} STATIC
 		"API/Aurora/Foundation/BoundingBox.h"
 		"API/Aurora/Foundation/Frustum.h"
@@ -7,8 +9,15 @@ add_library(${PROJECT_NAME} STATIC
 		"API/Aurora/Foundation/Plane.h"
 		"API/Aurora/Foundation/Timer.h"
 		"API/Aurora/Foundation/Utilities.h"
+		"API/Aurora/Foundation/Geometry.h"
+		"Source/Geometry.cpp"
 		"Source/Utilities.cpp"
 		"Source/Log.cpp"
+)
+
+target_link_libraries(${PROJECT_NAME}
+PRIVATE
+    glm::glm
 )
 
 # Set custom ouput properties.

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@
 
 // Development flag to turn of exception catching during the render loop.
 // NOTE: This should never be 0 in committed code; it is only for local development.
-#define AU_DEV_CATCH_EXCEPTIONS_DURING_RENDERING 1
+#define AU_DEV_CATCH_EXCEPTIONS_DURING_RENDERING 0
 
 BEGIN_AURORA
 
@@ -172,9 +172,9 @@ IMaterialPtr PTRenderer::createMaterialPointer(
     // This has no overhead, so just do it each time.
     _pAssetMgr->enableVerticalFlipOnImageLoad(_values.asBoolean(kLabelIsFlipImageYEnabled));
 
-    // The material type and default values for this material.
+    // The material type and definition for this material.
     PTMaterialTypePtr pMtlType;
-    map<string, Value> defaultValues;
+    shared_ptr<MaterialDefinition> pDef;
 
     // Create a material type based on the material type name provided.
     if (materialType.compare(Names::MaterialTypes::kBuiltIn) == 0)
@@ -182,8 +182,9 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         // Work out built-in type.
         string builtInType = document;
 
-        // Get the built-in material type from the shader library.
+        // Get the built-in material type and defintion for built-in.
         pMtlType = _pShaderLibrary->getBuiltInMaterialType(builtInType);
+        pDef     = _pShaderLibrary->getBuiltInMaterialDefinition(builtInType);
 
         // Print error and provide null material type if built-in not found.
         // TODO: Proper error handling for this case.
@@ -196,8 +197,8 @@ IMaterialPtr PTRenderer::createMaterialPointer(
     }
     else if (materialType.compare(Names::MaterialTypes::kMaterialX) == 0)
     {
-        // Generate a material type from the materialX document.
-        pMtlType = generateMaterialX(document, &defaultValues);
+        // Generate a material type and definition from the materialX document.
+        pMtlType = generateMaterialX(document, &pDef);
 
         // If flag is set dump the document to disk for development purposes.
         if (AU_DEV_DUMP_MATERIALX_DOCUMENTS)
@@ -225,62 +226,35 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         }
         else
         {
-            // If Material XML document loaded, use it to generate material type.
-            pMtlType = generateMaterialX(*pMtlxDocument, &defaultValues);
+            // If Material XML document loaded, use it to generate the material type and definition.
+            pMtlType = generateMaterialX(*pMtlxDocument, &pDef);
         }
     }
     else
     {
         // Print error and return null material type if material type not found.
         // TODO: Proper error handling for this case.
-        AU_ERROR("Unrecognized material type %s for material %s, using Default built-in instead.",
-            materialType.c_str(), name.c_str());
+        AU_ERROR(
+            "Unrecognized material type %s for material %s.", materialType.c_str(), name.c_str());
         pMtlType = nullptr;
     }
 
     // Error case, just return null material.
-    if (!pMtlType)
+    if (!pMtlType || !pDef)
         return nullptr;
 
     // Create the material object with the material type.
-    auto pNewMtl = make_shared<PTMaterial>(this, pMtlType);
+    auto pNewMtl = make_shared<PTMaterial>(this, pMtlType, pDef);
 
-    // Set the default values on the new material.
-    for (auto valIter : defaultValues)
+    // Set the default textures on the new material.
+    for (int i = 0; i < pDef->defaults().textures.size(); i++)
     {
-        auto defaultVal = valIter.second;
-        switch (defaultVal.type())
-        {
-        case Aurora::IValues::Type::Float:
-            // Set float default value.
-            pNewMtl->values().setFloat(valIter.first, defaultVal.asFloat());
-            break;
-        case Aurora::IValues::Type::Int:
-            // Set int default value.
-            pNewMtl->values().setInt(valIter.first, defaultVal.asInt());
-            break;
-        case Aurora::IValues::Type::Boolean:
-            // Set bool default value.
-            pNewMtl->values().setBoolean(valIter.first, defaultVal.asBoolean());
-            break;
-        case Aurora::IValues::Type::Float2:
-            // Set 2d vector default value.
-            pNewMtl->values().setFloat2(valIter.first, &defaultVal.asFloat2().x);
-            break;
-        case Aurora::IValues::Type::Float3:
-            // Set 3d vector default value.
-            pNewMtl->values().setFloat3(valIter.first, &defaultVal.asFloat3().x);
-            break;
-        case Aurora::IValues::Type::Sampler:
-        {
-            pNewMtl->values().setSampler(valIter.first, defaultVal.asSampler());
-        }
-        break;
-        case Aurora::IValues::Type::String:
-        {
-            // Image default values are provided as strings and must be loaded.
-            auto textureFilename = defaultVal.asString();
+        auto txtDef = pDef->defaults().textures[i];
 
+        // Image default values are provided as strings and must be loaded.
+        auto textureFilename = txtDef.defaultFilename;
+        if (!textureFilename.empty())
+        {
             // Load the pixels for the image using asset manager.
             auto pImageData = _pAssetMgr->acquireImage(textureFilename);
             if (!pImageData)
@@ -292,7 +266,11 @@ IMaterialPtr PTRenderer::createMaterialPointer(
             }
             else
             {
-                // Create Aurora image from the loaded pixels.
+                // Set the linearize flag.
+                // TODO: Should effect caching.
+                pImageData->data.linearize = txtDef.linearize;
+
+                // Create Ultra image from the loaded pixels.
                 // TODO: This should be cached by filename.
                 auto pImage = createImagePointer(pImageData->data);
                 if (!pImage)
@@ -305,13 +283,41 @@ IMaterialPtr PTRenderer::createMaterialPointer(
                 else
                 {
                     // Set the default image.
-                    pNewMtl->setImage(valIter.first, pImage);
+                    pNewMtl->setImage(txtDef.name, pImage);
                 }
             }
         }
-        break;
-        default:
-            break;
+
+        // If we have an address mode, create a sampler for texture.
+        // Currently only the first two hardcoded textures have samplers, so only do this for first
+        // two textures.
+        // TODO: Move to fully data driven textures and samplers.
+        if (i < 2 && (!txtDef.addressModeU.empty() || !txtDef.addressModeV.empty()))
+        {
+            Properties samplerProps;
+
+            // Set U address mode.
+            if (txtDef.addressModeU.compare("periodic") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeU] = Names::AddressModes::kWrap;
+            else if (txtDef.addressModeU.compare("clamp") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeU] = Names::AddressModes::kClamp;
+            else if (txtDef.addressModeU.compare("mirror") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeU] =
+                    Names::AddressModes::kMirror;
+
+            // Set V address mode.
+            if (txtDef.addressModeV.compare("periodic") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeV] = Names::AddressModes::kWrap;
+            else if (txtDef.addressModeV.compare("clamp") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeV] = Names::AddressModes::kClamp;
+            else if (txtDef.addressModeV.compare("mirror") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeV] =
+                    Names::AddressModes::kMirror;
+
+            // Create a sampler and set in the material.
+            // TODO: Don't assume hardcoded _sampler prefix.
+            auto pSampler = createSamplerPointer(samplerProps);
+            pNewMtl->setSampler(txtDef.name + "_sampler", pSampler);
         }
     }
 
@@ -1413,13 +1419,14 @@ bool PTRenderer::isDenoisingAOVsEnabled() const
         _values.asInt(kLabelDebugMode) > kDebugModeErrors;
 }
 
-shared_ptr<PTMaterialType> PTRenderer::generateMaterialX(
-    [[maybe_unused]] const string& document, [[maybe_unused]] map<string, Value>* pDefaultValuesOut)
+shared_ptr<PTMaterialType> PTRenderer::generateMaterialX([[maybe_unused]] const string& document,
+    [[maybe_unused]] shared_ptr<MaterialDefinition>* pDefOut)
 {
 #if ENABLE_MATERIALX
-    // Generate the shader for the materialX document, along with its unique material name.
-    MaterialTypeSource materialTypeSource;
-    if (!_pMaterialXGenerator->generate(document, pDefaultValuesOut, materialTypeSource))
+    // Generate the material defintion for the materialX document, this contains the source code,
+    // default values, and a unique name.
+    shared_ptr<MaterialDefinition> pDef = _pMaterialXGenerator->generate(document);
+    if (!pDef)
     {
         return nullptr;
     }
@@ -1430,23 +1437,14 @@ shared_ptr<PTMaterialType> PTRenderer::generateMaterialX(
     _pMaterialXGenerator->generateDefinitions(definitions);
     _pShaderLibrary->setDefinitionsHLSL(definitions);
 
-    // Acquire a material type for this shader.
+    // Acquire a material type for the definition.
     // This will create a new one if needed (and trigger a rebuild), otherwise will it will return
     // existing one.
-    bool typeCreated;
-    auto pType = _pShaderLibrary->acquireMaterialType(materialTypeSource, &typeCreated);
-    if (typeCreated)
-    {
-        if (AU_DEV_DUMP_PROCESSED_MATERIALX_DOCUMENTS)
-        {
-            string mltxPath = Foundation::getModulePath() + materialTypeSource.name + "Dumped.mtlx";
-            AU_INFO("Dumping processed MTLX document to:%s", mltxPath.c_str());
-            ofstream outputFile;
-            outputFile.open(mltxPath);
-            outputFile << document;
-            outputFile.close();
-        }
-    }
+    auto pType = _pShaderLibrary->acquireMaterialType(*pDef);
+
+    // Output the definition pointer.
+    if (pDefOut)
+        *pDefOut = pDef;
 
     return pType;
 #else

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -116,13 +116,9 @@ TEST_P(MaterialTest, TestMaterialDefault)
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "base_color", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "thin_film_IOR", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "specular_rotation", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "coat_IOR", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_depth", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "transmission", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
@@ -142,11 +138,7 @@ TEST_P(MaterialTest, TestMaterialDefault)
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "subsurface_anisotropy", true,
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_extra_roughness", true,
-        " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_scatter_anisotropy", true,
-        " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_dispersion", true,
+    testFloat3Value(*pScene, testMaterial, "transmission_color", true,
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "subsurface_scale", true,
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
@@ -158,11 +150,7 @@ TEST_P(MaterialTest, TestMaterialDefault)
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "specular_color", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloat3Value(*pScene, testMaterial, "transmission_color", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "subsurface_color", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloat3Value(*pScene, testMaterial, "transmission_scatter", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "subsurface_radius", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
@@ -191,11 +179,6 @@ static void clearAllProperties(Properties& props)
     props["metalness"].clear();
     props["transmission"].clear();
     props["transmission_color"].clear();
-    props["transmission_depth"].clear();
-    props["transmission_scatter"].clear();
-    props["transmission_scatter_anisotropy"].clear();
-    props["transmission_dispersion"].clear();
-    props["transmission_extra_roughness"].clear();
     props["subsurface"].clear();
     props["subsurface_color"].clear();
     props["subsurface_radius"].clear();
@@ -213,10 +196,6 @@ static void clearAllProperties(Properties& props)
     props["coat_IOR"].clear();
     props["coat_affect_color"].clear();
     props["coat_affect_roughness"].clear();
-    props["thin_film_thickness"].clear();
-    props["thin_film_IOR"].clear();
-    props["emission"].clear();
-    props["emission_color"].clear();
     props["opacity"].clear();
 
     props["base_color_image"].clear();
@@ -310,6 +289,49 @@ Paths createTeapotGrid(TestHelpers::FixtureBase& pFixture, uint32_t gridWidth, u
     }
 
     return pScene->addInstances(geometry, instDefs);
+}
+
+TEST_P(MaterialTest, DISABLED_TestMaterialDuplicateMaterialTypes)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    setDefaultRendererPathTracingIterations(256);
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // Create a grid of teapot instances.
+    vector<Path> teapotGrid = createTeapotGrid(*this, 6, 12);
+
+    // Test with all the built-ins except for the first one. This is the "Default" which refers to
+    // one of the other material types, so it would be redundant to test with it.
+    const vector<string> builtIns = pRenderer->builtInMaterials();
+    int materialCount             = 72;
+
+    // Create materials for each teapot.
+    for (int i = 0; i < teapotGrid.size(); i++)
+    {
+        // Read the materialX document from file.
+        int mtlIdx          = i % materialCount;
+        string mtlXName     = "standardSurface_" + to_string(mtlIdx) + "Dumped";
+        string mtlXFullPath = dataPath() + "/Materials/dumpedMtlx/" + mtlXName + ".mtlx";
+
+        // Load and process the MaterialX document and ensure it loaded correctly.
+        string processedMtlXString = loadAndProcessMaterialXFile(mtlXFullPath);
+        EXPECT_FALSE(processedMtlXString.empty());
+
+        // Create material from document
+        Path dupeMat = "DupeMaterial" + to_string(i);
+        pScene->setMaterialType(dupeMat, Names::MaterialTypes::kMaterialX, processedMtlXString);
+
+        pScene->setInstanceProperties(
+            teapotGrid[i], { { Names::InstanceProperties::kMaterial, dupeMat } });
+    }
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
 }
 
 // Test basic material properties using baseline image testing
@@ -951,10 +973,7 @@ TEST_P(MaterialTest, TestMaterialX)
     // Render the scene and check baseline image.
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_FromString", "Materials");
 
-    // On pathtracer we don't actually support setting arbritary materialX parameters, so mix1_mix
-    // won't exist.
-    ASSERT_THROW(pScene->setMaterialProperties(testMaterial, { { "mix1_mix", 0.1f } }),
-        TestHelpers::AuroraLoggerException);
+    pScene->setMaterialProperties(testMaterial, { { "mix_amount/value", 0.9f } });
 
     pScene->setInstanceProperties(instance, instProps);
 
@@ -1303,6 +1322,42 @@ TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
 
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName() + "_Removed");
 }
+
+// Test object space normal in materialX.
+TEST_P(MaterialTest, DISABLED_TestObjectSpaceMaterialX)
+{
+
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    setDefaultRendererPathTracingIterations(256);
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // Create teapot geom.
+    Path geometry = createTeapotGeometry(*pScene);
+
+    // Try loading a MtlX file dumped from Oxide.
+    Path material("ThreadMaterial");
+    pScene->setMaterialType(
+        material, Names::MaterialTypes::kMaterialXPath, dataPath() + "/Materials/TestThread.mtlx");
+
+    // Add to scene.
+    Path instance("ThreadInstance");
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial] = material;
+    EXPECT_TRUE(pScene->addInstance(instance, geometry, instProps));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_ThreadMtlX", "Materials");
+}
+
 
 INSTANTIATE_TEST_SUITE_P(MaterialTests, MaterialTest, TEST_SUITE_RENDERER_TYPES());
 

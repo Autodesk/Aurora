@@ -5,8 +5,10 @@ find_package(glm REQUIRED) # Find the GLM vector maths package.
 find_package(OpenGL REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(GLEW REQUIRED)
-
+find_package(MaterialX REQUIRED) # MaterialX SDK
 find_package(pxr REQUIRED) # Find the Universal Scene Description (USD) library
+# Alias the namespace to meet the cmake convention on imported targets
+add_library(MaterialX::GenGlsl ALIAS MaterialXGenGlsl)
 
 # Add shard library with all source files.
 add_library(${PROJECT_NAME} SHARED
@@ -50,6 +52,7 @@ PRIVATE
     glm::glm
     OpenGL::GL
     GLEW::glew
+    MaterialX::GenGlsl
     pxr::usd
     pxr::hf
     pxr::hd

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -100,6 +100,8 @@ GeometryBase::GeometryBase(const std::string& name, const GeometryDescriptor& de
         _positions, vertexBuffers[Names::VertexAttributes::kPosition], _vertexCount, 3);
     copyVertexChannelData(
         _normals, vertexBuffers[Names::VertexAttributes::kNormal], _vertexCount, 3);
+    copyVertexChannelData(
+        _tangents, vertexBuffers[Names::VertexAttributes::kTangent], _vertexCount, 3);
     copyVertexChannelData(
         _texCoords, vertexBuffers[Names::VertexAttributes::kTexCoord0], _vertexCount, 2);
     copyVertexChannelData(_indices, vertexBuffers[Names::VertexAttributes::kIndices], _indexCount);

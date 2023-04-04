@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ MaterialGenerator::MaterialGenerator(IRenderer* pRenderer, const string& mtlxFol
     // Map of MaterialX output parameters to Aurora material property.
     // Used by PTRenderer::generateMaterialX.
     // clang-format off
-    _materialXOutputParamMapping =
+    _bsdfInputParamMapping =
     {
         { "base", "base" },
         { "base_color", "baseColor" },
@@ -142,267 +142,91 @@ MaterialGenerator::MaterialGenerator(IRenderer* pRenderer, const string& mtlxFol
     // clang-format on
 }
 
-bool MaterialGenerator::generate(
-    const string& document, map<string, Value>* pDefaultValuesOut, MaterialTypeSource& sourceOut)
+shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& document)
 {
+    shared_ptr<MaterialDefinition> pDef;
+
+    // If we have already generated this material type, then just used cached material type.
+    auto mtliter = _definitions.find(document);
+    if (mtliter != _definitions.end())
+    {
+        pDef = mtliter->second.lock();
+        if (pDef)
+        {
+            return pDef;
+        }
+        else
+        {
+            _definitions.erase(document);
+        }
+    }
+
+
     // Create code generator result struct.
     MaterialXCodeGen::BSDFCodeGenerator::Result res;
 
+    // Strings for generated HLSL and entry point.
+    string generatedMtlxSetupFunction;
+
     // The hardcoded inputs are added manually to the generated HLSL and passed to the
-    // code-generated set up function.  This is filled in by the inputMapper lamdba when the code is
+    // code-generated set up function.  This is filled in by the inputMapper lambda when the code is
     // generated.
     set<string> hardcodedInputs;
 
-    // Callback function to map MaterialX inputs to Aurora uniforms and textures.
-    // This function will be called for each input parameter in the MaterialX document that is
-    // connected to a mapped output. Each "top level" input parameter will be prefixed with the top
-    // level shader name for the MaterialX document, other input parameters will be named for the
-    // node graph they are part of (e.g. generic_diffuse)
-    MaterialXCodeGen::BSDFCodeGenerator::ParameterMappingFunction inputMapper =
-        [&](const string& name, Aurora::IValues::Type type, const string& topLevelShaderName) {
-            // Top-level inputs are prefixed with the top level material name.
-            if (name.size() > topLevelShaderName.size())
-            {
-                // Strip the top level material name (and following underscore) from the input name.
-                string nameStripped = name.substr(topLevelShaderName.size() + 1);
-
-                // If this is one of the Standard Surface inputs then map to that.
-                auto iter = _materialXOutputParamMapping.find(nameStripped);
-                if (iter != _materialXOutputParamMapping.end())
-                    return iter->second;
-            }
-
-            // By default return an empty string (which will leave input unmapped.)
-            string mappedName = "";
-
-            // Map anything containing the string 'unit_unit_to' to the distance unit.
-            if (name.find("unit_unit_to") != string::npos)
-            {
-                mappedName = "distanceUnit";
-            }
-
-            // Map any image inputs using a heuristic that should guess the right texture mapping
-            // for any textures we care about.
-            if (type == Aurora::IValues::Type::Image)
-            {
-                mappedName = mapMaterialXTextureName(name);
-                if (mappedName.empty())
-                {
-                    // Leaving a texture unassigned will result in a HLSL compilation error, so map
-                    // unrecognized textures to gBaseColorTexture and print a warning. This avoids
-                    // the shader compile error, but will render incorrectly.
-                    AU_WARN("Unrecognized texture variable %s, setting to gBaseColorTexture.",
-                        name.c_str());
-                    mappedName = "base_color_image";
-                }
-            }
-
-            // Map any int parameters as sampler properties.
-            if (type == Aurora::IValues::Type::Int)
-            {
-                string mappedTextureName = mapMaterialXTextureName(name);
-
-                // Any int input that can be mapped to hardcoded texture name is treated as address
-                // mode.
-                // TODO: Only base color and opacity image currently supports samplers.
-                if (!mappedTextureName.empty() &&
-                    (mappedTextureName.compare("base_color_image") == 0 ||
-                        mappedTextureName.compare("opacity_image") == 0))
-                {
-                    // Map uaddressmode to the image's AddressModeU property.
-                    if (name.find("uaddressmode") != string::npos)
-                        mappedName = mappedTextureName + "_sampler_uaddressmode";
-                    // Map uaddressmode to the image's AddressModeV property.
-                    else if (name.find("vaddressmode") != string::npos)
-                        mappedName = mappedTextureName + "_sampler_vaddressmode";
-                }
-            }
-            if (type == Aurora::IValues::Type::Float2)
-            {
-                string mappedTextureName = mapMaterialXTextureName(name);
-
-                // Any vec2 input that can be mapped to hardcoded texture name is treated as texture
-                // transform property.
-                if (!mappedTextureName.empty())
-                {
-                    // Map uv_offset to the image transform's offset property.
-                    if (name.find("uv_offset") != string::npos)
-                        mappedName = mappedTextureName + "_offset";
-                    // Map uv_scale to the image transform's scale property.
-                    else if (name.find("uv_scale") != string::npos)
-                        mappedName = mappedTextureName + "_scale";
-                }
-            }
-            if (type == Aurora::IValues::Type::Float)
-            {
-                string mappedTextureName = mapMaterialXTextureName(name);
-
-                // Any float input that can be mapped to hardcoded texture name as texture rotation.
-                if (!mappedTextureName.empty())
-                {
-                    // Map uv_scale to the image transform's rotaiton property.
-                    if (name.find("rotation_angle") != string::npos)
-                        mappedName = mappedTextureName + "_rotation";
-                }
-            }
-
-            //  Add to the hardcoded inputs.
-            if (!mappedName.empty())
-                hardcodedInputs.insert(mappedName);
-
-            // Return the mapped name
-            return mappedName;
-        };
-
-    // Set to true by lambda if the normal has been modified in code-generated material setup.
-    bool modifiedNormal = false;
-
-    // Callback function to map MaterialX setup outputs to the Aurora material parameter.
-    MaterialXCodeGen::BSDFCodeGenerator::ParameterMappingFunction outputMapper =
-        [&](const string& name, Aurora::IValues::Type /*type*/,
-            const string& /*topLevelShaderName*/) {
-            // If there is direct mapping to aurora material use that.
-            auto iter = _materialXOutputParamMapping.find(name);
-            if (iter != _materialXOutputParamMapping.end())
-                return iter->second;
-
-            // If the setup code has generated a normal, set the modified flag.
-            if (name.compare("normal") == 0)
-            {
-                modifiedNormal = true;
-                return name;
-            }
-
-            // Otherwise don't code generate this output.
-            return string("");
-        };
-
-    // Remap the parameters *back* to the materialX name, as the material inputs are in snake case,
-    // not camel case.
-    // TODO: We should unify camel-vs-snake case for material parameters.
-    map<string, string> remappedInputs;
-    for (auto iter : _materialXOutputParamMapping)
+    // Create set of supported BSDF inputs.
+    set<string> supportedBSDFInputs;
+    for (auto iter : _bsdfInputParamMapping)
     {
-        remappedInputs[iter.second] = iter.first;
+        supportedBSDFInputs.insert(iter.first);
     }
 
     // Run the code generator overriding materialX document name, so that regardless of the name in
     // the document, the generated HLSL is based on a hardcoded name string for caching purposes.
     // NOTE: This will immediate run the code generator and invoke the inputMapper and outputMapper
     // function populate hardcodedInputs and set modifiedNormal.
-    if (!_pCodeGenerator->generate(document, &res, inputMapper, outputMapper, "MaterialXDocument"))
+    if (!_pCodeGenerator->generate(
+            document, &res, supportedBSDFInputs, "MaterialXDocument"))
     {
         // Fail if code generation fails.
         // TODO: Proper error handling here.
         AU_ERROR("Failed to generate MaterialX code.");
-        return false;
+        return nullptr;
     }
 
-    // Map of samplers to collate sampler properties.
-    map<string, Properties> samplerProperties;
-
-    // Get the default values.
-    pDefaultValuesOut->clear();
-    for (int i = 0; i < res.argumentsUsed.size(); i++)
+    // Create set of the generated BSDF inputs.
+    set<string> bsdfInputs;
+    for (int i = 0; i < res.bsdfInputs.size(); i++)
     {
-        auto arg = res.argumentsUsed[i];
-        // Code generator returns input and output values, we only care about inputs.
-        if (!arg.isOutput)
-        {
-            // For all Standard Surface inputs, remap back to snake case.
-            string remappedName = arg.name;
-
-            // We need to collate the seperate sampler properties (vaddressmode or uaddressmode)
-            // into sampler object.
-            bool isSamplerParam = false;
-            if (arg.name.find("uaddressmode") != string::npos ||
-                arg.name.find("vaddressmode") != string::npos)
-            {
-                isSamplerParam = true;
-
-                // Compute sampler name from property name.
-                string samplerName = arg.name;
-                samplerName.erase(samplerName.length() - string("_uaddressmode").length());
-
-                // If no sampler properties, create one.
-                if (samplerProperties.find(samplerName) == samplerProperties.end())
-                {
-                    samplerProperties[samplerName] = {};
-                }
-
-                // Map int value to address mode.
-                // These int values are abrirarily defined in MaterialX source:
-                // source\MaterialXRender\ImageHandler.h
-                // TODO: Make this less error prone.
-                string addressMode = Names::AddressModes::kWrap;
-                switch (arg.pDefaultValue->asInt())
-                {
-                case 1:
-                    addressMode = Names::AddressModes::kClamp;
-                    break;
-                case 2:
-                    addressMode = Names::AddressModes::kWrap;
-                    break;
-                case 3:
-                    addressMode = Names::AddressModes::kMirror;
-                    break;
-                default:
-                    break;
-                }
-
-                // Set the sampler properties for U/V address mode.
-                if (arg.name.find("uaddressmode") != string::npos)
-                {
-                    samplerProperties[samplerName][Names::SamplerProperties::kAddressModeU] =
-                        addressMode;
-                }
-                else if (arg.name.find("vaddressmode") != string::npos)
-                {
-                    samplerProperties[samplerName][Names::SamplerProperties::kAddressModeV] =
-                        addressMode;
-                }
-            }
-
-            // Don't map individual sampler parameters to default values, as they are added as
-            // sampler objects below.
-            if (!isSamplerParam)
-            {
-                // Remap if needed.
-                auto hardcodedIter = hardcodedInputs.find(arg.name);
-                if (hardcodedIter != hardcodedInputs.end())
-                {
-                    // If this is a hard-oded input, use the hardcoded name directly.
-                    remappedName = arg.name;
-                }
-                else
-                {
-                    // For Standard Surface inputs, remap back to snake case.
-                    remappedName = remappedInputs[arg.name];
-                }
-
-                // Add the default value to the output map.
-                pDefaultValuesOut->insert(make_pair(remappedName, *arg.pDefaultValue));
-            }
-        }
+        bsdfInputs.insert(res.bsdfInputs[i].name);
     }
 
-    // Create sampler objects for the sampler properties.
-    // TODO: Cache these to avoid unnessacary sampler objects.
-    for (auto iter = samplerProperties.begin(); iter != samplerProperties.end(); iter++)
+    // Create set of the textures used by the generated setup function.
+    map<string, int> textures;
+    for (int i = 0; i < res.textures.size(); i++)
     {
-        pDefaultValuesOut->insert(
-            make_pair(iter->first, _pRenderer->createSamplerPointer(iter->second)));
+        textures[res.textures[i]] = i;
     }
+
+    // Normal modified if the normal BSDF input is active.
+    bool modifiedNormal = bsdfInputs.find("normal") != bsdfInputs.end();
 
     // Create material name from the hash provided by code generator.
     string materialName = "MaterialX_" + Foundation::sHash(res.functionHash);
 
-    // Begin with the setup code (converted to HLSL)
-    string generatedMtlxSetupFunction = GLSLToHLSL(res.materialSetupCode);
+    // Append the material accessor functions used to read material properties from
+    // ByteAddressBuffer.
+    UniformBuffer mtlConstantsBuffer(res.materialProperties, res.materialPropertyDefaults);
+    generatedMtlxSetupFunction += "struct " + res.materialStructName + "\n";
+    generatedMtlxSetupFunction += mtlConstantsBuffer.generateHLSLStruct();
+    generatedMtlxSetupFunction += ";\n\n";
+    generatedMtlxSetupFunction +=
+        mtlConstantsBuffer.generateByteAddressBufferAccessors(res.materialStructName + "_");
+    generatedMtlxSetupFunction += "\n";
+    generatedMtlxSetupFunction += GLSLToHLSL(res.materialSetupCode);
 
     // Create a wrapper function that is called by the ray hit entry point to initialize material.
-    generatedMtlxSetupFunction +=
-        "\nMaterial initializeMaterial(ShadingData shading, float3x4 objToWorld, out float3 "
+    generatedMtlxSetupFunction += "\nMaterial initializeMaterial"
+        "(ShadingData shading, float3x4 objToWorld, out float3 "
         "materialNormal, out bool "
         "isGeneratedNormal) {\n";
 
@@ -413,138 +237,169 @@ bool MaterialGenerator::generate(
     // generated a normal)
     generatedMtlxSetupFunction += "\tisGeneratedNormal = " + to_string(modifiedNormal) + ";\n";
 
-    // The hardcoded initializeDefaultMaterial() function requires a normal parameter, this should
-    // never be used here.
-    generatedMtlxSetupFunction +=
-        "\nfloat3 unusedObjectSpaceNormal = shading.normal; bool unusedIsGeneratedNormal;\n";
+    // Reset material to default values.
+    generatedMtlxSetupFunction += "\tMaterial material = defaultMaterial();\n";
 
-    // Add code to call default initialize material function.
-    // NOTE: Most of this will get overwritten, but the compiler should be clever enough to know
-    // that and remove dead code.
-    generatedMtlxSetupFunction +=
-        "\tMaterial material = initializeDefaultMaterial(shading, ObjectToWorld3x4(), "
-        "unusedObjectSpaceNormal, "
-        "unusedIsGeneratedNormal);\n";
-
-    // MaterialX accepts addresmode parameters as dummy integers that are passed down to the shader
-    // code, but then never used. So we need to define them as arbritary ints to avoid compile
-    // errors.
-    // TODO: Less hacky way to do this.
-    if (hardcodedInputs.find("base_color_image_sampler_uaddressmode") != hardcodedInputs.end())
+    // Add code to create local texture variables for the textures used by generated code, based on
+    // hard-code texture names from Standard Surface.
+    // TODO: Data-driven textures that are not mapped to hard coded texture names.
+    vector<TextureDefinition> textureVars;
+    if (res.textures.size() >= 1)
     {
-        generatedMtlxSetupFunction += "\tint base_color_image_sampler_uaddressmode = 0;\n";
-    }
-    if (hardcodedInputs.find("base_color_image_sampler_vaddressmode") != hardcodedInputs.end())
-    {
-        generatedMtlxSetupFunction += "\tint base_color_image_sampler_vaddressmode = 0;\n";
-    }
-    if (hardcodedInputs.find("opacity_image_sampler_uaddressmode") != hardcodedInputs.end())
-    {
-        generatedMtlxSetupFunction += "\tint opacity_image_sampler_uaddressmode = 0;\n";
-    }
-    if (hardcodedInputs.find("opacity_image_sampler_vaddressmode") != hardcodedInputs.end())
-    {
-        generatedMtlxSetupFunction += "\tint opacity_image_sampler_vaddressmode = 0;\n";
-    }
-
-    // Add code to create local texture variables for the textures used by generated code.
-    // TODO: Add more and be more rigorous about finding which textures are used.
-    if (hardcodedInputs.find("base_color_image") != hardcodedInputs.end())
-    {
-        // Ensure the correct sampler is used for the base color sampler (not default sampler).
+        // Map first texture to the base_color_image and sampler.
         generatedMtlxSetupFunction +=
             "\tsampler2D base_color_image = createSampler2D(gBaseColorTexture, "
             "gBaseColorSampler);\n";
+
+        // Add to the texture array.
+        TextureDefinition txtDef = res.textureDefaults[0];
+        txtDef.name              = "base_color_image";
+        textureVars.push_back(txtDef);
     }
-    if (hardcodedInputs.find("specular_roughness_image") != hardcodedInputs.end())
+
+    if (res.textures.size() >= 2)
     {
-        generatedMtlxSetupFunction +=
-            "\tsampler2D specular_roughness_image = createSampler2D(gSpecularRoughnessTexture, "
-            "gDefaultSampler);\n";
-    }
-    if (hardcodedInputs.find("normal_image") != hardcodedInputs.end())
-    {
-        generatedMtlxSetupFunction +=
-            "\tsampler2D normal_image = createSampler2D(gNormalTexture, "
-            "gDefaultSampler);\n";
-    }
-    if (hardcodedInputs.find("opacity_image") != hardcodedInputs.end())
-    {
-        // Ensure the correct sampler is used for the opacity sampler (not default sampler).
+        // Map second texture to the opacity_image and sampler.
         generatedMtlxSetupFunction +=
             "\tsampler2D opacity_image = createSampler2D(gOpacityTexture, "
             "gOpacitySampler);\n";
+
+        // Add to the texture array.
+        TextureDefinition txtDef = res.textureDefaults[1];
+        txtDef.name              = "opacity_image";
+        textureVars.push_back(txtDef);
+    }
+
+    if (res.textures.size() >= 3)
+    {
+        // Map second texture to the normal_image and the default sampler.
+        generatedMtlxSetupFunction +=
+            "\tsampler2D normal_image = createSampler2D(gNormalTexture, "
+            "gDefaultSampler);\n";
+
+        // Add to the texture array.
+        TextureDefinition txtDef = res.textureDefaults[2];
+        txtDef.name              = "normal_image";
+        textureVars.push_back(txtDef);
+    }
+
+    if (res.textures.size() >= 4)
+    {
+        // Map second texture to the specular_roughness_image and the default sampler.
+        generatedMtlxSetupFunction +=
+            "\tsampler2D specular_roughness_image = createSampler2D(gSpecularRoughnessTexture, "
+            "gDefaultSampler);\n";
+
+        // Add to the texture array.
+        TextureDefinition txtDef = res.textureDefaults[3];
+        txtDef.name              = "specular_roughness_image";
+        textureVars.push_back(txtDef);
+    }
+
+    // Map any additional textures to base color image.
+    for (size_t i = textureVars.size(); i < res.textures.size(); i++)
+    {
+        TextureDefinition txtDef = textureVars[i];
+        txtDef.name              = "base_color_image";
+        textureVars.push_back(txtDef);
     }
 
     // Use the define DISTANCE_UNIT which is set in the shader library options.
     generatedMtlxSetupFunction += "\tint distanceUnit = DISTANCE_UNIT;\n";
 
+    // Create temporary material struct
+    generatedMtlxSetupFunction += "\t" + res.materialStructName + " setupMaterialStruct;\n";
+
+    // Fill struct using the byte address buffer accessors.
+    for (int i = 0; i < res.materialProperties.size(); i++)
+    {
+        generatedMtlxSetupFunction += "\tsetupMaterialStruct." + res.materialProperties[i].variableName +
+            " = " + res.materialStructName + "_" + res.materialProperties[i].variableName +
+            "(gMaterialConstants);\n";
+        ;
+    }
+
     // Add code to call the generate setup function.
     generatedMtlxSetupFunction += "\t" + res.setupFunctionName + "(\n";
 
-    // Add code for all the required arguments.
-    for (int i = 0; i < res.argumentsUsed.size(); i++)
+    // First argument is material struct.
+    generatedMtlxSetupFunction += "setupMaterialStruct";
+
+    // Add code for all the texture arguments.
+    for (int i = 0; i < textureVars.size(); i++)
     {
-        // Current argument.
-        auto arg = res.argumentsUsed[i];
+        // Add texture name.
+        generatedMtlxSetupFunction += ",\n";
 
-        // Append comma if needed.
-        if (i > 0)
-            generatedMtlxSetupFunction += ",\n";
+        // Add texture name.
+        generatedMtlxSetupFunction += textureVars[i].name;
+    }
 
-        if (arg.isOutput)
+    // Add distance unit parameter, if used.
+    if (res.hasUnits)
+    {
+        // Add texture name.
+        generatedMtlxSetupFunction += ",\n";
+
+        // Add distance unit variable.
+        generatedMtlxSetupFunction += "distanceUnit";
+    }
+
+    // Add the BSDF inputs that will be output from setup function.
+    for (int i = 0; i < res.bsdfInputs.size(); i++)
+    {
+        generatedMtlxSetupFunction += ",\n";
+        if (res.bsdfInputs[i].name.compare("normal") == 0)
         {
-            if (arg.name.compare("normal") == 0)
-            {
-                // Output the generated normal straight into the materialNormal output parameter.
-                generatedMtlxSetupFunction += "\t\tmaterialNormal";
-            }
-            else
-            {
-                // Output arguments are written to the material struct.
-                generatedMtlxSetupFunction += "\t\tmaterial." + arg.name;
-            }
+            // Output the generated normal straight into the materialNormal output parameter.
+            generatedMtlxSetupFunction += "\t\tmaterialNormal";
         }
         else
         {
-            if (hardcodedInputs.find(arg.name) != hardcodedInputs.end())
-            {
-                if (_materialXOutputParamMapping.find(arg.name) !=
-                    _materialXOutputParamMapping.end())
-                {
-                    generatedMtlxSetupFunction +=
-                        "\t\tgMaterialConstants." + _materialXOutputParamMapping[arg.name];
-                }
-                else
-                {
-                    // Hardcoded inputs are specified in the HLSL above and passed in directly.
-                    generatedMtlxSetupFunction += "\t\t" + arg.name;
-                }
-            }
-            else
-            {
-                // Other arguments are read from constant buffer transfered from CPU.
-                generatedMtlxSetupFunction += "\t\tgMaterialConstants." + arg.name;
-            }
+            // Output into the material struct to be returned.
+            string mappedBSDFInput = _bsdfInputParamMapping[res.bsdfInputs[i].name];
+            AU_ASSERT(
+                !mappedBSDFInput.empty(), "Invalid BSDF input:%s", res.bsdfInputs[i].name.c_str());
+            // Output arguments are written to the material struct.
+            generatedMtlxSetupFunction += "\t\tmaterial." + mappedBSDFInput;
         }
     }
 
     // Finish function call.
     generatedMtlxSetupFunction += ");\n";
 
+    // Replace overwrite metal color with base color.
+    // TODO: Metal color is not supported by materialX and not in Standard Surface definition.  So
+    // maybe remove it?
+    generatedMtlxSetupFunction += "material.metalColor = material.baseColor;";
+
     // Return the generated material struct.
     generatedMtlxSetupFunction += "\treturn material;\n";
 
     // Finish setup wrapper function.
     generatedMtlxSetupFunction += "}\n";
-
+    
     // Output the material name
-    sourceOut.bsdf  = "";
-    sourceOut.setup = generatedMtlxSetupFunction;
-    sourceOut.name  = materialName;
+    MaterialTypeSource source(materialName, generatedMtlxSetupFunction);
+    MaterialDefaultValues defaults(
+        res.materialProperties, res.materialPropertyDefaults, res.textureDefaults);
 
-    return true;
+    // Material type is opaque if neither opacity or transmission input is used.
+    bool isOpaque = bsdfInputs.find("opacity") == bsdfInputs.end() &&
+        bsdfInputs.find("transmission") == bsdfInputs.end();
+
+    // Create update function which just sets opacity flag based on material type opacity.
+    function<void(MaterialBase&)> updateFunc = [isOpaque](MaterialBase& mtl) {
+        mtl.setIsOpaque(isOpaque);
+    };
+
+    pDef = make_shared<MaterialDefinition>(source, defaults, updateFunc);
+
+    _definitions[document] = pDef;
+
+    return pDef;
 }
+
 
 void MaterialGenerator::generateDefinitions(string& definitionHLSLOut)
 {

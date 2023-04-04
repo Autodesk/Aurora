@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 
 #include <Aurora/Foundation/Utilities.h>
 
+#include <MaterialXFormat/Util.h>
+#include <MaterialXFormat/XmlIo.h>
+
 #include "HdAuroraImageCache.h"
 #include "HdAuroraMesh.h"
 #include "HdAuroraRenderDelegate.h"
@@ -24,6 +27,7 @@
 
 #include <functional>
 #include <list>
+#include <regex>
 
 #pragma warning(disable : 4506) // inline function warning (from USD but appears in this file)
 
@@ -95,9 +99,188 @@ HdDirtyBits HdAuroraMaterial::GetInitialDirtyBitsMask() const
 {
     return HdChangeTracker::AllSceneDirtyBits;
 }
+void HdAuroraMaterial::InitToDefaultValue(
+    MaterialX::NodePtr& pNode, Aurora::Properties& materialProperties, bool& isNodegraph)
+{
+    if (!pNode || !pNode->getInputCount())
+    {
+        return;
+    }
+    std::pair<std::string, std::string> inputValue;
+    for (MaterialX::InputPtr input : pNode->getInputs())
+    {
+        std::string namePath;
 
-bool HdAuroraMaterial::SetupAuroraMaterial(
-    const string& materialType, const string& materialDocument)
+        // Input is part of standard_surface, directly store its name
+        // Otherwise store the namepath to know the hierarchical nodegraph name
+        if (isNodegraph)
+        {
+            string ngNamepath            = input->getNamePath();
+            const size_t first_slash_idx = ngNamepath.find('/');
+            if (0 != first_slash_idx)
+            {
+                // Get rid of the first path of namepath, namely the name of nodegraph
+                namePath = ngNamepath.substr(first_slash_idx + 1, ngNamepath.length());
+            }
+        }
+        else
+        {
+            namePath = input->getName();
+        }
+        const std::string type          = input->getType();
+        const MaterialX::ValuePtr value = input->getValue();
+
+        // Skip invalid input type and value
+        if (type.empty() || !value)
+            continue;
+
+        // Reset all non-zero value to zero according to their types
+        if (type == MaterialX::getTypeString<float>())
+        {
+            if (value->asA<float>() != 0.0f)
+            {
+                materialProperties[namePath] = value->asA<float>();
+                input->setValue(0.0f);
+            }
+        }
+        else if (type == MaterialX::getTypeString<int>())
+        {
+            if (value->asA<int>() != 0)
+            {
+                // TODO: The "which" value of "switch" node is kept for now, as it is not currently
+                // supported by the data-driven mechanism.
+                auto pParent = input->getParent();
+                if (pParent && pParent->getCategory() == "switch")
+                {
+                    const size_t last_slash_idx = namePath.find_last_of('/');
+                    if (string::npos != last_slash_idx)
+                    {
+                        auto parameterName = namePath.substr(last_slash_idx + 1, namePath.length());
+                        if ("which" == parameterName)
+                            continue;
+                    }
+                }
+
+                materialProperties[namePath] = value->asA<int>();
+                input->setValue(0);
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Vector2>())
+        {
+            if (value->asA<MaterialX::Vector2>() != MaterialX::Vector2(0.0f, 0.0f))
+            {
+                glm::vec2 val;
+                val[0]                       = value->asA<MaterialX::Vector2>()[0];
+                val[1]                       = value->asA<MaterialX::Vector2>()[1];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Vector2(0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Vector3>())
+        {
+            if (value->asA<MaterialX::Vector3>() != MaterialX::Vector3(0.0f, 0.0f, 0.0f))
+            {
+                glm::vec3 val;
+                val[0]                       = value->asA<MaterialX::Vector3>()[0];
+                val[1]                       = value->asA<MaterialX::Vector3>()[1];
+                val[2]                       = value->asA<MaterialX::Vector3>()[2];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Vector3(0.0f, 0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Vector4>())
+        {
+            if (value->asA<MaterialX::Vector4>() != MaterialX::Vector4(0.0f, 0.0f, 0.0f, 0.0f))
+            {
+                glm::vec4 val;
+                val[0]                       = value->asA<MaterialX::Vector4>()[0];
+                val[1]                       = value->asA<MaterialX::Vector4>()[1];
+                val[2]                       = value->asA<MaterialX::Vector4>()[2];
+                val[3]                       = value->asA<MaterialX::Vector4>()[3];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Vector4(0.0f, 0.0f, 0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Color3>())
+        {
+            if (value->asA<MaterialX::Color3>() != MaterialX::Color3(0.0f, 0.0f, 0.0f))
+            {
+                glm::vec3 val;
+                val[0]                       = value->asA<MaterialX::Color3>()[0];
+                val[1]                       = value->asA<MaterialX::Color3>()[1];
+                val[2]                       = value->asA<MaterialX::Color3>()[2];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Color3(0.0f, 0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<bool>())
+        {
+            if (value->asA<bool>() != false)
+            {
+                materialProperties[namePath] = value->asA<bool>();
+                input->setValue(false);
+            }
+        }
+    }
+}
+void HdAuroraMaterial::ReplaceMaterialName(string& materialDocument, const string& targetName)
+{
+    std::string originalMaterialName;
+    MaterialX::DocumentPtr originalDoc = MaterialX::createDocument();
+    MaterialX::readFromXmlString(originalDoc, materialDocument);
+    for (MaterialX::ElementPtr elem : originalDoc->traverseTree())
+    {
+        if (elem->isA<MaterialX::Node>())
+        {
+            MaterialX::NodePtr pNode = elem->asA<MaterialX::Node>();
+            if (pNode->getType() == MaterialX::SURFACE_SHADER_TYPE_STRING)
+            {
+                originalMaterialName = pNode->getName();
+                break;
+            }
+        }
+    }
+    if (!originalMaterialName.empty())
+    {
+        std::regex srcNodegraphName("nodegraph=\"" + originalMaterialName);
+        std::regex srcNodeName("name=\"" + originalMaterialName);
+        string processedMtlXString =
+            regex_replace(materialDocument, srcNodegraphName, "nodegraph=\"" + targetName);
+        materialDocument = regex_replace(processedMtlXString, srcNodeName, "name=\"" + targetName);
+    }
+}
+string HdAuroraMaterial::SeparateHDMaterialXDocument(
+    string& materialDocument, Aurora::Properties& materialProperties)
+{
+    // Step1: Unified naming
+    std::string targetName = "HdAuroraMaterialX";
+    ReplaceMaterialName(materialDocument, targetName);
+
+    // Step2: Collect name-value pair
+    MaterialX::DocumentPtr hdMaterialXDoc = MaterialX::createDocument();
+    MaterialX::readFromXmlString(hdMaterialXDoc, materialDocument);
+    bool isNodeGraph = false;
+    for (MaterialX::ElementPtr elem : hdMaterialXDoc->traverseTree())
+    {
+        if (elem->isA<MaterialX::Node>())
+        {
+            MaterialX::NodePtr pNode = elem->asA<MaterialX::Node>();
+            InitToDefaultValue(pNode, materialProperties, isNodeGraph);
+        }
+        else if (elem->isA<MaterialX::NodeGraph>())
+        {
+            MaterialX::NodeGraphPtr pNodeGraph = elem->asA<MaterialX::NodeGraph>();
+            isNodeGraph                        = true;
+            for (MaterialX::ElementPtr subElem : pNodeGraph->traverseTree())
+            {
+                MaterialX::NodePtr pNode = subElem->asA<MaterialX::Node>();
+                InitToDefaultValue(pNode, materialProperties, isNodeGraph);
+            }
+        }
+    }
+    return MaterialX::writeToXmlString(hdMaterialXDoc);
+}
+bool HdAuroraMaterial::SetupAuroraMaterial(const string& materialType, const string& materialDocument)
 {
     // Calculate hash of document.
     std::size_t docHash = std::hash<std::string> {}(materialDocument);
@@ -136,8 +319,18 @@ void HdAuroraMaterial::ProcessHDMaterial(HdSceneDelegate* delegate)
     string hdMaterialXDocument;
     if (GetHDMaterialXDocument(delegate, hdMaterialXType, hdMaterialXDocument))
     {
-        // If we have Hydra materialX document or filename, just use that.
+        Aurora::Properties materialProperties;
+        if (!hdMaterialXDocument.empty())
+        {
+            // Separate hdMaterialXDocument into default doc and name-value pair
+            hdMaterialXDocument =
+                SeparateHDMaterialXDocument(hdMaterialXDocument, materialProperties);
+        }
+        // Send the document to Aurora (with the parameters reset.)
         SetupAuroraMaterial(hdMaterialXType, hdMaterialXDocument);
+
+        // Send the name-value pair by IScene::setMaterialProperties
+        _owner->GetScene()->setMaterialProperties(_auroraMaterialPath, materialProperties);
     }
     else if (!ProcessHDMaterialNetwork(hdMatVal))
     {

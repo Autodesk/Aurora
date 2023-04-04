@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ static void copyVertexChannelData(vector<ComponentType>& dst, const AttributeDat
         ComponentType* pDstComp = dst.data();
         for (size_t i = 0; i < vertexCount; i++)
         {
-            // Copy the individual element from the soure buffer to destination.
+            // Copy the individual element from the source buffer to destination.
             const ComponentType* pSrcComp = reinterpret_cast<const ComponentType*>(pSrc);
             for (uint32_t j = 0; j < componentCount; j++)
             {
@@ -115,6 +115,10 @@ bool PTGeometry::update()
     if (!_normals.empty())
     {
         createVertexBuffer(_normalBuffer, _normals.data(), sizeof(float) * _vertexCount * 3);
+    }
+    if (!_tangents.empty())
+    {
+        createVertexBuffer(_tangentBuffer, _tangents.data(), sizeof(float) * _vertexCount * 3);
     }
     if (!_texCoords.empty())
     {

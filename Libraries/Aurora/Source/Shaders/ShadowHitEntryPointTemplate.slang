@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@
     // If the material is opaque, set the visibility to zero, accept the hit, and stop searching for
     // hits, as the shadow ray is completely blocked. Doing this here is a performance optimization,
     // as it avoids calling the full material initialization below, which can be expensive.
-    if (gMaterialConstants.isOpaque)
+    if (gIsOpaque)
     {
         rayPayload.visibility = BLACK;
         AcceptHitAndEndSearch();

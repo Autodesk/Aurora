@@ -91,6 +91,8 @@ set(COMMON_SOURCE
     "Source/ResourceStub.h"
     "Source/SceneBase.cpp"
     "Source/SceneBase.h"
+    "Source/UniformBuffer.cpp"
+    "Source/UniformBuffer.h"
     "Source/Transpiler.h"
     "Source/Transpiler.cpp"
     "Source/WindowsHeaders.h"

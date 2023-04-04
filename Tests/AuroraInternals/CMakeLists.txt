@@ -33,6 +33,8 @@ set(AURORA_FILES
     "${AURORA_DIR}/Source/ResourceStub.h"
     "${AURORA_DIR}/Source/SceneBase.cpp"
     "${AURORA_DIR}/Source/SceneBase.h"
+    "${AURORA_DIR}/Source/UniformBuffer.cpp"
+    "${AURORA_DIR}/Source/UniformBuffer.h"
     "${AURORA_DIR}/Source/Aurora.cpp"
     "${AURORA_DIR}/Source/AuroraNames.cpp"
     "${AURORA_DIR}/Source/WindowsHeaders.h"

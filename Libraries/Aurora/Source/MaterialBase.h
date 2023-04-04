@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,19 +14,14 @@
 #pragma once
 
 #include "Properties.h"
+#include "UniformBuffer.h"
 
 BEGIN_AURORA
 
-// Texture UV transform.
-struct TextureTransform
-{
-    vec2 pivot;
-    vec2 scale;
-    vec2 offset;
-    float rotation;
-};
+class MaterialBase;
 
-// Representation of the shader source for a material type.
+// Representation of the shader source for a material type.  Contains source code itself and a
+// unique name string.
 struct MaterialTypeSource
 {
     MaterialTypeSource(const string& typeName = "", const string& setupSource = "",
@@ -44,7 +39,7 @@ struct MaterialTypeSource
     // Compare the name.
     bool compare(const MaterialTypeSource& other) const { return (name.compare(other.name) == 0); }
 
-    // Reset the contents of the
+    // Reset the contents to empty strings.
     void reset()
     {
         name  = "";
@@ -55,7 +50,7 @@ struct MaterialTypeSource
     // Is there actually source associated with this material type?
     bool empty() const { return name.empty(); }
 
-    // Unique name.
+    // Unique name (assigning different source the same name will result in errors).
     string name;
 
     // Shader source for material setup.
@@ -65,76 +60,170 @@ struct MaterialTypeSource
     string bsdf;
 };
 
+// The default values for the properties and textures contained in a material.
+struct MaterialDefaultValues
+{
+    MaterialDefaultValues() {}
+    MaterialDefaultValues(const UniformBufferDefinition& propertyDefs,
+        const vector<PropertyValue>& defaultProps, const vector<TextureDefinition>& defaultTxt) :
+        propertyDefinitions(propertyDefs), properties(defaultProps), textures(defaultTxt)
+    {
+        AU_ASSERT(defaultProps.size() == propertyDefs.size(),
+            "Default properties do not match definition");
+        for (int i = 0; i < defaultTxt.size(); i++)
+        {
+            textureNames.push_back(defaultTxt[i].name);
+        }
+    }
+
+    // The names of the textures defined for this material.
+    vector<string> textureNames;
+
+    // The definitions of the properties defined for this material.
+    UniformBufferDefinition propertyDefinitions;
+
+    // Default values for properties, must match order and size of propertyDefinitions.
+    vector<PropertyValue> properties;
+
+    // Default values (include texture filename and sampler properties) for textures, must match
+    //  match order and size of textureNames.
+    vector<TextureDefinition> textures;
+};
+
+// The definition of a material. All the data need to create a material: the shader source code, a
+// set of default values, and an update callback function.
+class MaterialDefinition
+{
+public:
+    MaterialDefinition(const MaterialTypeSource& source, const MaterialDefaultValues& defaults,
+        function<void(MaterialBase&)> updateFunc) :
+        _source(source), _defaults(defaults), _updateFunc(updateFunc)
+    {
+    }
+    MaterialDefinition() {}
+
+    // Get the material source code.
+    const MaterialTypeSource& source() const { return _source; }
+
+    // Get the default value.
+    const MaterialDefaultValues& defaults() const { return _defaults; }
+
+    // Get the update the function, that is invoked when the material is updated.
+    const function<void(MaterialBase&)>& updateFunction() const { return _updateFunc; }
+
+private:
+    // A shared pointer to the material type, shared_ptr so material type will kept alive for
+    // lifetime of this object.
+    MaterialTypeSource _source;
+    // The default values for the material.
+    MaterialDefaultValues _defaults;
+    // The update function, called when material is changed.
+    function<void(MaterialBase&)> _updateFunc;
+};
+
 // A base class for implementations of IMaterial.
 class MaterialBase : public IMaterial, public FixedValues
 {
 public:
     /*** Lifetime Management ***/
 
-    MaterialBase();
+    MaterialBase(shared_ptr<MaterialDefinition> pDef);
 
     /*** IMaterial Functions ***/
 
     IValues& values() override { return *this; }
 
-protected:
-    // The CPU representation of material constant buffer. The layout of this struct must match the
-    // MaterialConstants struct in the shader.
-    // NOTE: Members should be kept in the same order as the Standard Surface reference document.
-    // https://github.com/Autodesk/standard-surface/blob/master/reference/standard_surface.mtlx
-    // Because it is a CPU representation of a GPU constant buffer, it must be padded to conform to
-    // DirectX packing conventions:
-    // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-packing-rules
-    struct MaterialData
+    // Override default setter.
+    void setBoolean(const string& name, bool value) override
     {
-        float base;
-        vec3 baseColor;
-        float diffuseRoughness;
-        float metalness;
-        float specular;
-        float _padding1;
-        vec3 specularColor;
-        float specularRoughness;
-        float specularIOR;
-        float specularAnisotropy;
-        float specularRotation;
-        float transmission;
-        vec3 transmissionColor;
-        float subsurface;
-        vec3 subsurfaceColor;
-        float _padding2;
-        vec3 subsurfaceRadius;
-        float subsurfaceScale;
-        float subsurfaceAnisotropy;
-        float sheen;
-        vec2 _padding3;
-        vec3 sheenColor;
-        float sheenRoughness;
-        float coat;
-        vec3 coatColor;
-        float coatRoughness;
-        float coatAnisotropy;
-        float coatRotation;
-        float coatIOR;
-        float coatAffectColor;
-        float coatAffectRoughness;
-        vec2 _padding4;
-        vec3 opacity;
-        int thinWalled;
-        int hasBaseColorTex;
-        vec3 _padding5;
-        TextureTransform baseColorTexTransform;
-        int hasSpecularRoughnessTex;
-        TextureTransform specularRoughnessTexTransform;
-        int hasOpacityTex;
-        TextureTransform opacityTexTransform;
-        int hasNormalTex;
-        TextureTransform normalTexTransform;
-        int isOpaque;
-    };
+        _uniformBuffer.set(name, value);
+        _bIsDirty = true;
+    }
 
-    void updateGPUStruct(MaterialData& data);
-    bool computeIsOpaque() const;
+    // Override default setter.
+    void setInt(const string& name, int value) override
+    {
+        _uniformBuffer.set(name, value);
+        _bIsDirty = true;
+    }
+
+    // Override default setter.
+    void setFloat(const string& name, float value) override
+    {
+        _uniformBuffer.set(name, value);
+        _bIsDirty = true;
+    }
+
+    // Override default setter.
+    void setFloat2(const string& name, const float* value) override
+    {
+        _uniformBuffer.set(name, glm::make_vec2(value));
+        _bIsDirty = true;
+    }
+
+    // Override default setter.
+    void setFloat3(const string& name, const float* value) override
+    {
+        _uniformBuffer.set(name, glm::make_vec3(value));
+        _bIsDirty = true;
+    }
+
+    // Override default setter.
+    void setMatrix(const string& name, const float* value) override
+    {
+        _uniformBuffer.set(name, glm::make_mat4(value));
+        _bIsDirty = true;
+    }
+
+    // Override default setter.
+    // TODO: Correctly map arbritrary texture names.
+    void setImage(const string& name, const IImagePtr& value) override
+    {
+        FixedValues::setImage(name, value);
+    }
+
+    // Override default setter.
+    // TODO: Correctly map arbritrary texture names.
+    void setSampler(const string& name, const ISamplerPtr& value) override
+    {
+        FixedValues::setSampler(name, value);
+    }
+
+    // Override default clear function.
+    void clearValue(const string& name) override
+    {
+        if (_uniformBuffer.contains(name))
+        {
+            _uniformBuffer.reset(name);
+            return;
+        }
+        FixedValues::clearValue(name);
+    }
+
+    // Is this material opaque?
+    bool isOpaque() const { return _isOpaque; }
+
+    // Set the opaque flag.
+    void setIsOpaque(bool val) { _isOpaque = val; }
+
+    // Get the uniform buffer for this material.
+    UniformBuffer& uniformBuffer() { return _uniformBuffer; }
+    const UniformBuffer& uniformBuffer() const { return _uniformBuffer; }
+
+    // Hard-coded Standard Surface properties, textures and defaults used by built-in materials.
+    static UniformBufferDefinition StandardSurfaceUniforms;
+    static vector<string> StandardSurfaceTextures;
+    static MaterialDefaultValues StandardSurfaceDefaults;
+
+    // Update function for built-in materials.
+    static void updateBuiltInMaterial(MaterialBase& mtl);
+
+protected:
+    bool _isOpaque = true;
+
+private:
+    shared_ptr<MaterialDefinition> _pDef;
+    UniformBuffer _uniformBuffer;
 };
 
 END_AURORA

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,21 +19,27 @@ interface IGeometry
     uint3 getIndices(int bufferLocation);
     float3 getPosition(int bufferLocation);
     float3 getNormal(int bufferLocation);
+    float3 getTangent(int bufferLocation);
     float2 getTexCoord(int bufferLocation);
     bool hasTexCoords();
     bool hasNormals();
+    bool hasTangents();
 };
 
 
 // Shading data for an intersection point, with interpolated values from adjacent vertices.
 struct ShadingData
 {
-    float3 position;     // the shading position, which may be slightly above the surface
-    float3 geomPosition; // the geometric position, interpolated from adjancent vertices
-    float3 normal;       // the shading normal, interpolated from adjancent vertices
-    float2 texCoord;     // the shading texture coordinates, interpolated from adjancent vertices
-    float3 tangent;      // the shading tangent (X), interpolated from adjacent vertices
-    float3 bitangent;    // the shading bitangent (Y), interpolated from adjacent vertices
+    float3 position;       // the shading position, which may be slightly above the surface
+    float3 geomPosition;   // the geometric position, interpolated from adjancent vertices
+    float3 normal;         // the shading normal, interpolated from adjancent vertices
+    float2 texCoord;       // the shading texture coordinates, interpolated from adjancent vertices
+    float3 tangent;        // the shading tangent (X), interpolated from adjacent vertices
+    float3 bitangent;      // the shading bitangent (Y), interpolated from adjacent vertices
+    float3 objectNormal;   // the shading position in object space (not world space). Used only in
+                           // materialX generated code.
+    float3 objectPosition; // the shading normal in object space (not world space). Used only in
+                           // materialX generated code.
 };
 
 // Computes the barycentric coordinates from the specified triangle intersection.
@@ -95,6 +101,7 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
     // as 32-bit unsigned ints, which are then read as floats.
     float3 positions[3];
     float3 normals[3];
+    float3 tangents[3];
     for (uint i = 0; i < 3; i++)
     {
         positions[i] = (geometry.getPosition(indices[i]));
@@ -104,12 +111,19 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
         // WorldRayOrigin() + WorldRayDirection() * RayTCurrent(). However this will be less
         // accurate due to floating-point precision; see "Ray Tracing Gems" chapter 6.
         shading.geomPosition += positions[i] * barycentrics[i];
-
+        
         // Accumulate the optional normals, weighted by the barycentric coordinates.
         if (geometry.hasNormals())
         {
             normals[i] = (geometry.getNormal(indices[i]));
             shading.normal += normals[i] * barycentrics[i];
+        }
+
+        // Accumulate the optional normals, weighted by the barycentric coordinates.
+        if (geometry.hasTangents())
+        {
+            normals[i] = (geometry.getTangent(indices[i]));
+            shading.tangent += tangents[i] * barycentrics[i];
         }
 
         // Accumulate the optional texture coordinates, weighted by the barycentric coordinates.
@@ -124,25 +138,32 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
     // NOTE: If a provided normal has zero length, then the normal will have undefined components
     // (likely NaN), leading to rendering artifacts (likely black pixels) along any path that
     // accesses the normal.
-    shading.normal = normalize(geometry.hasNormals()
+    shading.objectNormal = normalize(geometry.hasNormals()
             ? shading.normal
             : cross(positions[1] - positions[0], positions[2] - positions[0]));
 
     // Compute the shading position from the geometry position and vertex data. If no normals are
     // provided, use the geometric position.
-    shading.position = geometry.hasNormals() ? computeShadingPosition(shading.geomPosition,
+    shading.objectPosition = geometry.hasNormals() ? computeShadingPosition(shading.geomPosition,
                                                    shading.normal, positions, normals, barycentrics)
                                              : shading.geomPosition;
 
     // Transform the position, geometric position, and normal to world space.
     // NOTE: Renormalize the normal as the object-to-world matrix can have a scale.
-    shading.position     = mul(objToWorld, float4(shading.position, 1.0f));
+    shading.position     = mul(objToWorld, float4(shading.objectPosition, 1.0f));
     shading.geomPosition = mul(objToWorld, float4(shading.geomPosition, 1.0f));
-    shading.normal       = normalize(mul((float3x3)objToWorld, shading.normal));
+    shading.normal       = normalize(mul((float3x3)objToWorld, shading.objectNormal));
+    
+    // Arbritary up vector used to calculate tangents, if none provided.
+    float3 up =
+        abs(shading.normal.y) < 0.999f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
 
-    // Generate automatic tangent / bitangent vector from the shading normal.
-    // TODO: Use tangent vectors from the host instead of this.
-    buildBasis(shading.normal, shading.tangent, shading.bitangent);
+    // Compute arbritary shading tangent from up vector, or use provided one transformed in world space.
+    shading.tangent = normalize(geometry.hasTangents() ? mul(objToWorld, float4(shading.tangent, 1.0f))
+                                            : cross(shading.normal, up));
+
+    // Generate bitangent from normal and tangent.
+    shading.bitangent = computeBitangent(shading.normal, shading.tangent);
 
     return shading;
 }

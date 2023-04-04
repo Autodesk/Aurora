@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,15 @@ BEGIN_AURORA
 class PTRenderer;
 class PTMaterialType;
 class PTShaderLibrary;
+struct MaterialDefaultValues;
+
+struct TextureTransform
+{
+    vec2 pivot;
+    vec2 scale;
+    vec2 offset;
+    float rotation = 0.0f;
+};
 
 // An internal implementation for IMaterial.
 class PTMaterial : public MaterialBase
@@ -35,7 +44,8 @@ public:
 
     /*** Lifetime Management ***/
 
-    PTMaterial(PTRenderer* pRenderer, shared_ptr<PTMaterialType> pType);
+    PTMaterial(PTRenderer* pRenderer, shared_ptr<PTMaterialType> pType,
+        shared_ptr<MaterialDefinition> pDef);
     ~PTMaterial() {};
 
     /*** Functions ***/
@@ -69,6 +79,8 @@ private:
     /*** Private Types ***/
 
     /*** Private Functions ***/
+
+    bool computeIsOpaque() const;
 
     /*** Private Variables ***/
 

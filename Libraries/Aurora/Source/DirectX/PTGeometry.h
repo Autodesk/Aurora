@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ public:
         D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer    = 0;
         D3D12_GPU_VIRTUAL_ADDRESS PositionBuffer = 0;
         D3D12_GPU_VIRTUAL_ADDRESS NormalBuffer   = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS TangentBuffer   = 0;
         D3D12_GPU_VIRTUAL_ADDRESS TexCoordBuffer = 0;
     };
 
@@ -83,6 +84,7 @@ private:
     VertexBuffer _indexBuffer;
     VertexBuffer _positionBuffer;
     VertexBuffer _normalBuffer;
+    VertexBuffer _tangentBuffer;
     VertexBuffer _texCoordBuffer;
 };
 MAKE_AURORA_PTR(PTGeometry);

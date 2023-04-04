@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -135,7 +135,7 @@ private:
     void copyTextureToTarget(ID3D12Resource* pTexture, PTTarget* pTarget);
     bool isDenoisingAOVsEnabled() const;
     shared_ptr<PTMaterialType> generateMaterialX(
-        const string& document, map<string, Value>* pDefaultValuesOut);
+        const string& document, shared_ptr<MaterialDefinition>* pDefOut);
     PTScenePtr dxScene() { return static_pointer_cast<PTScene>(_pScene); }
 
     /*** Private Variables ***/

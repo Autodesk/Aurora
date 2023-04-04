@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,15 +83,18 @@ struct MaterialLayerShaderIDs
 ByteAddressBuffer gIndices : register(t0, space1);
 ByteAddressBuffer gPositions : register(t1, space1);
 ByteAddressBuffer gNormals : register(t2, space1);
-ByteAddressBuffer gTexCoords : register(t3, space1);
+ByteAddressBuffer gTangents : register(t3, space1);
+ByteAddressBuffer gTexCoords : register(t4, space1);
 
 // NOTE: Material variables are inserted at register(b1, space1) between gGeometryMetadata and
 // gMaterialLayerIDs by Material.slang.
 cbuffer gGeometryMetadata : register(b0, space1)
 {
     bool gHasNormals;        // Are there normals?
+    bool gHasTangents;       // Are there tangents?
     bool gHasTexCoords;      // Are there texture coordinates?
     int gMaterialLayerCount; // Number of material layer miss shaders.
+    bool gIsOpaque;          // Is the geometry opaque?
 }
 
 // To hide DX-Vulkan differences, expose geometry access using functions.
@@ -109,6 +112,11 @@ float3 getNormalForVertex(int vertexIndex)
     return asfloat(gNormals.Load3(vertexIndex * 3 * 4));
 }
 
+float3 getTangentForVertex(int vertexIndex)
+{
+    return asfloat(gTangents.Load3(vertexIndex * 3 * 4));
+}
+
 float2 getTexCoordForVertex(int vertexIndex)
 {
     return asfloat(gTexCoords.Load2(vertexIndex * 2 * 4));
@@ -117,6 +125,10 @@ float2 getTexCoordForVertex(int vertexIndex)
 bool instanceHasNormals()
 {
     return gHasNormals;
+}
+bool instanceHasTangents()
+{
+    return gHasTangents;
 }
 bool instanceHasTexCoords()
 {
@@ -141,9 +153,11 @@ struct Geometry : IGeometry
     uint3 getIndices(int triangleIndex) { return getIndicesForTriangle(triangleIndex); }
     float3 getPosition(int vertexIndex) { return getPositionForVertex(vertexIndex); }
     float3 getNormal(int vertexIndex) { return normalize(getNormalForVertex(vertexIndex)); }
+    float3 getTangent(int vertexIndex) { return normalize(getTangentForVertex(vertexIndex)); }
     float2 getTexCoord(int vertexIndex) { return getTexCoordForVertex(vertexIndex); }
     bool hasTexCoords() { return instanceHasTexCoords(); }
     bool hasNormals() { return instanceHasNormals(); }
+    bool hasTangents() { return instanceHasTangents(); }
 } gGeometry;
 
 // Constant buffer for layer material shader IDs.

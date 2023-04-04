@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "pch.h"
+
+#include "Aurora/Foundation/Geometry.h"
 
 #include "HdAuroraInstancer.h"
 #include "HdAuroraMaterial.h"
@@ -29,13 +31,14 @@ struct HdAuroraMeshVertexData
 {
     VtVec3fArray points;
     VtVec3fArray normals;
+    VtVec3fArray tangents;
     VtVec2fArray uvs;
     VtVec3iArray triangulatedIndices;
     VtVec3fArray flattenedPoints;
     VtVec3fArray flattenedNormals;
+    VtVec3fArray flattenedTangents;
     VtVec2fArray flattenedUVs;
     const VtArray<GfVec2f>* st;
-    bool hasNormals;
     bool hasTexCoords;
 };
 
@@ -99,10 +102,11 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
     }
 
     // Create vertex data object, that will exist until the renderer has read the vertex data.
-    _pVertexData          = make_unique<HdAuroraMeshVertexData>();
-    _pVertexData->points  = delegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
-    _pVertexData->normals = delegate->Get(id, HdTokens->normals).Get<VtVec3fArray>();
-    _pVertexData->uvs     = delegate->Get(id, pxr::TfToken("map1")).Get<VtVec2fArray>();
+    _pVertexData           = make_unique<HdAuroraMeshVertexData>();
+    _pVertexData->points   = delegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
+    _pVertexData->normals  = delegate->Get(id, HdTokens->normals).Get<VtVec3fArray>();
+    _pVertexData->tangents = delegate->Get(id, pxr::TfToken("tangents")).Get<VtVec3fArray>();
+    _pVertexData->uvs      = delegate->Get(id, pxr::TfToken("map1")).Get<VtVec2fArray>();
 
     // Sample code for extracting extra uv set
     // The name for the base uv set is st, other uv sets (st0, st1, etc.)
@@ -143,11 +147,20 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
     }
 
     // Does the mesh have normals?
-    _pVertexData->hasNormals = !_pVertexData->normals.empty() &&
+    bool meshHasNormals = !_pVertexData->normals.empty() &&
         // This is what is received from USD for geometry that has no normals
         !(_pVertexData->normals.size() == 1 && _pVertexData->normals[0][0] == 0.0f &&
             _pVertexData->normals[0][1] == 0.0f && _pVertexData->normals[0][2] == 0.0f);
 
+    if (!meshHasNormals)
+    {
+        _pVertexData->normals.resize(_pVertexData->points.size());
+        Aurora::Foundation::calculateNormals(_pVertexData->points.size(),
+            reinterpret_cast<const float*>(_pVertexData->points.data()),
+            _pVertexData->triangulatedIndices.size(),
+            reinterpret_cast<const unsigned int*>(_pVertexData->triangulatedIndices.data()),
+            reinterpret_cast<float*>(_pVertexData->normals.data()));
+    }
     // Does the mesh have texture coordinates (UVs or STs)?
     _pVertexData->hasTexCoords = _pVertexData->uvs.size() || _pVertexData->st;
 
@@ -157,7 +170,7 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
     // If there are valid normals but normal and position attribute arrays are not the same
     // clamp indices to smallest value
     VtValue pvNormals;
-    if (_pVertexData->hasNormals && _pVertexData->normals.size() != _pVertexData->points.size())
+    if (_pVertexData->normals.size() != _pVertexData->points.size())
     {
         HdPrimvarDescriptorVector fpvs =
             delegate->GetPrimvarDescriptors(id, HdInterpolation::HdInterpolationFaceVarying);
@@ -221,7 +234,7 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
     {
         size_t numFlattenedVerts = _pVertexData->triangulatedIndices.size() * 3;
         _pVertexData->flattenedPoints.resize(numFlattenedVerts);
-        if (_pVertexData->hasNormals && !hasFaceVaryingNormals)
+        if (!hasFaceVaryingNormals)
             _pVertexData->flattenedNormals.resize(numFlattenedVerts);
         if (_pVertexData->uvs.size() && !hasFaceVaryingSTs)
             _pVertexData->flattenedUVs.resize(numFlattenedVerts);
@@ -248,7 +261,7 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
             _pVertexData->flattenedPoints[j * 3 + 0] = _pVertexData->points[t0];
             _pVertexData->flattenedPoints[j * 3 + 1] = _pVertexData->points[t1];
             _pVertexData->flattenedPoints[j * 3 + 2] = _pVertexData->points[t2];
-            if (_pVertexData->hasNormals && !hasFaceVaryingNormals)
+            if (!hasFaceVaryingNormals)
             {
                 _pVertexData->flattenedNormals[j * 3 + 0] = _pVertexData->normals[t0];
                 _pVertexData->flattenedNormals[j * 3 + 1] = _pVertexData->normals[t1];
@@ -260,6 +273,25 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
                 _pVertexData->flattenedUVs[j * 3 + 1] = _pVertexData->uvs[t1];
                 _pVertexData->flattenedUVs[j * 3 + 2] = _pVertexData->uvs[t2];
             }
+            // If we have tangents provided by client, use them.
+            if (_pVertexData->tangents.size() == _pVertexData->normals.size())
+            {
+                _pVertexData->flattenedTangents[j * 3 + 0] = _pVertexData->tangents[t0];
+                _pVertexData->flattenedTangents[j * 3 + 1] = _pVertexData->tangents[t1];
+                _pVertexData->flattenedTangents[j * 3 + 2] = _pVertexData->tangents[t2];
+            }
+        }
+
+        if (_pVertexData->tangents.size() == _pVertexData->normals.size())
+        {
+            // If there are no client provided tangents, create tangent vectors based on the texture
+            // coordinates, using a utility function.
+            Aurora::Foundation::calculateTangents(_pVertexData->flattenedPoints.size(),
+                reinterpret_cast<const float*>(_pVertexData->flattenedPoints.data()),
+                reinterpret_cast<const float*>(_pVertexData->flattenedNormals.data()),
+                reinterpret_cast<const float*>(_pVertexData->st->data()),
+                _pVertexData->triangulatedIndices.size(), nullptr,
+                reinterpret_cast<float*>(_pVertexData->flattenedTangents.data()));
         }
     }
     else
@@ -280,6 +312,19 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
                 " for " + GetId().GetString());
             return;
         }
+
+        if (_pVertexData->tangents.size() != _pVertexData->normals.size() &&
+            _pVertexData->uvs.size())
+        {
+            _pVertexData->tangents.resize(_pVertexData->points.size());
+            Aurora::Foundation::calculateTangents(_pVertexData->points.size(),
+                reinterpret_cast<const float*>(_pVertexData->points.data()),
+                reinterpret_cast<const float*>(_pVertexData->normals.data()),
+                reinterpret_cast<const float*>(_pVertexData->uvs.data()),
+                _pVertexData->triangulatedIndices.size(),
+                reinterpret_cast<const unsigned int*>(_pVertexData->triangulatedIndices.data()),
+                reinterpret_cast<float*>(_pVertexData->tangents.data()));
+        }
     }
 
     // Create a geometry descriptor for mesh's geometry.
@@ -290,10 +335,11 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
         { Aurora::Names::VertexAttributes::kPosition, Aurora::AttributeFormat::Float3 },
     };
 
-    // Set normals attibute type, if the mesh has them.
-    if (_pVertexData->hasNormals)
-        geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kNormal] =
-            Aurora::AttributeFormat::Float3;
+    // Set normals and tangent attibute type.
+    geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kNormal] =
+        Aurora::AttributeFormat::Float3;
+    geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTangent] =
+        Aurora::AttributeFormat::Float3;
 
     // Set texcoord attibute type, if the mesh has them.
     if (_pVertexData->hasTexCoords)
@@ -331,12 +377,12 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
             dataOut[Aurora::Names::VertexAttributes::kPosition].address =
                 &_pVertexData->flattenedPoints[0];
             dataOut[Aurora::Names::VertexAttributes::kPosition].stride = sizeof(GfVec3f);
-            if (_pVertexData->hasNormals)
-            {
-                dataOut[Aurora::Names::VertexAttributes::kNormal].address =
-                    &_pVertexData->flattenedNormals[0];
-                dataOut[Aurora::Names::VertexAttributes::kNormal].stride = sizeof(GfVec3f);
-            }
+            dataOut[Aurora::Names::VertexAttributes::kNormal].address =
+                &_pVertexData->flattenedNormals[0];
+            dataOut[Aurora::Names::VertexAttributes::kNormal].stride = sizeof(GfVec3f);
+            dataOut[Aurora::Names::VertexAttributes::kTangent].address =
+                &_pVertexData->flattenedTangents[0];
+            dataOut[Aurora::Names::VertexAttributes::kTangent].stride = sizeof(GfVec3f);
 
             // Use the STs.
             if (hasFaceVaryingSTs)
@@ -362,11 +408,13 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
             // Get position, texcoords, and normals directly from Hydra mesh.
             dataOut[Aurora::Names::VertexAttributes::kPosition].address = &_pVertexData->points[0];
             dataOut[Aurora::Names::VertexAttributes::kPosition].stride  = sizeof(GfVec3f);
-            if (_pVertexData->hasNormals)
+            dataOut[Aurora::Names::VertexAttributes::kNormal].address   = &_pVertexData->normals[0];
+            dataOut[Aurora::Names::VertexAttributes::kNormal].stride    = sizeof(GfVec3f);
+            if (_pVertexData->tangents.size() == _pVertexData->points.size())
             {
-                dataOut[Aurora::Names::VertexAttributes::kNormal].address =
-                    &_pVertexData->normals[0];
-                dataOut[Aurora::Names::VertexAttributes::kNormal].stride = sizeof(GfVec3f);
+                dataOut[Aurora::Names::VertexAttributes::kTangent].address =
+                    &_pVertexData->tangents[0];
+                dataOut[Aurora::Names::VertexAttributes::kTangent].stride = sizeof(GfVec3f);
             }
             if (_pVertexData->uvs.size())
             {
@@ -678,7 +726,7 @@ void HdAuroraMesh::Sync(HdSceneDelegate* delegate, HdRenderParam* /* renderParam
             if (displayColorAttr.IsArrayValued())
             {
                 VtVec3fArray dispColorArr = displayColorAttr.Get<VtVec3fArray>();
-                _displayColor = GfVec3ToGLM(&dispColorArr[0]);
+                _displayColor             = GfVec3ToGLM(&dispColorArr[0]);
             }
 
             // Rebuild the Aurora instances and geometry for this mesh.

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,8 +71,11 @@ struct HitGroupShaderRecord
         PositionBufferAddress          = geometry.PositionBuffer;
         HasNormals                     = geometry.NormalBuffer ? 1 : 0;
         NormalBufferAddress            = HasNormals ? geometry.NormalBuffer : 0;
-        HasTexCoords                   = geometry.TexCoordBuffer ? 1 : 0;
+        HasTangents                    = geometry.TangentBuffer != 0;
+        TangentBufferAddress           = HasTangents ? geometry.TangentBuffer : 0;
+        HasTexCoords                   = geometry.TexCoordBuffer != 0;
         TexCoordBufferAddress          = HasTexCoords ? geometry.TexCoordBuffer : 0;
+        IsOpaque                       = material.isOpaque();
         MaterialLayerCount             = materialLayerCount;
         MaterialBufferAddress          = material.buffer()->GetGPUVirtualAddress();
         MaterialLayerIndexTableAddress = pMaterialLayerIndexBuffer
@@ -101,10 +104,13 @@ struct HitGroupShaderRecord
     D3D12_GPU_VIRTUAL_ADDRESS IndexBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS PositionBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS NormalBufferAddress;
+    D3D12_GPU_VIRTUAL_ADDRESS TangentBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS TexCoordBufferAddress;
-    int HasNormals;
-    int HasTexCoords;
+    uint32_t HasNormals;
+    uint32_t HasTangents;
+    uint32_t HasTexCoords;
     uint32_t MaterialLayerCount;
+    uint32_t IsOpaque;
     D3D12_GPU_VIRTUAL_ADDRESS MaterialBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS MaterialLayerIndexTableAddress;
     D3D12_GPU_DESCRIPTOR_HANDLE TexturesHeapAddress;
@@ -171,7 +177,7 @@ void PTInstance::setTransform(const mat4& transform)
 
 void PTInstance::setObjectIdentifier(int /*objectId*/)
 {
-    // TODO: implement object id setting for AuroraPT
+    // TODO: implement object id setting for Aurora
 }
 
 bool PTInstance::update()

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <MaterialXCore/Document.h>
 #include <string>
 
 class HdAuroraRenderDelegate;
@@ -58,6 +59,18 @@ private:
     // Get the MaterialX document or path associated with the material in Hydra.
     bool GetHDMaterialXDocument(
         HdSceneDelegate* pDelegate, string& materialTypeOut, string& documentOut);
+    // Replace diverse named MaterialX to unified target name
+    // eg:<standard_surface name="TestThread"> to <standard_surface name="MaterialX">
+    void ReplaceMaterialName(string& materialDocument, const string& targetName);
+    // Set all the input value of node to zero
+    void InitToDefaultValue(
+        MaterialX::NodePtr& pNode, Aurora::Properties& materialProperties, bool& isNodegraph);
+    // Seperate the MaterialX document to generate materialX doc with default 0 value
+    // and related properties value pair
+    string SeparateHDMaterialXDocument(
+        string& materialDocument, Aurora::Properties& materialProperties);
+    // Create a new Aurora material with this material type and document, if required.
+    // Does nothing if current material type and document match the ones provided.
     // Create a new aurora material with this material type and document, if required.
     // Does nothing if current material type and document match the ones provided.
     bool SetupAuroraMaterial(const string& materialType, const string& materialDocument);

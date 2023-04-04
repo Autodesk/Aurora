@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,12 +91,12 @@ struct VertexAttributes
 {
     static AURORA_API const std::string kPosition;
     static AURORA_API const std::string kNormal;
+    static AURORA_API const std::string kTangent;
     static AURORA_API const std::string kTexCoord0;
     static AURORA_API const std::string kTexCoord1;
     static AURORA_API const std::string kTexCoord2;
     static AURORA_API const std::string kTexCoord3;
     static AURORA_API const std::string kTexCoord4;
-    static AURORA_API const std::string kTangent;
     static AURORA_API const std::string kIndices;
 };
 

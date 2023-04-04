@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,16 @@
 #pragma once
 
 #include "MaterialBase.h"
+#include "Transpiler.h"
+#include "UniformBuffer.h"
 
 BEGIN_AURORA
 
-class Transpiler;
-
 // Alias for DirectX shader ID, used to access the shader functions in the library.
 using DirectXShaderIdentifier = void*;
+
+class MaterialBase;
+struct MaterialDefaultValues;
 
 /**
  * \desc Class representing a material type, which maps directly to a DirectX hit group and a hit
@@ -33,15 +36,8 @@ class PTMaterialType
     friend class PTShaderLibrary;
 
 public:
-    /**
-     *  \param pShaderLibrary The shader library this type is part of.
-     *  \param sourceIndex The index for this type's shader code within the library's HLSL source.
-     *  \param hitEntryPoint The entry point for this type's hit shader.
-     */
-    PTMaterialType(PTShaderLibrary* pShaderLibrary, int sourceIndex, const string& typeName);
-    ~PTMaterialType();
+    /*** Types ***/
 
-    // Entry point types.
     enum EntryPoint
     {
         kRadianceHit,
@@ -52,6 +48,18 @@ public:
     // Array of entry point names.
     static constexpr string_view EntryPointNames[EntryPoint::kNumEntryPoints] = { "RADIANCE_HIT",
         "LAYER_MISS" };
+
+    /*** Lifetime Management ***/
+
+    /**
+     *  \param pShaderLibrary The shader library this type is part of.
+     *  \param sourceIndex The index for this type's shader code within the library's HLSL source.
+     *  \param hitEntryPoint The entry point for this type's hit shader.
+     */
+    PTMaterialType(PTShaderLibrary* pShaderLibrary, int sourceIndex, const string& typeName,
+        const UniformBufferDefinition& properties, const vector<string>& textures,
+        function<void(MaterialBase&)> updateFunc);
+    ~PTMaterialType();
 
     // Gets the DX shader identifier for this type's hit group.
     DirectXShaderIdentifier getShaderID();
@@ -82,6 +90,12 @@ public:
     void decrementRefCount(EntryPoint entryPoint);
 
     int refCount(EntryPoint entryPoint) const { return _entryPointRefCount[entryPoint]; }
+
+    const UniformBufferDefinition& properties() { return _properties; }
+
+    const vector<string>& textures() { return _textures; }
+
+    void runUpdateFunc(MaterialBase& mtl) { _updateFunc(mtl); }
 
     void getEntryPoints(map<string, bool>& entryPoints)
     {
@@ -122,10 +136,17 @@ protected:
 
     // The unique material type name.
     string _name;
+
+    UniformBufferDefinition _properties;
+
+    vector<string> _textures;
+
+    function<void(MaterialBase&)> _updateFunc;
 };
 
 // Shared pointer type for material types.
 using PTMaterialTypePtr = shared_ptr<PTMaterialType>;
+
 struct CompiledMaterialType
 {
     MaterialTypeSource source;
@@ -163,8 +184,8 @@ private:
 
 /**
  * \desc Class representing a DXIL shader library, and its HLSL source code.  Manages the material
- * types that implement Aurora materials using the compiled code in the library. The DXIL library
- * and its associated pipeline state must be rebuilt as the source code for the library changes.
+ * types that implement Ultra materials using the compiled code in the library. The DXIL library and
+ * its associated pipeline state must be rebuilt as the source code for the library changes.
  */
 class PTShaderLibrary
 {
@@ -184,11 +205,13 @@ public:
     /// generation, so this will never trigger a rebuild.
     PTMaterialTypePtr getBuiltInMaterialType(const string& name);
 
+    shared_ptr<MaterialDefinition> getBuiltInMaterialDefinition(const string& name);
+
     void assembleShadersForMaterialType(const MaterialTypeSource& source,
         const map<string, bool>& entryPoints, vector<string>& hlslOut);
 
     /**
-     *  \desc Acquire a material type for the provided source and type name.  This
+     *  \desc Acquire a material type for the provided source and entry point function name.  This
      * will create new material type (and trigger a rebuild) if the named function does not already
      * exist..
      *
@@ -198,8 +221,7 @@ public:
      * material type for the entry point exists, the source code must match or this will trigger
      * assert.
      */
-    PTMaterialTypePtr acquireMaterialType(
-        const MaterialTypeSource& source, bool* pCreateNewType = nullptr);
+    PTMaterialTypePtr acquireMaterialType(const MaterialDefinition& def);
 
     /// Get the DX pipeline state for this library. This will assert if the library requires a
     /// rebuild.
@@ -228,6 +250,17 @@ public:
 
     /// Get the names of the built-in material types.
     const vector<string>& builtInMaterials() const { return _builtInMaterialNames; }
+
+    /// Get the HLSL template code that is configured to create a hit shader for each material type.
+    const string& hitPointTemplateHLSL() const;
+
+    /// Get the HLSL template code that is configured to create a layer material miss shader for
+    /// each material type.
+    const string& layerShaderTemplateHLSL() const;
+
+    /// Get the HLSL template code that is provides the shade functions for closest hit and layer
+    /// shader.
+    const string& shadeTemplateHLSL() const;
 
     /// Get the global root signature used by all shaders.
     ID3D12RootSignaturePtr globalRootSignature() const { return _pGlobalRootSignature; }
@@ -271,6 +304,10 @@ private:
         const string& target, const string& entryPoint, bool debug, ComPtr<IDxcBlob>& pOutput,
         string* pErrorMessage);
 
+    void handleError(const string& errorMessage);
+
+    void dumpShaderSource(const string& source, const string& name);
+
     // Create a DirectX root signature.
     ID3D12RootSignaturePtr createRootSignature(const D3D12_ROOT_SIGNATURE_DESC& desc);
 
@@ -292,7 +329,6 @@ private:
     ID3D12RootSignaturePtr _pRayGenRootSignature;
     ID3D12RootSignaturePtr _pRadianceHitRootSignature;
     ID3D12RootSignaturePtr _pLayerMissRootSignature;
-    ;
 
     ID3D12StateObjectPtr _pPipelineState;
 
@@ -304,7 +340,8 @@ private:
     vector<int> _sourceToRemove;
 
     map<string, weak_ptr<PTMaterialType>> _materialTypes;
-    map<string, PTMaterialTypePtr> _builtInMaterialTypes;
+    map<string, shared_ptr<MaterialDefinition>> _builtInMaterialDefinitions;
+    map<string, shared_ptr<PTMaterialType>> _builtInMaterialTypes;
 
     bool _rebuildRequired = true;
 

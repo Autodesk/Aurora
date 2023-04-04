@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,49 +27,6 @@ static PropertySetPtr propertySet()
     }
 
     g_pPropertySet = make_shared<PropertySet>();
-
-    // Constants.
-    // NOTE: Default values and order come from the Standard surface reference document:
-    // https://github.com/Autodesk/standard-surface/blob/master/reference/standard_surface.mtlx
-    g_pPropertySet->add("base", 0.8f);
-    g_pPropertySet->add("base_color", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("diffuse_roughness", 0.0f);
-    g_pPropertySet->add("metalness", 0.0f);
-    g_pPropertySet->add("specular", 1.0f);
-    g_pPropertySet->add("specular_color", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("specular_roughness", 0.2f);
-    g_pPropertySet->add("specular_IOR", 1.5f);
-    g_pPropertySet->add("specular_anisotropy", 0.0f);
-    g_pPropertySet->add("specular_rotation", 0.0f);
-    g_pPropertySet->add("transmission", 0.0f);
-    g_pPropertySet->add("transmission_color", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("transmission_depth", 0.0f);
-    g_pPropertySet->add("transmission_scatter", vec3(0.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("transmission_scatter_anisotropy", 0.0f);
-    g_pPropertySet->add("transmission_dispersion", 0.0f);
-    g_pPropertySet->add("transmission_extra_roughness", 0.0f);
-    g_pPropertySet->add("subsurface", 0.0f);
-    g_pPropertySet->add("subsurface_color", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("subsurface_radius", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("subsurface_scale", 1.0f);
-    g_pPropertySet->add("subsurface_anisotropy", 0.0f);
-    g_pPropertySet->add("sheen", 0.0f);
-    g_pPropertySet->add("sheen_color", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("sheen_roughness", 0.3f);
-    g_pPropertySet->add("coat", 0.0f);
-    g_pPropertySet->add("coat_color", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("coat_roughness", 0.1f);
-    g_pPropertySet->add("coat_anisotropy", 0.0f);
-    g_pPropertySet->add("coat_rotation", 0.0f);
-    g_pPropertySet->add("coat_IOR", 1.5f);
-    g_pPropertySet->add("coat_affect_color", 0.0f);
-    g_pPropertySet->add("coat_affect_roughness", 0.0f);
-    g_pPropertySet->add("thin_film_thickness", 0.0f);
-    g_pPropertySet->add("thin_film_IOR", 1.5f);
-    g_pPropertySet->add("emission", 0.0f);
-    g_pPropertySet->add("emission_color", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("opacity", vec3(1.0f, 1.0f, 1.0f));
-    g_pPropertySet->add("thin_walled", false);
 
     // Images (textures) and associated transforms.
     // NOTE: Default values must be nullptr, as the property set has a lifetime that could exceed
@@ -107,125 +64,193 @@ static PropertySetPtr propertySet()
     return g_pPropertySet;
 }
 
-void MaterialBase::updateGPUStruct(MaterialData& data)
+// Material properties used by the built-in Standard Surface material type.
+// NOTE: Default values and order come from the Standard surface reference document:
+// https://github.com/Autodesk/standard-surface/blob/master/reference/standard_surface.mtlx
+UniformBufferDefinition MaterialBase::StandardSurfaceUniforms = {
+    UniformBufferPropertyDefinition("base", "base", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("base_color", "baseColor", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition(
+        "diffuse_roughness", "diffuseRoughness", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("metalness", "metalness", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("specular", "specular", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("specular_color", "specularColor", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition(
+        "specular_roughness", "specularRoughness", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("specular_IOR", "specularIOR", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "specular_anisotropy", "specularAnisotropy", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "specular_rotation", "specularRotation", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("transmission", "transmission", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "transmission_color", "transmissionColor", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition("subsurface", "subsurface", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "subsurface_color", "subsurfaceColor", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition(
+        "subsurface_radius", "subsurfaceRadius", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition(
+        "subsurface_scale", "subsurfaceScale", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "subsurface_anisotropy", "subsurfaceAnisotropy", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("sheen", "sheen", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("sheen_color", "sheenColor", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition(
+        "sheen_roughness", "sheenRoughness", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("coat", "coat", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("coat_color", "coatColor", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition("coat_roughness", "coatRoughness", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "coat_anisotropy", "coatAnisotropy", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("coat_rotation", "coatRotation", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("coat_IOR", "coatIOR", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "coat_affect_color", "coatAffectColor", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "coat_affect_roughness", "coatAffectRoughness", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("opacity", "opacity", PropertyValue::Type::Float3),
+    UniformBufferPropertyDefinition("thin_walled", "thinWalled", PropertyValue::Type::Bool),
+    UniformBufferPropertyDefinition(
+        "has_base_color_image", "hasBaseColorTex", PropertyValue::Type::Bool),
+    UniformBufferPropertyDefinition(
+        "base_color_image_offset", "baseColorTexOffset", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "base_color_image_scale", "baseColorTexScale", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "base_color_image_pivot", "baseColorTexPivot", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "base_color_image_rotation", "baseColorTexRotation", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "has_specular_roughness_image", "hasSpecularRoughnessTex", PropertyValue::Type::Bool),
+    UniformBufferPropertyDefinition("specular_roughness_image_offset", "specularRoughnessTexOffset",
+        PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "specular_roughness_image_scale", "specularRoughnessTexScale", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "specular_roughness_image_pivot", "specularRoughnessTexPivot", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition("specular_roughness_image_rotation",
+        "specularRoughnessTexRotation", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition(
+        "has_opacity_image", "hasOpacityTex", PropertyValue::Type::Bool),
+    UniformBufferPropertyDefinition(
+        "opacity_image_offset", "opacityTexOffset", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "opacity_image_scale", "opacityTexScale", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "opacity_image_pivot", "opacityTexPivot", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "opacity_image_rotation", "opacityTexRotation", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("has_normal_image", "hasNormalTex", PropertyValue::Type::Bool),
+    UniformBufferPropertyDefinition(
+        "normal_image_offset", "normalTexOffset", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "normal_image_scale", "normalTexScale", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "normal_image_pivot", "normalTexPivot", PropertyValue::Type::Float2),
+    UniformBufferPropertyDefinition(
+        "normal_image_rotation", "normalTexRotation", PropertyValue::Type::Float)
+};
+
+// Textures used by the built-in Standard Surface material type.
+vector<string> MaterialBase::StandardSurfaceTextures = {
+    "base_color_image",
+    "specular_roughness_image",
+    "opacity_image",
+    "normal_image",
+};
+
+// Default values for textures used in Standard Surface material type.
+vector<TextureDefinition> StandardSurfaceDefaultTextures = {
+    { "base_color_image", false },
+    { "specular_roughness_image", true },
+    { "opacity_image", true },
+    { "normal_image", true },
+};
+
+// Default values for Standard Surface properties.
+// NOTE: These must align with the StandardSurfaceUniforms array above.
+vector<PropertyValue> StandardSurfaceDefaultProperties = {
+    0.8f,                   // base
+    vec3(1.0f, 1.0f, 1.0f), // base_color
+    0.0f,                   // diffuse_roughness
+    0.0f,                   // metalness
+    1.0f,                   // specular
+    vec3(1.0f, 1.0f, 1.0f), // specular_color
+    0.2f,                   // specular_roughness
+    1.5f,                   // specular_IOR
+    0.0f,                   // specular_anisotropy
+    0.0f,                   // specular_rotation
+    0.0f,                   // transmission
+    vec3(1.0f, 1.0f, 1.0f), // transmission_color
+    0.0f,                   // subsurface
+    vec3(1.0f, 1.0f, 1.0f), // subsurface_color
+    vec3(1.0f, 1.0f, 1.0f), // subsurface_radius
+    1.0f,                   // subsurface_scale
+    0.0f,                   // subsurface_anisotropy
+    0.0f,                   // sheen
+    vec3(1.0f, 1.0f, 1.0f), // sheen_color
+    0.3f,                   // sheen_roughness
+    0.0f,                   // coat
+    vec3(1.0f, 1.0f, 1.0f), //
+    0.1f,                   // coat_roughness coat_anisotropy
+    0.0f,                   // coat_anisotropy
+    0.0f,                   // coat_rotation
+    1.5f,                   // coat_IOR
+    0.0f,                   // coat_affect_roughness
+    0.0f,                   // coat_affect_color
+    vec3(1.0f, 1.0f, 1.0f), // opacity
+    false,                  // thin_walled
+    false,                  // has_base_color_image
+    vec2(0.0f, 0.0f),       // base_color_image_offset
+    vec2(1.0f, 1.0f),       // base_color_image_scale
+    vec2(0.0f, 0.0f),       // base_color_image_pivot
+    0.0f,                   // base_color_image_rotation
+    false,                  // has_specular_roughness_image
+    vec2(0.0f, 0.0f),       // specular_roughness_image_offset
+    vec2(1.0f, 1.0f),       // specular_roughness_image_scale
+    vec2(0.0f, 0.0f),       // specular_roughness_image_pivot
+    0.0f,                   // specular_roughness_image_rotation
+    false,                  // has_opacity_image
+    vec2(0.0f, 0.0f),       // opacity_image_offset
+    vec2(1.0f, 1.0f),       // opacity_image_scale
+    vec2(0.0f, 0.0f),       // opacity_image_pivot
+    0.0f,                   // opacity_image_rotation
+    false,                  // has_normal_image
+    vec2(0.0f, 0.0f),       // normal_image_offset
+    vec2(1.0f, 1.0f),       // normal_image_scale
+    vec2(0.0f, 0.0f),       // normal_image_pivot
+    0.0f,                   // normal_image_rotation
+};
+
+MaterialDefaultValues MaterialBase::StandardSurfaceDefaults(
+    StandardSurfaceUniforms, StandardSurfaceDefaultProperties, StandardSurfaceDefaultTextures);
+
+MaterialBase::MaterialBase(shared_ptr<MaterialDefinition> pDef) :
+    FixedValues(propertySet()),
+    _pDef(pDef),
+    _uniformBuffer(pDef->defaults().propertyDefinitions, pDef->defaults().properties)
 {
-    // Get print offsets into struct for debugging purposes.
-#if 0
-    int id = 0;
-    AU_INFO("Offset %02d  - base:%d", id++, offsetof(MaterialData, base));
-    AU_INFO("Offset %02d - baseColor:%d", id++, offsetof(MaterialData, baseColor));
-    AU_INFO("Offset %02d  - diffuseRoughness:%d", id++, offsetof(MaterialData, diffuseRoughness));
-    AU_INFO("Offset %02d  - metalness:%d", id++, offsetof(MaterialData, metalness));
-    AU_INFO("Offset %02d  - specular:%d", id++, offsetof(MaterialData, specular));
-    AU_INFO("Offset %02d  - specularColor:%d", id++, offsetof(MaterialData, specularColor));
-    AU_INFO("Offset %02d  - specularRoughness:%d", id++, offsetof(MaterialData, specularRoughness));
-    AU_INFO("Offset %02d  - specularIOR:%d", id++, offsetof(MaterialData, specularIOR));
-    AU_INFO("Offset %02d  - specularAnisotropy:%d", id++, offsetof(MaterialData, specularAnisotropy));
-    AU_INFO("Offset %02d - specularRotation:%d", id++, offsetof(MaterialData, specularRotation));
-    AU_INFO("Offset %02d - transmission:%d", id++, offsetof(MaterialData, transmission));
-    AU_INFO("Offset %02d - transmissionColor:%d", id++, offsetof(MaterialData, transmissionColor));
-    AU_INFO("Offset %02d - subsurface:%d", id++, offsetof(MaterialData, subsurface));
-    AU_INFO("Offset %02d - subsurfaceColor:%d", id++, offsetof(MaterialData, subsurfaceColor));
-    AU_INFO("Offset %02d - subsurfaceRadius:%d", id++, offsetof(MaterialData, subsurfaceRadius));
-    AU_INFO("Offset %02d - subsurfaceScale:%d", id++, offsetof(MaterialData, subsurfaceScale));
-    AU_INFO("Offset %02d - subsurfaceAnisotropy:%d", id++, offsetof(MaterialData, subsurfaceAnisotropy));
-    AU_INFO("Offset %02d - sheen:%d", id++, offsetof(MaterialData, sheen));
-    AU_INFO("Offset %02d - sheenColor:%d", id++, offsetof(MaterialData, sheenColor));
-    AU_INFO("Offset %02d - sheenRoughness:%d", id++, offsetof(MaterialData, sheenRoughness));
-    AU_INFO("Offset %02d - coat:%d", id++, offsetof(MaterialData, coat));
-    AU_INFO("Offset %02d - coatColor:%d", id++, offsetof(MaterialData, coatColor));
-    AU_INFO("Offset %02d - coatRoughness:%d", id++, offsetof(MaterialData, coatRoughness));
-    AU_INFO("Offset %02d - coatAnisotropy:%d", id++, offsetof(MaterialData, coatAnisotropy));
-    AU_INFO("Offset %02d - coatRotation:%d", id++, offsetof(MaterialData, coatRotation));
-    AU_INFO("Offset %02d - coatIOR:%d", id++, offsetof(MaterialData, coatIOR));
-    AU_INFO("Offset %02d - coatAffectColor:%d", id++, offsetof(MaterialData, coatAffectColor));
-    AU_INFO(
-        "Offset %02d - coatAffectRoughness:%d", id++, offsetof(MaterialData, coatAffectRoughness));
-    AU_INFO("Offset %02d - _padding4:%d", id++, offsetof(MaterialData, _padding4));
-    AU_INFO("Offset %02d - opacity:%d", id++, offsetof(MaterialData, opacity));
-    AU_INFO("Offset %02d - thinWalled:%d", id++, offsetof(MaterialData, thinWalled));
-    AU_INFO("Offset %02d - hasBaseColorTex:%d", id++, offsetof(MaterialData, hasBaseColorTex));
-    AU_INFO("Offset %02d - baseColorTexTransform:%d", id++, offsetof(MaterialData, baseColorTexTransform));
-    AU_INFO("Offset %02d - hasSpecularRoughnessTex:%d", id++, offsetof(MaterialData, hasSpecularRoughnessTex));
-    AU_INFO("Offset %02d - specularRoughnessTexTransform:%d", id++, offsetof(MaterialData, specularRoughnessTexTransform));
-    AU_INFO("Offset %02d - hasOpacityTex:%d", id++, offsetof(MaterialData, hasOpacityTex));
-    AU_INFO("Offset %02d - opacityTexTransform:%d", id++, offsetof(MaterialData, opacityTexTransform));
-    AU_INFO("Offset %02d - hasNormalTex:%d", id++, offsetof(MaterialData, hasNormalTex));
-    AU_INFO("Offset %02d - normalTexTransform:%d", id++, offsetof(MaterialData, normalTexTransform));
-    AU_INFO("Offset %02d - isOpaque:%d", id++, offsetof(MaterialData, isOpaque));
-#endif
-
-    // Update the GPU struct from the values map.
-    data.base                                 = _values.asFloat("base");
-    data.baseColor                            = _values.asFloat3("base_color");
-    data.diffuseRoughness                     = _values.asFloat("diffuse_roughness");
-    data.metalness                            = _values.asFloat("metalness");
-    data.specular                             = _values.asFloat("specular");
-    data.specularColor                        = _values.asFloat3("specular_color");
-    data.specularRoughness                    = _values.asFloat("specular_roughness");
-    data.specularIOR                          = _values.asFloat("specular_IOR");
-    data.specularAnisotropy                   = _values.asFloat("specular_anisotropy");
-    data.specularRotation                     = _values.asFloat("specular_rotation");
-    data.transmission                         = _values.asFloat("transmission");
-    data.transmissionColor                    = _values.asFloat3("transmission_color");
-    data.subsurface                           = _values.asFloat("subsurface");
-    data.subsurfaceColor                      = _values.asFloat3("subsurface_color");
-    data.subsurfaceRadius                     = _values.asFloat3("subsurface_radius");
-    data.subsurfaceScale                      = _values.asFloat("subsurface_scale");
-    data.subsurfaceAnisotropy                 = _values.asFloat("subsurface_anisotropy");
-    data.sheen                                = _values.asFloat("sheen");
-    data.sheenColor                           = _values.asFloat3("sheen_color");
-    data.sheenRoughness                       = _values.asFloat("sheen_roughness");
-    data.coat                                 = _values.asFloat("coat");
-    data.coatColor                            = _values.asFloat3("coat_color");
-    data.coatRoughness                        = _values.asFloat("coat_roughness");
-    data.coatAnisotropy                       = _values.asFloat("coat_anisotropy");
-    data.coatRotation                         = _values.asFloat("coat_rotation");
-    data.coatIOR                              = _values.asFloat("coat_IOR");
-    data.coatAffectColor                      = _values.asFloat("coat_affect_color");
-    data.coatAffectRoughness                  = _values.asFloat("coat_affect_roughness");
-    data.opacity                              = _values.asFloat3("opacity");
-    data.thinWalled                           = _values.asBoolean("thin_walled") ? 1 : 0;
-    data.hasBaseColorTex                      = _values.asImage("base_color_image") ? 1 : 0;
-    data.baseColorTexTransform.offset         = _values.asFloat2("base_color_image_offset");
-    data.baseColorTexTransform.scale          = _values.asFloat2("base_color_image_scale");
-    data.baseColorTexTransform.pivot          = _values.asFloat2("base_color_image_pivot");
-    data.baseColorTexTransform.rotation       = _values.asFloat("base_color_image_rotation");
-    data.hasSpecularRoughnessTex              = _values.asImage("specular_roughness_image") ? 1 : 0;
-    data.specularRoughnessTexTransform.offset = _values.asFloat2("specular_roughness_image_offset");
-    data.specularRoughnessTexTransform.scale  = _values.asFloat2("specular_roughness_image_scale");
-    data.specularRoughnessTexTransform.pivot  = _values.asFloat2("specular_roughness_image_pivot");
-    data.specularRoughnessTexTransform.rotation =
-        _values.asFloat("specular_roughness_image_rotation");
-    data.hasOpacityTex                = _values.asImage("opacity_image") ? 1 : 0;
-    data.opacityTexTransform.offset   = _values.asFloat2("opacity_image_offset");
-    data.opacityTexTransform.scale    = _values.asFloat2("opacity_image_scale");
-    data.opacityTexTransform.pivot    = _values.asFloat2("opacity_image_pivot");
-    data.opacityTexTransform.rotation = _values.asFloat("opacity_image_rotation");
-    data.hasNormalTex                 = _values.asImage("normal_image") ? 1 : 0;
-    data.normalTexTransform.offset    = _values.asFloat2("normal_image_offset");
-    data.normalTexTransform.scale     = _values.asFloat2("normal_image_scale");
-    data.normalTexTransform.pivot     = _values.asFloat2("normal_image_pivot");
-    data.normalTexTransform.rotation  = _values.asFloat("normal_image_rotation");
-
-    // Record whether the material is opaque with its current values.
-    data.isOpaque = computeIsOpaque();
 }
 
-MaterialBase::MaterialBase() : FixedValues(propertySet()) {}
-
-bool MaterialBase::computeIsOpaque() const
+void MaterialBase::updateBuiltInMaterial(MaterialBase& mtl)
 {
-    // A material is considered opaque if all the opacity components are 1.0, there is no opacity
-    // image, and transmission is zero.
-    // TODO: This should also consider whether the material type has overridden opacity or
-    // transmission, likely with a shader graph attached to that input.
+    // A built-in material is considered opaque if all the opacity components are 1.0, there is no
+    // opacity image, and transmission is zero.
     static vec3 kOpaque(1.0f);
-    vec3 opacity         = _values.asFloat3("opacity");
-    bool hasOpacityImage = _values.asImage("opacity_image") ? 1 : 0;
-    float transmission   = _values.asFloat("transmission");
+    vec3 opacity         = mtl.uniformBuffer().get<vec3>("opacity");
+    bool hasOpacityImage = mtl._values.asImage("opacity_image") ? 1 : 0;
+    float transmission   = mtl.uniformBuffer().get<float>("transmission");
+    mtl.setIsOpaque(opacity == kOpaque && !hasOpacityImage && transmission == 0.0f);
 
-    return opacity == kOpaque && !hasOpacityImage && transmission == 0.0f;
+    // Set the image flags used by built-in materials.
+    mtl.uniformBuffer().set(
+        "has_base_color_image", mtl._values.asImage("base_color_image") ? true : false);
+    mtl.uniformBuffer().set("has_specular_roughness_image",
+        mtl._values.asImage("specular_roughness_image") ? true : false);
+    mtl.uniformBuffer().set(
+        "has_opacity_image", mtl._values.asImage("opacity_image") ? true : false);
+    mtl.uniformBuffer().set("has_normal_image", mtl._values.asImage("normal_image") ? true : false);
 }
 
 END_AURORA

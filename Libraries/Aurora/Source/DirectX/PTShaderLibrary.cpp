@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,9 +114,15 @@ private:
     const map<string, const string&>& _includes;
 };
 
-PTMaterialType::PTMaterialType(
-    PTShaderLibrary* pShaderLibrary, int sourceIndex, const string& typeName) :
-    _pShaderLibrary(pShaderLibrary), _sourceIndex(sourceIndex), _name(typeName)
+PTMaterialType::PTMaterialType(PTShaderLibrary* pShaderLibrary, int sourceIndex,
+    const string& typeName, const UniformBufferDefinition& properties,
+    const vector<string>& textures, function<void(MaterialBase&)> updateFunc) :
+    _pShaderLibrary(pShaderLibrary),
+    _sourceIndex(sourceIndex),
+    _name(typeName),
+    _properties(properties),
+    _textures(textures),
+    _updateFunc(updateFunc)
 {
     // Set the closest hit, any hit, and layer miss hit entry point names, converted to wide string.
     _closestHitEntryPoint        = Foundation::s2w(typeName + "RadianceHitShader");
@@ -438,9 +444,9 @@ void PTShaderLibrary::initRootSignatures()
     CD3DX12_DESCRIPTOR_RANGE texRange;
     CD3DX12_DESCRIPTOR_RANGE samplerRange;
 
-    CD3DX12_ROOT_PARAMETER globalRootParameters[8] = {}; // NOLINT(modernize-avoid-c-arrays)
-    globalRootParameters[0].InitAsShaderResourceView(0); // gScene: acceleration structure
-    globalRootParameters[1].InitAsConstants(2, 0);       // sampleIndex + seedOffset
+    array<CD3DX12_ROOT_PARAMETER, 8> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
+    globalRootParameters[0].InitAsShaderResourceView(0);        // gScene: acceleration structure
+    globalRootParameters[1].InitAsConstants(2, 0);              // sampleIndex + seedOffset
     globalRootParameters[2].InitAsConstantBufferView(1); // gFrameData: per-frame constant buffer
     globalRootParameters[3].InitAsConstantBufferView(2); // gEnvironmentConstants
     globalRootParameters[4].InitAsShaderResourceView(1); // gEnvironmentAliasMap
@@ -451,8 +457,8 @@ void PTShaderLibrary::initRootSignatures()
     globalRootParameters[6].InitAsConstantBufferView(3); // gGroundPlane
     globalRootParameters[7].InitAsShaderResourceView(4); // gNullScene: null acceleration structure
     CD3DX12_STATIC_SAMPLER_DESC samplerDesc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR);
-    CD3DX12_ROOT_SIGNATURE_DESC globalDesc(
-        _countof(globalRootParameters), globalRootParameters, 1, &samplerDesc);
+    CD3DX12_ROOT_SIGNATURE_DESC globalDesc(static_cast<UINT>(globalRootParameters.size()),
+        globalRootParameters.data(), 1, &samplerDesc);
     _pGlobalRootSignature = createRootSignature(globalDesc);
     _pGlobalRootSignature->SetName(L"Global Root Signature");
 
@@ -462,62 +468,69 @@ void PTShaderLibrary::initRootSignatures()
     CD3DX12_DESCRIPTOR_RANGE uavRange;
     uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 7, 0);   // Output images (for AOV data)
     CD3DX12_DESCRIPTOR_RANGE rayGenRanges[] = { uavRange }; // NOLINT(modernize-avoid-c-arrays)
-    CD3DX12_ROOT_PARAMETER rayGenRootParameters[1] = {};    // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 1> rayGenRootParameters = {};
     rayGenRootParameters[0].InitAsDescriptorTable(_countof(rayGenRanges), rayGenRanges);
-    CD3DX12_ROOT_SIGNATURE_DESC rayGenDesc(_countof(rayGenRootParameters), rayGenRootParameters);
+    CD3DX12_ROOT_SIGNATURE_DESC rayGenDesc(
+        static_cast<UINT>(rayGenRootParameters.size()), rayGenRootParameters.data());
     rayGenDesc.Flags      = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
     _pRayGenRootSignature = createRootSignature(rayGenDesc);
     _pRayGenRootSignature->SetName(L"Ray Gen Local Root Signature");
 
     // Specify a local root signature for the radiance hit group.
     // NOTE: All shaders in the hit group must have the same local root signature.
-    CD3DX12_ROOT_PARAMETER radianceHitParameters[9] = {};    // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 10> radianceHitParameters = {};
     radianceHitParameters[0].InitAsShaderResourceView(0, 1); // gIndices: indices
     radianceHitParameters[1].InitAsShaderResourceView(1, 1); // gPositions: positions
     radianceHitParameters[2].InitAsShaderResourceView(2, 1); // gNormals: normals
-    radianceHitParameters[3].InitAsShaderResourceView(3, 1); // gTexCoords: texture coordinates
-    radianceHitParameters[4].InitAsConstants(
-        3, 0, 1); // gHasNormals, gHasTexCoords, and gLayerMissShaderIndex
-    radianceHitParameters[5].InitAsConstantBufferView(1, 1); // gMaterial: material data
-    radianceHitParameters[6].InitAsConstantBufferView(
+    radianceHitParameters[3].InitAsShaderResourceView(3, 1); // gTangents: tangents
+    radianceHitParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords: texture coordinates
+    radianceHitParameters[5].InitAsConstants(
+        5, 0, 1); // gHasNormals, gHasTangents gHasTexCoords, gLayerMissShaderIndex and gIsOpaque
+    radianceHitParameters[6].InitAsShaderResourceView(
+        9, 1); // gMaterialConstants: material data (stored in register 9 after textures)
+    radianceHitParameters[7].InitAsConstantBufferView(
         2, 1); // gMaterialLayerIDs: indices for layer material shaders
 
-    // Texture descriptors starting at register(t4, space1)
-    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 4, 1);
+    // Texture descriptors starting at register(t5, space1), after the byte address buffers for
+    // vertex data.
+    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 5, 1);
     CD3DX12_DESCRIPTOR_RANGE radianceHitRanges[] = { texRange }; // NOLINT(modernize-avoid-c-arrays)
-    radianceHitParameters[7].InitAsDescriptorTable(_countof(radianceHitRanges), radianceHitRanges);
+    radianceHitParameters[8].InitAsDescriptorTable(_countof(radianceHitRanges), radianceHitRanges);
 
     // Sampler descriptors starting at register(s1)
     samplerRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, PTMaterial::samplerDescriptorCount(), 1);
     CD3DX12_DESCRIPTOR_RANGE radianceHitSamplerRanges[] = {
         samplerRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    radianceHitParameters[8].InitAsDescriptorTable(
+    radianceHitParameters[9].InitAsDescriptorTable(
         _countof(radianceHitSamplerRanges), radianceHitSamplerRanges);
 
     CD3DX12_ROOT_SIGNATURE_DESC radianceHitDesc(
-        _countof(radianceHitParameters), radianceHitParameters);
+        static_cast<UINT>(radianceHitParameters.size()), radianceHitParameters.data());
     radianceHitDesc.Flags      = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
     _pRadianceHitRootSignature = createRootSignature(radianceHitDesc);
     _pRadianceHitRootSignature->SetName(L"Radiance Hit Group Local Root Signature");
 
     // Specify a local root signature for the layer miss shader.
     // NOTE: All shaders in the hit group must have the same local root signature.
-    CD3DX12_ROOT_PARAMETER layerMissParameters[9] = {};    // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 10> layerMissParameters = {};
     layerMissParameters[0].InitAsShaderResourceView(0, 1); // gIndices: indices
     layerMissParameters[1].InitAsShaderResourceView(1, 1); // gPositions: positions
     layerMissParameters[2].InitAsShaderResourceView(2, 1); // gNormals: normals
-    layerMissParameters[3].InitAsShaderResourceView(3, 1); // gTexCoords: texture coordinates
-    layerMissParameters[4].InitAsConstants(
-        3, 0, 1); // gHasNormals, gHasTexCoords, and gLayerMissShaderIndex
-    layerMissParameters[5].InitAsConstantBufferView(1, 1); // gMaterial: material data
-    layerMissParameters[6].InitAsConstantBufferView(
+    layerMissParameters[3].InitAsShaderResourceView(3, 1); // gTangents: tangents
+    layerMissParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords: texture coordinates
+    layerMissParameters[5].InitAsConstants(
+        5, 0, 1); // gHasNormals, gHasTangents, gHasTexCoords, gIsOpaque,and gLayerMissShaderIndex
+    layerMissParameters[6].InitAsShaderResourceView(
+        9, 1); // gMaterialConstants: material data (stored in register 9 after textures)
+    layerMissParameters[7].InitAsConstantBufferView(
         2, 1); // gMaterialLayerIDs: indices for layer material shaders
 
-    // Texture descriptors starting at register(t4, space1)
-    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 4, 1); // Textures
+    // Texture descriptors starting at register(t5, space1), after the byte address buffers for
+    // vertex data.
+    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 5, 1); // Textures
     CD3DX12_DESCRIPTOR_RANGE layerMissRanges[] = { texRange }; // NOLINT(modernize-avoid-c-arrays)
-    layerMissParameters[7].InitAsDescriptorTable(_countof(layerMissRanges), layerMissRanges);
+    layerMissParameters[8].InitAsDescriptorTable(_countof(layerMissRanges), layerMissRanges);
 
     // Sampler descriptors starting at register(s1)
     samplerRange.Init(
@@ -525,11 +538,12 @@ void PTShaderLibrary::initRootSignatures()
     CD3DX12_DESCRIPTOR_RANGE layerMissSamplerRanges[] = {
         samplerRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    layerMissParameters[8].InitAsDescriptorTable(
+    layerMissParameters[9].InitAsDescriptorTable(
         _countof(layerMissSamplerRanges), layerMissSamplerRanges);
 
     // Create layer miss root signature.
-    CD3DX12_ROOT_SIGNATURE_DESC layerMissDesc(_countof(layerMissParameters), layerMissParameters);
+    CD3DX12_ROOT_SIGNATURE_DESC layerMissDesc(
+        static_cast<UINT>(layerMissParameters.size()), layerMissParameters.data());
     layerMissDesc.Flags      = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
     _pLayerMissRootSignature = createRootSignature(layerMissDesc);
     _pLayerMissRootSignature->SetName(L"Layer Miss Local Root Signature");
@@ -596,14 +610,16 @@ void PTShaderLibrary::removeSource(int sourceIndex)
     // Push index in to vector, the actual remove only happens when library rebuilt.
     _sourceToRemove.push_back(sourceIndex);
 }
-PTMaterialTypePtr PTShaderLibrary::acquireMaterialType(
-    const MaterialTypeSource& source, bool* pCreatedType)
+PTMaterialTypePtr PTShaderLibrary::acquireMaterialType(const MaterialDefinition& def)
 {
     // The shared pointer to material type.
     PTMaterialTypePtr pMtlType;
 
-    // First see if this entry point already exists.
-    map<string, weak_ptr<PTMaterialType>>::iterator hgIter = _materialTypes.find(source.name);
+    // Get the unique name from the source object.
+    string typeName = def.source().name;
+
+    // First see a material type already exists.
+    map<string, weak_ptr<PTMaterialType>>::iterator hgIter = _materialTypes.find(typeName);
     if (hgIter != _materialTypes.end())
     {
         // Weak pointer is stored in shader library, ensure it has not been deleted.
@@ -616,9 +632,10 @@ PTMaterialTypePtr PTShaderLibrary::acquireMaterialType(
                 source.compareSource(_compiledMaterialTypes[pMtlType->_sourceIndex].source),
                 "Source mis-match for material type %s.", source.name.c_str());
 
-            // No type created.
-            if (pCreatedType)
-                *pCreatedType = false;
+            AU_ASSERT(pMtlType->_properties.size() == def.defaults().properties.size(),
+                "Material type properties mismatch");
+            AU_ASSERT(pMtlType->_textures.size() == def.defaults().textures.size(),
+                "Material type textures mismatch");
 
             // Return the existing material type.
             return pMtlType;
@@ -627,28 +644,20 @@ PTMaterialTypePtr PTShaderLibrary::acquireMaterialType(
 
     // Append the new source to the source vector, and calculate source index.
     int sourceIdx = static_cast<int>(_compiledMaterialTypes.size());
-    _compiledMaterialTypes.push_back({ source, nullptr });
+    _compiledMaterialTypes.push_back({ def.source(), nullptr });
 
     // Trigger rebuild.
     _rebuildRequired = true;
 
     // Create new material type.
-    pMtlType = make_shared<PTMaterialType>(this, sourceIdx, source.name);
+    pMtlType = make_shared<PTMaterialType>(this, sourceIdx, typeName,
+        def.defaults().propertyDefinitions, def.defaults().textureNames, def.updateFunction());
 
     // Add weak reference to map.
-    _materialTypes[source.name] = weak_ptr<PTMaterialType>(pMtlType);
-
-    // New type created.
-    if (pCreatedType)
-        *pCreatedType = true;
+    _materialTypes[typeName] = weak_ptr<PTMaterialType>(pMtlType);
 
     // Return the new material type.
     return pMtlType;
-}
-
-PTMaterialTypePtr PTShaderLibrary::getBuiltInMaterialType(const string& name)
-{
-    return _builtInMaterialTypes[name];
 }
 
 void PTShaderLibrary::initialize()
@@ -663,10 +672,16 @@ void PTShaderLibrary::initialize()
     _compiledMaterialTypes.clear();
     _builtInMaterialNames = {};
 
-    // Create the default material type.
+    // Create the default material definition.
     MaterialTypeSource defaultMaterialSource(
         "Default", CommonShaders::g_sInitializeDefaultMaterialType);
-    PTMaterialTypePtr pDefaultMaterialType = acquireMaterialType(defaultMaterialSource);
+    _builtInMaterialDefinitions[defaultMaterialSource.name] =
+        make_shared<MaterialDefinition>(defaultMaterialSource,
+            MaterialBase::StandardSurfaceDefaults, MaterialBase::updateBuiltInMaterial);
+
+    // Create material type from the defintion.
+    PTMaterialTypePtr pDefaultMaterialType =
+        acquireMaterialType(*_builtInMaterialDefinitions[defaultMaterialSource.name]);
 
     // Ensure the radiance hit entry point is compiled for default material type.
     pDefaultMaterialType->incrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
@@ -704,6 +719,16 @@ bool PTShaderLibrary::setOption(const string& name, int value)
     }
 
     return changed;
+}
+
+PTMaterialTypePtr PTShaderLibrary::getBuiltInMaterialType(const string& name)
+{
+    return _builtInMaterialTypes[name];
+}
+
+shared_ptr<MaterialDefinition> PTShaderLibrary::getBuiltInMaterialDefinition(const string& name)
+{
+    return _builtInMaterialDefinitions[name];
 }
 
 void PTShaderLibrary::assembleShadersForMaterialType(const MaterialTypeSource& source,
@@ -921,7 +946,7 @@ void PTShaderLibrary::rebuild()
         compiledShaderNames.push_back(job.libName);
     }
 
-    // Link the compiled shaders into single library.
+    // Link the compiled shaders into a single library blob.
     float linkStart = _timer.elapsed();
     ComPtr<IDxcBlob> linkedShader;
     string linkErrorMessage;
@@ -1028,7 +1053,7 @@ void PTShaderLibrary::rebuild()
             // an any hit shader for radiance rays, then a separate hit group for shadow rays would
             // have to be created, and referenced with an offset in the related TraceRay() calls.
 
-            // Create hit group (required even if only has miss shader.)
+            // Create hit group (required even if only  has miss shader.)
             auto* pMaterialTypeSubobject =
                 pipelineStateDesc.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
             pMaterialTypeSubobject->SetHitGroupExport(pMaterialType->exportName().c_str());
@@ -1036,7 +1061,6 @@ void PTShaderLibrary::rebuild()
 
             if (pMaterialType->refCount(PTMaterialType::EntryPoint::kRadianceHit) > 0)
             {
-
                 pMaterialTypeSubobject->SetClosestHitShaderImport(
                     pMaterialType->closestHitEntryPoint().c_str());
                 pMaterialTypeSubobject->SetAnyHitShaderImport(
@@ -1048,7 +1072,6 @@ void PTShaderLibrary::rebuild()
 
             if (pMaterialType->refCount(PTMaterialType::EntryPoint::kLayerMiss) > 0)
             {
-
                 auto* pLayerMissRootSignatureSubobject =
                     pipelineStateDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
                 pLayerMissRootSignatureSubobject->SetRootSignature(_pLayerMissRootSignature.Get());
