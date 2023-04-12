@@ -37,7 +37,7 @@ add_library(${PROJECT_NAME} SHARED
     "pch.h"
 )
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	FOLDER "Libraries"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"

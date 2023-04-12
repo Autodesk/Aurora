@@ -6,7 +6,7 @@ _externals/
 
 # Ignore script generated files
 Scripts/cmake/externalsConfig.cmake
-
+__pycache__
 
 # Ignore IDE cache folders
 .vs/

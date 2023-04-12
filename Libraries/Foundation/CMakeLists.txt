@@ -20,7 +20,7 @@ PRIVATE
     glm::glm
 )
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 		FOLDER "Libraries"
 		# TODO: set a custom output name for this target: OUTPUT_NAME "aurora_foundation"

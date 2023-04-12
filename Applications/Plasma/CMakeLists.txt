@@ -30,7 +30,7 @@ add_executable(${PROJECT_NAME}
     "SceneContents.h"
 )
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
     FOLDER "Applications"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"

@@ -54,7 +54,7 @@ source_group("Helpers" FILES ${HELPER_FILES})
 source_group("Tests" FILES ${TEST_FILES})
 source_group("Aurora" FILES ${AURORA_FILES})
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	FOLDER "Tests"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"

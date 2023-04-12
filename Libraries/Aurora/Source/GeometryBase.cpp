@@ -51,7 +51,7 @@ static void copyVertexChannelData(vector<ComponentType>& dst, const AttributeDat
         ComponentType* pDstComp = dst.data();
         for (size_t i = 0; i < vertexCount; i++)
         {
-            // Copy the individual element from the soure buffer to destination.
+            // Copy the individual element from the source buffer to destination.
             const ComponentType* pSrcComp = reinterpret_cast<const ComponentType*>(pSrc);
             for (uint32_t j = 0; j < componentCount; j++)
             {

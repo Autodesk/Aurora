@@ -1,0 +1,18 @@
+{
+  "Plugins": [
+    {
+      "Info": {
+        "Types": {
+          "ImageProcessingResolverPlugin": {
+            "bases": [ "ArResolver" ]
+          }
+        }
+      },
+      "LibraryPath": "../ImageProcessingResolver.dll",
+      "Name": "ImageProcessingResolver",
+      "ResourcePath": "resources",
+      "Root": "..",
+      "Type": "library"
+    }
+  ]
+}

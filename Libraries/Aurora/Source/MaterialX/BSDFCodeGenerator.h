@@ -105,7 +105,7 @@ public:
     /// \param.document MaterialX XML document string.
     /// \param inputParameterMapper Function used to map a parameter in the MaterialX network an
     /// input parameter in the setup function. \param outputParameterMapper Function used to map a
-    /// parameter in the MaterialX network an ouput parameter in the setup function. \param
+    /// parameter in the MaterialX network an output parameter in the setup function. \param
     /// pResultOut Code generation result output.
     bool generate(const string& document, Result* pResultOut,
         const set<string> supportedBSDFInputs = {}, const string& overrideDocumentName = "");

@@ -345,7 +345,7 @@ else() # Linux
     #TODO anything we need to set to support the Aurora execution?
 endif()
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	FOLDER "Libraries"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"

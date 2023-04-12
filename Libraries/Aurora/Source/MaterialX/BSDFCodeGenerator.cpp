@@ -490,7 +490,7 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
         auto node       = connection->getNode();
         string implName = node->getImplementation().getName();
 
-        // Create a temp variable to store the node ouput, if this node has already been generated
+        // Create a temp variable to store the node output, if this node has already been generated
         // then this will be reused without generating again.
         // TODO: Handle multiple outputs.
         string outputTempVariable =
