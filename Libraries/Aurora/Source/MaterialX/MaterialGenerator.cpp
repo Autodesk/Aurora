@@ -382,7 +382,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // Output the material name
     MaterialTypeSource source(materialName, generatedMtlxSetupFunction);
     MaterialDefaultValues defaults(
-        res.materialProperties, res.materialPropertyDefaults, res.textureDefaults);
+        res.materialProperties, res.materialPropertyDefaults, textureVars);
 
     // Material type is opaque if neither opacity or transmission input is used.
     bool isOpaque = bsdfInputs.find("opacity") == bsdfInputs.end() &&

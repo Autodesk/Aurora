@@ -182,7 +182,7 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         // Work out built-in type.
         string builtInType = document;
 
-        // Get the built-in material type and defintion for built-in.
+        // Get the built-in material type and definition for built-in.
         pMtlType = _pShaderLibrary->getBuiltInMaterialType(builtInType);
         pDef     = _pShaderLibrary->getBuiltInMaterialDefinition(builtInType);
 
@@ -1423,7 +1423,7 @@ shared_ptr<PTMaterialType> PTRenderer::generateMaterialX([[maybe_unused]] const 
     [[maybe_unused]] shared_ptr<MaterialDefinition>* pDefOut)
 {
 #if ENABLE_MATERIALX
-    // Generate the material defintion for the materialX document, this contains the source code,
+    // Generate the material definition for the materialX document, this contains the source code,
     // default values, and a unique name.
     shared_ptr<MaterialDefinition> pDef = _pMaterialXGenerator->generate(document);
     if (!pDef)

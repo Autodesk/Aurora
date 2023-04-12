@@ -816,7 +816,7 @@ TEST_P(MaterialTest, TestMaterialAdvancedMaterialProperties)
     }
 }
 
-// Test material creation using MaterialX
+// Test material type creation using MaterialX
 TEST_P(MaterialTest, TestMaterialTypes)
 {
     // No MaterialX on HGI yet.
@@ -1005,6 +1005,41 @@ TEST_P(MaterialTest, TestHdAuroraMaterialX)
     Path material("HdAuroraMaterial");
     pScene->setMaterialType(material, Names::MaterialTypes::kMaterialXPath,
         dataPath() + "/Materials/HdAuroraTest.mtlx");
+
+    // Add to scene.
+    Path instance("HdAuroraInstance");
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial] = material;
+    EXPECT_TRUE(pScene->addInstance(instance, geometry, instProps));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_HdAuroraMtlX", "Materials");
+}
+
+// Test material creation using MaterialX file dumped from HdAurora that has a texture.
+TEST_P(MaterialTest, TestHdAuroraTextureMaterialX)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    if (!pRenderer)
+        return;
+
+    setDefaultRendererPathTracingIterations(256);
+
+    setupAssetPaths();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // Create teapot geom.
+    Path geometry = createTeapotGeometry(*pScene);
+
+    // Try loading a MtlX file dumped from HdAurora.
+    Path material("HdAuroraMaterial");
+    pScene->setMaterialType(material, Names::MaterialTypes::kMaterialXPath,
+        dataPath() + "/Materials/HdAuroraTextureTest.mtlx");
 
     // Add to scene.
     Path instance("HdAuroraInstance");

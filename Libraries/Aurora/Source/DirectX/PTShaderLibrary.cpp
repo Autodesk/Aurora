@@ -679,7 +679,7 @@ void PTShaderLibrary::initialize()
         make_shared<MaterialDefinition>(defaultMaterialSource,
             MaterialBase::StandardSurfaceDefaults, MaterialBase::updateBuiltInMaterial);
 
-    // Create material type from the defintion.
+    // Create material type from the definition.
     PTMaterialTypePtr pDefaultMaterialType =
         acquireMaterialType(*_builtInMaterialDefinitions[defaultMaterialSource.name]);
 
@@ -913,7 +913,7 @@ void PTShaderLibrary::rebuild()
             // developer a chance to handle HLSL programming errors as early as possible.
             AU_ERROR("HLSL compilation error log:\n%s", errorMessage.c_str());
             AU_DEBUG_BREAK();
-            AU_FAIL("HLSL compilation failed, see log in console for details.");
+            AU_FAIL("HLSL compilation failed for %s, see log in console for details.", job.libName.c_str());
         }
         job.pBlob = compiledShader;
     };

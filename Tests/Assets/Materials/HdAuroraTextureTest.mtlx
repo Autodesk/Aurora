@@ -1,0 +1,36 @@
+
+<?xml version = "1.0" ?>
+<materialx version = "1.38"> 
+  <nodegraph name="NG1">
+    <image name="base_color_image" type="color3">
+      <parameter name="file" type="filename" value="../Textures/CoatOfArms.bmp" />
+      <parameter name="uaddressmode" type="string" value="periodic" />
+      <parameter name="vaddressmode" type="string" value="periodic" />
+    </image>
+    <output name="out1" type="color3" nodename="base_color_image" />
+  </nodegraph>
+  <nodegraph name="NG2">
+    <image name="specular_roughness_image" type="float">
+      <parameter name="file" type="filename" value="../Textures/fishscale_roughness.png" />
+      <parameter name="uaddressmode" type="string" value="periodic" />
+      <parameter name="vaddressmode" type="string" value="periodic" />
+    </image>
+    <output name="out1" type="float" nodename="specular_roughness_image" />
+  </nodegraph>
+  <standard_surface name="SS_Material" type="surfaceshader"> 
+      <input name="base_color" type="color3" nodegraph="NG1" output="out1" />
+      <input name="specular_roughness" type="float" nodegraph="NG2" output="out1" />
+      <input name="specular_IOR" type="float" value="0.6" />
+      <input name="emission_color" type="color3" value="0.0,0.0,0.0" />
+      <input name="transmission" type="float" value="0.0" />
+      <input name="coat" type="float" value="0.0" />
+      <input name="coat_roughness" type="float" value="0.0" />
+      <input name="metalness" type="float" value="0.4" />
+  </standard_surface>
+  <surfacematerial name="SS_Material_shader" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="SS_Material" />
+  </surfacematerial>
+  <look name="default">
+    <materialassign name="material_assign_default" material="SS_Material_shader" geom="*" />
+  </look>
+</materialx>

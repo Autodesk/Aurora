@@ -47,7 +47,7 @@ struct ProcessedMaterialNetwork
 
 // Properties require a value to be added to a Uniform block.
 static const string paramBindingTemplate = R"(
-      <input name="%s" type="%s" />)";
+      <input name="%s" type="%s" value="%s" />)";
 
 static const string nodeGraphBindingTemplate = R"(
       <input name="%s" type="%s" nodegraph="NG%s" output="out1" />)";
@@ -494,9 +494,9 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         if (vtVal.IsHolding<GfVec3f>())
         {
             // Add the input binding for input to the dynamically built materialX document.
-            // Note: Values are applied seperately and not built into the document.
+            // Note: Values are applied seperately and not built into the document, so value is all zeros here.
             parameterBindingStr +=
-                Aurora::Foundation::sFormat(paramBindingTemplate, auroraName.c_str(), "color3");
+                Aurora::Foundation::sFormat(paramBindingTemplate, auroraName.c_str(), "color3", "0.0,0.0,0.0");
         }
     };
 
@@ -506,9 +506,9 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         if (vtVal.IsHolding<float>())
         {
             // Add the input binding for input to the dynamically built materialX document.
-            // Note: Values are applied seperately and not built into the document.
-            parameterBindingStr +=
-                Aurora::Foundation::sFormat(paramBindingTemplate, auroraName.c_str(), "float");
+            // Note: Values are applied seperately and not built into the document, so value is zero here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "float", "0.0");
         }
     };
 

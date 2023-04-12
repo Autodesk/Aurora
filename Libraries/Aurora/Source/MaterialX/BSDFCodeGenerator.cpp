@@ -846,28 +846,41 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     }
 
     // Find all the terminal input values that will become the setup function parameters.
-    vector<MaterialX::ValueElementPtr> stringValues;
+    vector<MaterialX::ElementPtr> stringValues;
     map<string, int> textureIndexLookup;
     for (MaterialX::ElementPtr elem : doc->traverseTree())
     {
+        // Get full path to node.
+        string path                          = elem->getNamePath();
+        
+        // Initialize parameter struct to be filled in if parameter is found.
+        Parameter param;
+        param.parameterIndex                 = (int)_parameters.size();
+
+        // Have we found a parameter?
+        bool foundParam                      = false;
+
         MaterialX::ValueElementPtr valueElem = elem->asA<MaterialX::ValueElement>();
         if (valueElem && valueElem->isA<MaterialX::Input>() && valueElem->hasValue())
         {
-            // Create a parameter object from the input value.
-            string path = valueElem->getNamePath();
-            Parameter param;
-            param.parameterIndex = (int)_parameters.size();
-            auto type            = valueElem->getType();
+            // All ValueElement's are parameters.
+            foundParam = true;
+
+            // Create a parameter object from the ValueElement's input value (adsk texture node
+            // values will be represented this way).
+            auto type = valueElem->getType();
+            
+            // Fill in parameter based on type.
             if (type.compare("filename") == 0)
             {
-                // Create texture parameter.
+                // Create texture parameter from the file ValueElement.
                 param.path = processPath(path, true); // Remove the last and first part of path.
                 param.variableName = pathToVariableName(param.path);
                 param.index        = (int)_textures.size();
                 param.paramType    = ParameterType::Texture;
                 param.type         = "sampler2D";
 
-                // Create the texture defintion for this parameter.
+                // Create the texture definition for this parameter.
                 TextureDefinition tex;
                 tex.name            = param.path;
                 tex.defaultFilename = valueElem->getValue()->asA<string>();
@@ -883,11 +896,11 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
             {
                 // String parameters are hardcoded texture properties (e.g. wrap mode), must be
                 // post-processed.
-                stringValues.push_back(valueElem);
+                stringValues.push_back(elem);
             }
             else
             {
-                // All other types become material properties.
+                // All other ValueElement types become material properties.
                 param.path         = processPath(path, false); // Remove only first section of path.
                 param.variableName = pathToVariableName(param.path);
                 param.index        = (int)_materialProperties.size();
@@ -903,32 +916,82 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
                 _materialPropertyDefaults.push_back(propVal);
             }
 
-            // Add to setup function parameters.
-            if (!param.variableName.empty())
-            {
-                _parameterIndexLookup[path] = (int)_parameters.size();
-                _parameters.push_back(param);
-            }
         }
+        else
+        {
+
+            // image nodes and their children are not represented by ValueElement for some reason, so
+            // get the type as attribute.
+            string type = elem->getAttribute("type");
+            if (!type.empty())
+            {
+                // Process string and filename nodes.
+                if (type.compare("filename") == 0)
+                {
+                    // Found a filename parameter.
+                    foundParam = true;
+
+                    // Create texture parameter.
+                    param.path = processPath(path, true); // Remove the last and first part of path.
+                    param.variableName = pathToVariableName(param.path);
+                    param.index        = (int)_textures.size();
+                    param.paramType    = ParameterType::Texture;
+                    param.type         = "sampler2D";
+
+                    // Create the texture definition for this parameter.
+                    TextureDefinition tex;
+                    tex.name            = param.path;
+                    tex.defaultFilename = elem->getAttribute("value");
+
+                    // Set linearize to if no color space or srgb_texture color space.
+                    string colorSpace = elem->getAttribute("colorspace");
+                    tex.linearize = colorSpace.empty() || colorSpace.compare("srgb_texture") == 0;
+
+                    _textures.push_back(tex);
+                    textureIndexLookup[param.path] = param.index;
+                }
+                else if (type.compare("string") == 0)
+                {
+                    // Found a string parameter.
+                    foundParam = true;
+                    
+                    // String parameters are hardcoded texture properties (e.g. wrap mode), must be
+                    // post-processed.
+                    stringValues.push_back(elem);
+                }
+
+
+            }
+
+        
+        }
+
+        // Add to setup function parameters.
+        if (foundParam && !param.variableName.empty())
+        {
+            _parameterIndexLookup[path] = (int)_parameters.size();
+            _parameters.push_back(param);
+        }
+
     }
 
     // Process the hardcoded texture properties that will become sampler settings.
     // TODO: Fix this in MaterialX, so we have actual sampler objects, not error prone hard coded
     // magic property names.
-    for (MaterialX::ValueElementPtr valueElem : stringValues)
+    for (MaterialX::ElementPtr elem : stringValues)
     {
-        string path    = valueElem->getNamePath();
+        string path    = elem->getNamePath();
         string txtPath = processPath(path, true);
-        string valData = valueElem->getValue()->asA<string>();
+        string valData = elem->getAttribute("value");
         auto iter      = textureIndexLookup.find(txtPath);
         if (iter != textureIndexLookup.end())
         {
             auto& texture = _textures[iter->second];
-            if (valueElem->getName().compare("uaddressmode") == 0)
+            if (elem->getName().compare("uaddressmode") == 0)
             {
                 texture.addressModeU = valData;
             }
-            else if (valueElem->getName().compare("vaddressmode") == 0)
+            else if (elem->getName().compare("vaddressmode") == 0)
             {
                 texture.addressModeV = valData;
             }
