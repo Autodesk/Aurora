@@ -629,8 +629,9 @@ PTMaterialTypePtr PTShaderLibrary::acquireMaterialType(const MaterialDefinition&
             // If the entry point exists, in debug mode do a string comparison to ensure the source
             // also matches.
             AU_ASSERT_DEBUG(
-                source.compareSource(_compiledMaterialTypes[pMtlType->_sourceIndex].source),
-                "Source mis-match for material type %s.", source.name.c_str());
+                def.source().compareSource(_compiledMaterialTypes[pMtlType->_sourceIndex].source),
+                "Source mis-match for material type %s.",
+                _compiledMaterialTypes[pMtlType->_sourceIndex].source.name.c_str());
 
             AU_ASSERT(pMtlType->_properties.size() == def.defaults().properties.size(),
                 "Material type properties mismatch");
