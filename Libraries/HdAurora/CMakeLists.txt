@@ -15,8 +15,6 @@ add_library(${PROJECT_NAME} SHARED
     "DLL.cpp"
     "HdAuroraImageCache.cpp"
     "HdAuroraImageCache.h"
-    "HdAuroraCamera.cpp"
-    "HdAuroraCamera.h"
     "HdAuroraInstancer.cpp"
     "HdAuroraInstancer.h"
     "HdAuroraLight.cpp"

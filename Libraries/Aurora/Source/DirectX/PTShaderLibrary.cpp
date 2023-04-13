@@ -1104,7 +1104,7 @@ void PTShaderLibrary::rebuild()
 
     AU_INFO("Compiled %d material types in %d ms", activeMaterialTypes,
         static_cast<int>(elapsedMillisec));
-    AU_INFO("  - DXC compile took %d ms", static_cast<int>(compEnd - compStart));
+    AU_INFO("  - Transpilation and DXC compile took %d ms", static_cast<int>(compEnd - compStart));
     AU_INFO("  - DXC link took %d ms", static_cast<int>(linkEnd - linkStart));
     AU_INFO("  - Pipeline creation took %d ms", static_cast<int>(plEnd - plStart));
 }

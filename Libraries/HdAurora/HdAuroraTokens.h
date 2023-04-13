@@ -65,6 +65,9 @@ static const TfToken kIsSharedHandleOpenGL("aurora:is_shared_handle_opengl");
 /// The settings for the global ground plane, as defined in the Aurora API.
 static const TfToken kGroundPlaneSettings("aurora:ground_plane_settings");
 
+/// Whether to flip the output image.
+static const TfToken kFlipYOutput("aurora:flip_y_output");
+
 //**************************************************************************/
 // Material Tokens
 //**************************************************************************/

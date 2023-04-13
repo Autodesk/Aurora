@@ -195,6 +195,7 @@ public:
         if (_uniformBuffer.contains(name))
         {
             _uniformBuffer.reset(name);
+            _bIsDirty = true;
             return;
         }
         FixedValues::clearValue(name);

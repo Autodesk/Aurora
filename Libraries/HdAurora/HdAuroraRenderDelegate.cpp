@@ -18,7 +18,6 @@
 #include <pxr/imaging/hgi/tokens.h>
 #pragma warning(pop)
 
-#include "HdAuroraCamera.h"
 #include "HdAuroraImageCache.h"
 #include "HdAuroraInstancer.h"
 #include "HdAuroraLight.h"
@@ -347,7 +346,7 @@ HdSprim* HdAuroraRenderDelegate::CreateSprim(TfToken const& typeId, SdfPath cons
 {
     if (typeId == HdPrimTypeTokens->camera)
     {
-        return new HdAuroraCamera(sprimId, this);
+        return new HdCamera(sprimId);
     }
     else if (typeId == HdPrimTypeTokens->material)
     {

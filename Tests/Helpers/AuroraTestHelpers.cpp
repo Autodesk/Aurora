@@ -219,25 +219,20 @@ void FixtureBase::testFloat3Value(
 
         // Expect an assert if set with wrong type.
         matProps[name] = 123.0f;
-        ASSERT_THROW(
-            scene.setMaterialProperties(material, matProps), TestHelpers::AuroraLoggerException)
+        ASSERT_NO_FATAL_FAILURE(scene.setMaterialProperties(material, matProps))
             << " " << __FUNCTION__ << " value:" << name << " " << message;
-        ASSERT_THAT(lastLogMessage(),
-            ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: typesMatch"))
+        ;
+        ASSERT_THAT(lastLogMessage(), ::testing::StartsWith("Type mismatch in UniformBlock"))
             << " " << __FUNCTION__ << " value:" << name << " " << message;
         ;
     }
     else
     {
-        ASSERT_THROW(
-            scene.setMaterialProperties(material, matProps), TestHelpers::AuroraLoggerException)
+        ASSERT_NO_FATAL_FAILURE(scene.setMaterialProperties(material, matProps))
             << " " << __FUNCTION__ << " value:" << name << " " << message;
         ;
-
-        ASSERT_THAT(lastLogMessage(),
-            ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: find(name) != end"))
+        ASSERT_THAT(lastLogMessage(), ::testing::StartsWith("Type mismatch in UniformBlock"))
             << " " << __FUNCTION__ << " value:" << name << " " << message;
-        ;
     }
 }
 
@@ -261,21 +256,23 @@ void FixtureBase::testFloatValue(
 
         // Expect an assert if set with wrong type.
         matProps[name] = vec3(1.0f, 2.0f, 3.0f);
-        ASSERT_THROW(
-            scene.setMaterialProperties(material, matProps), TestHelpers::AuroraLoggerException)
+        ASSERT_NO_FATAL_FAILURE(
+            scene.setMaterialProperties(material, matProps))
             << " " << __FUNCTION__ << " value:" << name << " " << message;
         ;
         ASSERT_THAT(lastLogMessage(),
-            ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: typesMatch"))
+            ::testing::StartsWith("Type mismatch in UniformBlock"))
             << " " << __FUNCTION__ << " value:" << name << " " << message;
         ;
     }
     else
     {
-        ASSERT_THROW(
-            scene.setMaterialProperties(material, matProps), TestHelpers::AuroraLoggerException);
-        ASSERT_THAT(lastLogMessage(),
-            ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: find(name) != end"));
+        ASSERT_NO_FATAL_FAILURE(scene.setMaterialProperties(material, matProps))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
+        ;
+        ASSERT_THAT(lastLogMessage(), ::testing::StartsWith("Type mismatch in UniformBlock"))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
+        ;
     }
 }
 
@@ -300,17 +297,20 @@ void FixtureBase::testMatrixValue(
 
         // Expect an assert if set with wrong type.
         matProps[name] = 42;
-        ASSERT_THROW(
-            scene.setMaterialProperties(material, matProps), TestHelpers::AuroraLoggerException);
-        ASSERT_THAT(lastLogMessage(),
-            ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: typesMatch"));
+        ASSERT_NO_FATAL_FAILURE(scene.setMaterialProperties(material, matProps))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
+        ;
+        ASSERT_THAT(lastLogMessage(), ::testing::StartsWith("Type mismatch in UniformBlock"))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
     }
     else
     {
-        ASSERT_THROW(
-            scene.setMaterialProperties(material, matProps), TestHelpers::AuroraLoggerException);
-        ASSERT_THAT(lastLogMessage(),
-            ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: find(name) != end"));
+        ASSERT_NO_FATAL_FAILURE(scene.setMaterialProperties(material, matProps))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
+        ;
+        ASSERT_THAT(lastLogMessage(), ::testing::StartsWith("Type mismatch in UniformBlock"))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
+        ;
     }
 }
 
@@ -334,11 +334,11 @@ void FixtureBase::testBooleanValue(
 
         // Expect an assert if set with wrong type.
         matProps[name] = vec3(1.0f, 2.0f, 3.0f);
-
-        ASSERT_THROW(
-            scene.setMaterialProperties(material, matProps), TestHelpers::AuroraLoggerException);
-        ASSERT_THAT(lastLogMessage(),
-            ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: typesMatch"));
+        ASSERT_NO_FATAL_FAILURE(scene.setMaterialProperties(material, matProps))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
+        ;
+        ASSERT_THAT(lastLogMessage(), ::testing::StartsWith("Type mismatch in UniformBlock"))
+            << " " << __FUNCTION__ << " value:" << name << " " << message;
     }
     else
     {

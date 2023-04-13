@@ -24,6 +24,7 @@
 #include <fstream>
 #include <regex>
 #include <streambuf>
+#include <filesystem>
 
 using namespace Aurora;
 
@@ -72,6 +73,11 @@ public:
         defaultRenderer()->setLoadResourceFunction(loadResourceFunc);
     }
     ~MaterialTest() {}
+
+    // Test for the existence of the ADSK materialX libraries (in the working folder for the tests)
+    bool adskMaterialXSupport() { 
+        return std::filesystem::exists("MaterialX/libraries/adsk");
+    }
 
     // Load a MaterialX document and process file paths to correct locations for unit tests.
     string loadAndProcessMaterialXFile(const string& filename)
@@ -289,49 +295,6 @@ Paths createTeapotGrid(TestHelpers::FixtureBase& pFixture, uint32_t gridWidth, u
     }
 
     return pScene->addInstances(geometry, instDefs);
-}
-
-TEST_P(MaterialTest, DISABLED_TestMaterialDuplicateMaterialTypes)
-{
-    // Create the default scene (also creates renderer)
-    auto pScene    = createDefaultScene();
-    auto pRenderer = defaultRenderer();
-    setDefaultRendererPathTracingIterations(256);
-
-    // If pRenderer is null this renderer type not supported, skip rest of the test.
-    if (!pRenderer)
-        return;
-
-    // Create a grid of teapot instances.
-    vector<Path> teapotGrid = createTeapotGrid(*this, 6, 12);
-
-    // Test with all the built-ins except for the first one. This is the "Default" which refers to
-    // one of the other material types, so it would be redundant to test with it.
-    const vector<string> builtIns = pRenderer->builtInMaterials();
-    int materialCount             = 72;
-
-    // Create materials for each teapot.
-    for (int i = 0; i < teapotGrid.size(); i++)
-    {
-        // Read the materialX document from file.
-        int mtlIdx          = i % materialCount;
-        string mtlXName     = "standardSurface_" + to_string(mtlIdx) + "Dumped";
-        string mtlXFullPath = dataPath() + "/Materials/dumpedMtlx/" + mtlXName + ".mtlx";
-
-        // Load and process the MaterialX document and ensure it loaded correctly.
-        string processedMtlXString = loadAndProcessMaterialXFile(mtlXFullPath);
-        EXPECT_FALSE(processedMtlXString.empty());
-
-        // Create material from document
-        Path dupeMat = "DupeMaterial" + to_string(i);
-        pScene->setMaterialType(dupeMat, Names::MaterialTypes::kMaterialX, processedMtlXString);
-
-        pScene->setInstanceProperties(
-            teapotGrid[i], { { Names::InstanceProperties::kMaterial, dupeMat } });
-    }
-
-    // Render the scene and check baseline image.
-    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
 }
 
 // Test basic material properties using baseline image testing
@@ -1053,8 +1016,12 @@ TEST_P(MaterialTest, TestHdAuroraTextureMaterialX)
 
 // Test different settings for isFlipImageYEnabled option.
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialXFlipImageY)
+TEST_P(MaterialTest, TestMaterialXFlipImageY)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
+
     // No MaterialX on HGI yet.
     if (!isDirectX())
         return;
@@ -1104,8 +1071,11 @@ TEST_P(MaterialTest, DISABLED_TestMaterialXFlipImageY)
 
 // Test different MtlX file that loads a BMP.
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialXBMP)
+TEST_P(MaterialTest, TestMaterialXBMP)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
 
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
@@ -1198,8 +1168,12 @@ TEST_P(MaterialTest, TestMaterialTransparency)
 }
 
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
+TEST_P(MaterialTest, TestMtlXSamplers)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
+
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -1237,8 +1211,12 @@ TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
 
 // MaterialX as layered materials
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
+TEST_P(MaterialTest, TestMaterialMaterialXLayers)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
+
     // No MaterialX on HGI yet.
     if (!isDirectX())
         return;
@@ -1359,8 +1337,11 @@ TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
 }
 
 // Test object space normal in materialX.
-TEST_P(MaterialTest, DISABLED_TestObjectSpaceMaterialX)
+TEST_P(MaterialTest, TestObjectSpaceMaterialX)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
 
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
@@ -1374,6 +1355,8 @@ TEST_P(MaterialTest, DISABLED_TestObjectSpaceMaterialX)
     // If pRenderer is null this renderer type not supported, skip rest of the test.
     if (!pRenderer)
         return;
+
+    setupAssetPaths();
 
     // Create teapot geom.
     Path geometry = createTeapotGeometry(*pScene);

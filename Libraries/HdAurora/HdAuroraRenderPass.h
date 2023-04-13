@@ -42,4 +42,6 @@ private:
 
     std::shared_ptr<HdAuroraRenderBuffer> _ownedRenderBuffer;
     std::map<TfToken, HdAuroraRenderBuffer*> _renderBuffers;
+
+    GfMatrix4f _cameraView, _cameraProj;
 };

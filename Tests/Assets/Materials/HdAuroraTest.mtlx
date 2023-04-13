@@ -1,22 +1,14 @@
 <?xml version = "1.0" ?>
 <materialx version = "1.37"> 
-  <nodegraph name="NG1">
-    <image name="base_color_image" type="color3">
-      <parameter name="file" type="filename" value="../Textures/Mandrill.png" />
-      <parameter name="uaddressmode" type="string" value="periodic" />
-      <parameter name="vaddressmode" type="string" value="periodic" />
-    </image>
-    <output name="out1" type="color3" nodename="base_color_image" />
-  </nodegraph>
    <material name="SS_Material">
      <shaderref name="SS_ShaderRef1" node="standard_surface"> 
-      <bindinput name="base_color" type="color3" nodegraph="NG1" output="out1" />
-      <bindinput name="specular_color" type="color3" />
-      <bindinput name="specular_roughness" type="float" />
-      <bindinput name="specular_IOR" type="float" />
-      <bindinput name="emission_color" type="color3" />
-      <bindinput name="coat" type="float" />
-      <bindinput name="coat_roughness" type="float" />
+      <bindinput name="base_color" type="color3" value="1,0,1" />
+      <bindinput name="specular_color" type="color3" value="0,1,0" />
+      <bindinput name="specular_roughness" type="float" value="0.8" />
+      <bindinput name="specular_IOR" type="float" value = "0.75" />
+      <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+      <bindinput name="coat" type="float" value = "0.75" />
+      <bindinput name="coat_roughness" type="float" value = "0.75" />
     </shaderref>
   </material>
 </materialx>

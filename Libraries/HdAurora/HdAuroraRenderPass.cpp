@@ -3,6 +3,7 @@
 #include "HdAuroraRenderBuffer.h"
 #include "HdAuroraRenderDelegate.h"
 #include "HdAuroraRenderPass.h"
+#include "HdAuroraTokens.h"
 #include <pxr/imaging/garch/glApi.h>
 
 HdAuroraRenderPass::HdAuroraRenderPass(HdRenderIndex* index, HdRprimCollection const& collection,
@@ -133,6 +134,38 @@ void HdAuroraRenderPass::_Execute(
 
         _viewportSize.first  = viewportWidth;
         _viewportSize.second = viewportHeight;
+        _owner->SetSampleRestartNeeded(true);
+    }
+
+    // Get the view and projection matrices using the active camera of the render pass.
+    const auto camera = renderPassState->GetCamera();
+    GfMatrix4f viewMat(camera->GetTransform().GetInverse());
+    GfMatrix4f projMat(camera->ComputeProjectionMatrix());
+
+    // Check to see if we need to flip the output image.
+    // Default to true if not set.
+    bool flipY      = true;
+    auto flipYValue = this->_owner->GetRenderSetting(HdAuroraTokens::kFlipYOutput);
+    if (!flipYValue.IsEmpty() && flipYValue.IsHolding<bool>())
+        flipY = flipYValue.Get<bool>();
+    if (flipY)
+    {
+        // Invert the second row of the projection matrix to flip the rendered image, because OpenGL
+        // expects the first pixel to be at the *bottom* corner.
+        projMat[1][0] = -projMat[1][0];
+        projMat[1][1] = -projMat[1][1];
+        projMat[1][2] = -projMat[1][2];
+        projMat[1][3] = -projMat[1][3];
+    }
+
+    // Set the view and projection matrices on the renderer.
+    _owner->GetRenderer()->setCamera((float*)&viewMat, (float*)&projMat);
+
+    // check for camera movements
+    if (_cameraView != viewMat || _cameraProj != projMat)
+    {
+        _cameraView = viewMat;
+        _cameraProj = projMat;
         _owner->SetSampleRestartNeeded(true);
     }
 
