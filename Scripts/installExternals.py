@@ -52,7 +52,7 @@ if sys.version_info.major < 3:
     raise Exception("Python 3 or a more recent version is required.")
 
 ############################################################
-# Class representing an external dependency.  
+# Class representing an external dependency.
 # Each instance of the  class represents a dependency, and is added to the global dependency list in the constructor,
 
 AllDependencies = list()
@@ -412,16 +412,16 @@ TINYEXR = Dependency(TinyEXR_INSTALL_FOLDER, TinyEXR_PACKAGE_NAME, InstallTinyEX
 ############################################################
 # miniz
 
-MINIZ_URL = "https://github.com/richgel999/miniz/archive/refs/tags/3.0.2.zip"
+miniz_URL = "https://github.com/richgel999/miniz/archive/refs/tags/3.0.2.zip"
 
-MINIZ_INSTALL_FOLDER = "MiniZ"
-MINIZ_PACKAGE_NAME = "MiniZ"
+miniz_INSTALL_FOLDER = "miniz"
+miniz_PACKAGE_NAME = "miniz"
 
 def InstallMiniZ(context, force, buildArgs):
-    with CurrentWorkingDirectory(DownloadURL(MINIZ_URL, context, force)):
-        RunCMake(context, force, MINIZ_INSTALL_FOLDER, buildArgs)
+    with CurrentWorkingDirectory(DownloadURL(miniz_URL, context, force)):
+        RunCMake(context, force, miniz_INSTALL_FOLDER, buildArgs)
 
-MINIZ = Dependency(MINIZ_INSTALL_FOLDER, MINIZ_PACKAGE_NAME, InstallMiniZ, MINIZ_URL, "include/miniz/miniz_export.h")
+MINIZ = Dependency(miniz_INSTALL_FOLDER, miniz_PACKAGE_NAME, InstallMiniZ, miniz_URL, "include/miniz/miniz_export.h")
 
 ############################################################
 # uriparser
@@ -434,7 +434,7 @@ URIPARSER_PACKAGE_NAME = "uriparser"
 def InstallURIParser(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(URIPARSER_URL, context, force)):
 
-        extraArgs = ['-DURIPARSER_BUILD_TESTS=OFF ' 
+        extraArgs = ['-DURIPARSER_BUILD_TESTS=OFF '
                      '-DURIPARSER_BUILD_DOCS=OFF ',
                      '-DBUILD_SHARED_LIBS=OFF ',
                     ]

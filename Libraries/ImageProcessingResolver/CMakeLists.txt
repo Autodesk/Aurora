@@ -6,7 +6,7 @@ find_package(glm REQUIRED) # Find the GLM vector maths package.
 find_package(stb REQUIRED) # Find the Universal Scene Description (USD) library
 find_package(pxr REQUIRED) # Find the Universal Scene Description (USD) library
 find_package(OpenImageIO REQUIRED)
-find_package(MiniZ REQUIRED)
+find_package(miniz REQUIRED)
 find_package(uriparser REQUIRED)
 
 # Add shared library with all source files.
