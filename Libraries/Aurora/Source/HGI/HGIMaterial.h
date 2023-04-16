@@ -20,12 +20,13 @@ BEGIN_AURORA
 
 // Forward declarations.
 class HGIRenderer;
+struct MaterialData;
 
 // An internal implementation for IMaterial.
 class HGIMaterial : public MaterialBase
 {
 public:
-    HGIMaterial(HGIRenderer* pRenderer);
+    HGIMaterial(HGIRenderer* pRenderer, shared_ptr<MaterialDefinition> pDef);
     ~HGIMaterial() {};
 
     void update();
@@ -33,6 +34,7 @@ public:
     pxr::HgiBufferHandle ubo() { return _ubo->handle(); }
 
 private:
+    void updateGPUStruct(MaterialData& data);
     HGIRenderer* _pRenderer;
     HgiBufferHandleWrapper::Pointer _ubo;
 };

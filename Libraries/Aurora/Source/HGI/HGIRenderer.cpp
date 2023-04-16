@@ -309,7 +309,7 @@ IMaterialPtr HGIRenderer::createMaterialPointer(
     }
 
     // Create and return a new material object.
-    return make_shared<HGIMaterial>(this);
+    return make_shared<HGIMaterial>(this, nullptr);
 }
 
 IGeometryPtr HGIRenderer::createGeometryPointer(
