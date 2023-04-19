@@ -419,7 +419,11 @@ miniz_PACKAGE_NAME = "miniz"
 
 def InstallMiniZ(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(miniz_URL, context, force)):
-        RunCMake(context, force, miniz_INSTALL_FOLDER, buildArgs)
+        extraArgs = ['-DCMAKE_POSITION_INDEPENDENT_CODE=ON']
+
+        # Add on any user-specified extra arguments.
+        extraArgs += buildArgs
+        RunCMake(context, force, miniz_INSTALL_FOLDER, extraArgs)
 
 MINIZ = Dependency(miniz_INSTALL_FOLDER, miniz_PACKAGE_NAME, InstallMiniZ, miniz_URL, "include/miniz/miniz_export.h")
 
@@ -434,9 +438,10 @@ URIPARSER_PACKAGE_NAME = "uriparser"
 def InstallURIParser(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(URIPARSER_URL, context, force)):
 
-        extraArgs = ['-DURIPARSER_BUILD_TESTS=OFF '
+        extraArgs = ['-DURIPARSER_BUILD_TESTS=OFF ',
                      '-DURIPARSER_BUILD_DOCS=OFF ',
                      '-DBUILD_SHARED_LIBS=OFF ',
+                     '-DCMAKE_POSITION_INDEPENDENT_CODE=ON'
                     ]
 
         # Add on any user-specified extra arguments.

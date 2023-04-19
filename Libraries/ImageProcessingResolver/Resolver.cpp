@@ -27,7 +27,10 @@
 #define TINYEXR_IMPLEMENTATION
 #pragma warning(push)
 #pragma warning(disable : 4706)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #include "tinyexr.h"
+#pragma clang diagnostic pop
 #pragma warning(pop)
 
 #include <cstdio>
@@ -46,7 +49,7 @@ std::string assetPathPrefix = "@@@ImageProcessingAsset_";
 ImageProcessingResolverPlugin::ImageProcessingResolverPlugin() : ArDefaultResolver() {}
 
 ImageProcessingResolverPlugin::~ImageProcessingResolverPlugin()
-{ 
+{
 }
 
 std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(const ArResolvedPath& resolvedPath) const
@@ -124,9 +127,9 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(const ArResol
             // Set the cached asset.
             // TODO: Set a memory limit on size of cached assets.
             cacheEntry.pAsset = pAsset;
-        
+
         }
-        
+
         // Return the cached asset.
         return cacheEntry.pAsset;
 
@@ -164,16 +167,16 @@ std::string ImageProcessingResolverPlugin::CreateIdentifierFromURI(
         // If this is not an imageProcessing URI return empty string.
         if (scheme.compare("imageProcessing") != 0)
             return "";
-    
-        // Create a processed asset path string from hash.  
+
+        // Create a processed asset path string from hash.
         // Assume EXR filename as we only support HDR float32 RGBs currently.
         std::size_t assetHash = std::hash<std::string> {}(assetPath.c_str());
         ArResolvedPath generatedAssetPath =
             ArResolvedPath(assetPathPrefix + Aurora::Foundation::sHash(assetHash) + ".exr");
-         
+
         // Create an cache entry for this path.
         AssetCacheEntry cacheEntry = AssetCacheEntry(generatedAssetPath);
-            
+
         // Set the host which defines which processing function to run.
         cacheEntry.host = std::string(
             uri.hostText.first, (size_t)uri.hostText.afterLast - (size_t)uri.hostText.first);
@@ -203,13 +206,13 @@ std::string ImageProcessingResolverPlugin::CreateIdentifierFromURI(
 
         // Return processed asset path.
         return cacheEntry.assetPath.GetPathString();
-    
+
     }
     return "";
 }
 
 std::string ImageProcessingResolverPlugin::_CreateIdentifier(
-    const std::string& assetPath, const ArResolvedPath& anchorAssetPath) const 
+    const std::string& assetPath, const ArResolvedPath& anchorAssetPath) const
 {
     // If an imageProcessing URI was successfully parsed, return the processed asset path.
     std::string uriId = CreateIdentifierFromURI(assetPath, anchorAssetPath);

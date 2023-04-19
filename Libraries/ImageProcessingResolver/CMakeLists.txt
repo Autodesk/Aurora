@@ -55,12 +55,14 @@ PRIVATE
 # Add default compile definitions (set in root CMakefile)
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${DEFAULT_COMPILE_DEFINITIONS})
 
-# Create post-build step to copy to USD folder.
-set(IMAGEPROCESSINGRESOLVER_PLUGIN_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> $<$<CONFIG:Debug>:$<TARGET_PDB_FILE:${PROJECT_NAME}>> ${RUNTIME_OUTPUT_DIR}/usd
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${IMAGEPROCESSINGRESOLVER_PLUGIN_RESOURCES_DIR} ${RUNTIME_OUTPUT_DIR}/usd/ImageProcessingResolver/resources
-)
+if(WIN32)
+    # Create post-build step to copy to USD folder.
+    set(IMAGEPROCESSINGRESOLVER_PLUGIN_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> $<$<CONFIG:Debug>:$<TARGET_PDB_FILE:${PROJECT_NAME}>> ${RUNTIME_OUTPUT_DIR}/usd
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${IMAGEPROCESSINGRESOLVER_PLUGIN_RESOURCES_DIR} ${RUNTIME_OUTPUT_DIR}/usd/ImageProcessingResolver/resources
+    )
+endif()
 
 # Install the binaries.
 install(TARGETS ${PROJECT_NAME}  DESTINATION ${INSTALL_BIN}/usd)

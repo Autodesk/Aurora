@@ -88,7 +88,7 @@ void canonInverse(pxr::HioImage::StorageSpec& srcBlob, float exposure)
     }
 }
 
-bool linearize(const AssetCacheEntry& cacheEntry, pxr::HioImageSharedPtr const pImage,
+bool linearize(const AssetCacheEntry& cacheEntry, pxr::HioImageSharedPtr const /*pImage*/,
     pxr::HioImage::StorageSpec& imageData) {
 
     // If not RGB float32 return false;

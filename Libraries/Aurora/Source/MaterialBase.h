@@ -70,7 +70,7 @@ struct MaterialDefaultValues
     {
         AU_ASSERT(defaultProps.size() == propertyDefs.size(),
             "Default properties do not match definition");
-        for (int i = 0; i < defaultTxt.size(); i++)
+        for (size_t i = 0; i < defaultTxt.size(); i++)
         {
             textureNames.push_back(defaultTxt[i].name);
         }

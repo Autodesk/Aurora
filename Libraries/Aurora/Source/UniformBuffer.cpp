@@ -166,7 +166,7 @@ string UniformBuffer::generateByteAddressBufferAccessors(const string& prefix) c
 void UniformBuffer::reset(const string& name)
 {
     size_t index = getIndex(name);
-    if (index == -1)
+    if (index == size_t(-1))
     {
         AU_ERROR("Unknown property %s", name.c_str());
         return;

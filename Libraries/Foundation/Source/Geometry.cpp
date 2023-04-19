@@ -30,7 +30,7 @@ void calculateNormals(size_t vertexCount, const float* vertex, size_t triangleCo
     float angle2             = 1.0f;
     float angle3             = 1.0f;
 
-    for (int face = 0; face < triangleCount; ++face)
+    for (size_t face = 0; face < triangleCount; ++face)
     {
         const unsigned int& ip1 = indices[face * 3];
         const unsigned int& ip2 = indices[(face * 3) + 1];
@@ -88,7 +88,7 @@ void calculateNormals(size_t vertexCount, const float* vertex, size_t triangleCo
     }
 
     // normalize all the summed up normals
-    for (int i = 0; i < vertexCount; i++)
+    for (size_t i = 0; i < vertexCount; i++)
     {
         vec3* curPos = (vec3*)(normalOut + (i * 3));
         vec3 n       = normalize(*curPos);

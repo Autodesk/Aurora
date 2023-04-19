@@ -224,7 +224,7 @@ bool convertToLatLongLayout(
     return true;
 }
 
-bool convertEnvMapLayout(const AssetCacheEntry& record, pxr::HioImageSharedPtr const pImage,
+bool convertEnvMapLayout(const AssetCacheEntry& record, pxr::HioImageSharedPtr const /*pImage*/,
     pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf)
 {
     if (imageData.format != pxr::HioFormatFloat32Vec3)
