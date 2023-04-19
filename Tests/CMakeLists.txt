@@ -6,7 +6,6 @@ find_package(OpenImageIO REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GTest REQUIRED) # Find the GoogleTest unit test package.
 
-find_package(Vulkan REQUIRED)
 find_package(pxr REQUIRED)
 
 # Build list of backends

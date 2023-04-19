@@ -46,7 +46,7 @@ if(NOT OPENSUBDIV_FOUND)
 endif()
 if(NOT Vulkan_shaderc_combined_FOUND)
   # Vulkan is required by hgiVulkan
-  find_package(Vulkan COMPONENTS shaderc_combined REQUIRED) # requires cmake 3.24
+  find_package(Vulkan COMPONENTS shaderc_combined) # requires cmake 3.24
 endif()
 if(NOT OpenGL_FOUND)
   find_package(OpenGL REQUIRED)
@@ -62,7 +62,11 @@ set(PXR_LIBRARY_DIR "${PXR_INSTALL_PREFIX}/lib")
 set(PXR_LIBRARY_DIRS "${PXR_LIBRARY_DIR}")
 
 # Configure all USD targets
-set(USD_COMPOMPONENTS arch tf gf js trace work plug vt ar kind sdf ndr sdr pcp usd usdGeom usdVol usdMedia usdShade usdLux usdProc usdRender usdHydra usdRi usdSkel usdUI usdUtils usdPhysics garch hf hio cameraUtil pxOsd glf hgi hgiGL hgiVulkan hgiInterop hd hdGp hdsi hdSt hdx usdImaging usdImagingGL usdProcImaging usdRiImaging usdSkelImaging usdVolImaging usdAppUtils)
+set(USD_COMPOMPONENTS arch tf gf js trace work plug vt ar kind sdf ndr sdr pcp usd usdGeom usdVol usdMedia usdShade usdLux usdProc usdRender usdHydra usdRi usdSkel usdUI usdUtils usdPhysics garch hf hio cameraUtil pxOsd glf hgi hgiGL hgiInterop hd hdGp hdsi hdSt hdx usdImaging usdImagingGL usdProcImaging usdRiImaging usdSkelImaging usdVolImaging usdAppUtils)
+
+if(Vulkan_shaderc_combined_FOUND)
+  list(APPEND USD_COMPOMPONENTS "hgiVulkan")
+endif()
 
 if(USD_COMPOMPONENTS_USDVIEW)
   list(APPEND USD_COMPOMPONENTS "usdviewq")
