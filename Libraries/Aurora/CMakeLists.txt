@@ -371,16 +371,16 @@ if(ENABLE_HGI_BACKEND)
 endif()
 
 if(ENABLE_DIRECTX_BACKEND)
-    set(D2D12_TARGETS D3D12::D3D12 D3D12::compiler)
+    set(D3D12_TARGETS D3D12::D3D12 D3D12::compiler)
 else()
-    set(D2D12_TARGETS "")
+    set(D3D12_TARGETS "")
 endif()
 
 target_link_libraries(${PROJECT_NAME}
 PRIVATE
     Foundation
     ${MATERIALX_TARGETS} # MaterialX needs to be in front of USD due to the conflicts of MaterialX.h in USD
-    ${D2D12_TARGETS}
+    ${D3D12_TARGETS}
     ${USD_TARGETS}
     ${DENOISER_TARGETS}
     stb::stb
