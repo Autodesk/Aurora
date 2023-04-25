@@ -130,6 +130,13 @@ MaterialResource::MaterialResource(const Aurora::Path& path, const ResourceMap& 
                _resource->values().setFloat(propName, value);
            } } });
 
+    // Setup a default applicator function so all vec2 properties are applied to the underlying
+    // material resource.
+    initializeVec2Applicators(
+        { { ResourceStub::kDefaultPropName, [this](string propName, vec2 value) {
+               _resource->values().setFloat2(propName, (float*)&value);
+           } } });
+
     // Setup a default applicator function so all vec3 properties are applied to the underlying
     // material resource.
     initializeVec3Applicators(
