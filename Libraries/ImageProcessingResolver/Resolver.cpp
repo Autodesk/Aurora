@@ -10,9 +10,9 @@
 // limitations under the License.
 #include "pch.h"
 
-#include "Resolver.h"
-#include "Linearize.h"
 #include "ConvertEnvMapLayout.h"
+#include "Linearize.h"
+#include "Resolver.h"
 
 #define URI_STATIC_BUILD 1
 #include "uriparser/Uri.h"
@@ -40,7 +40,6 @@
 #include <mutex>
 #include <thread>
 
-
 using namespace pxr;
 
 // Asset path prefix, used once asset URI is processed.
@@ -48,11 +47,10 @@ std::string assetPathPrefix = "@@@ImageProcessingAsset_";
 
 ImageProcessingResolverPlugin::ImageProcessingResolverPlugin() : ArDefaultResolver() {}
 
-ImageProcessingResolverPlugin::~ImageProcessingResolverPlugin()
-{
-}
+ImageProcessingResolverPlugin::~ImageProcessingResolverPlugin() {}
 
-std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(const ArResolvedPath& resolvedPath) const
+std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
+    const ArResolvedPath& resolvedPath) const
 {
     // Get string for path.
     std::string pathStr = resolvedPath.GetPathString();
@@ -61,7 +59,8 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(const ArResol
     if (pathStr.find(assetPathPrefix) != std::string::npos)
     {
         // Get the cacheEntry for this URI.
-        AssetCacheEntry& cacheEntry = const_cast<ImageProcessingResolverPlugin*>(this)->_assetCache[pathStr];
+        AssetCacheEntry& cacheEntry =
+            const_cast<ImageProcessingResolverPlugin*>(this)->_assetCache[pathStr];
 
         // If we do not have an asset cached, create one.
         if (!cacheEntry.pAsset)
@@ -83,33 +82,39 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(const ArResol
 
             // Read the source image into the temp buffer.
             pxr::HioImage::StorageSpec imageData;
-            imageData.width    = image->GetWidth();
-            imageData.height   = image->GetHeight();
-            imageData.depth    = 1;
-            imageData.flipped  = false;
-            imageData.format   = image->GetFormat();
-            imageData.data = imageBuf.data();
+            imageData.width   = image->GetWidth();
+            imageData.height  = image->GetHeight();
+            imageData.depth   = 1;
+            imageData.flipped = false;
+            imageData.format  = image->GetFormat();
+            imageData.data    = imageBuf.data();
             image->Read(imageData);
 
             // The asset object (that will be cached in this resolver class.)
             std::shared_ptr<ResolverAsset> pAsset;
 
+            if (cacheEntry.host.compare("linearize") == 0)
+            {
+                // Run the linearize function if host string indicated that function.
+                // This will overwrite the temp buffer in imageBuf with a resized vector if the
+                // input is LDR.
+                if (!linearize(cacheEntry, image, imageData, imageBuf))
+                    return nullptr;
+            }
+            else if (cacheEntry.host.compare("convertEnvMapLayout") == 0)
+            {
+                // Run the convert environment map function if host string indicated that function.
+                // This will overwrite the temp buffer in imageBuf with a resized vector.
+                if (!convertEnvMapLayout(cacheEntry, image, imageData, imageBuf))
+                    return nullptr;
+            }
+
             // Currently only RGB float32 supported.
             if (imageData.format == HioFormatFloat32Vec3)
             {
-                if (cacheEntry.host.compare("linearize") == 0)
-                {
-                    // Run the linearize function if host string indicated that function.
-                    linearize(cacheEntry, image, imageData);
-                }
-                else if (cacheEntry.host.compare("convertEnvMapLayout") == 0)
-                {
-                    // Run the convert environment map function if host string indicated that function.
-                    // This will overwrite the temp buffer in imageBuf with a resized vector.
-                    convertEnvMapLayout(cacheEntry, image, imageData, imageBuf);
-                }
 
-                // Re-encode the image data as an EXR (as the rest of the USD stack expects an image file from the ArResolver.)
+                // Re-encode the image data as an EXR (as the rest of the USD stack expects an image
+                // file from the ArResolver.)
                 unsigned char* pBuffer;
                 const char* pErr;
                 int len = SaveEXRToMemory((const float*)imageData.data, imageData.width,
@@ -124,15 +129,19 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(const ArResol
                 // Free the buffer (as the ArAsset has taken a copy.)
                 free(pBuffer);
             }
+            else
+            {
+                AU_ERROR("Unsupported format:%x", imageData.format);
+                return nullptr;
+            }
+
             // Set the cached asset.
             // TODO: Set a memory limit on size of cached assets.
             cacheEntry.pAsset = pAsset;
-
         }
 
         // Return the cached asset.
         return cacheEntry.pAsset;
-
     }
 
     // If not an imageProcesing URI run the default _OpenAsset Function.
@@ -140,7 +149,8 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(const ArResol
     return pRes;
 }
 
-ArResolvedPath ImageProcessingResolverPlugin::_Resolve(const std::string& assetPath) const {
+ArResolvedPath ImageProcessingResolverPlugin::_Resolve(const std::string& assetPath) const
+{
 
     // If this is a processed URI path, generated by _CreateIdentifier, just return it unaltered.
     if (assetPath.find(assetPathPrefix) != std::string::npos)
@@ -168,14 +178,8 @@ std::string ImageProcessingResolverPlugin::CreateIdentifierFromURI(
         if (scheme.compare("imageProcessing") != 0)
             return "";
 
-        // Create a processed asset path string from hash.
-        // Assume EXR filename as we only support HDR float32 RGBs currently.
-        std::size_t assetHash = std::hash<std::string> {}(assetPath.c_str());
-        ArResolvedPath generatedAssetPath =
-            ArResolvedPath(assetPathPrefix + Aurora::Foundation::sHash(assetHash) + ".exr");
-
         // Create an cache entry for this path.
-        AssetCacheEntry cacheEntry = AssetCacheEntry(generatedAssetPath);
+        AssetCacheEntry cacheEntry = AssetCacheEntry();
 
         // Set the host which defines which processing function to run.
         cacheEntry.host = std::string(
@@ -184,29 +188,52 @@ std::string ImageProcessingResolverPlugin::CreateIdentifierFromURI(
         // Build a query dictionary which defines the function parameters.
         UriQueryListA* queryList;
         int itemCount;
-        if (uriDissectQueryMallocA(
-                &queryList, &itemCount, uri.query.first, uri.query.afterLast) == URI_SUCCESS)
+        if (uriDissectQueryMallocA(&queryList, &itemCount, uri.query.first, uri.query.afterLast) ==
+            URI_SUCCESS)
         {
             while (queryList)
             {
                 cacheEntry.queries[queryList->key] = queryList->value;
-                queryList                      = queryList->next;
+                queryList                          = queryList->next;
             }
 
-            // Set the source file name from the file query parameter (Which is common to all functions)
+            // Set the source file name from the file query parameter (Which is common to all
+            // functions)
             cacheEntry.sourceFilename =
                 ArDefaultResolver::_CreateIdentifier(cacheEntry.queries["file"], anchorAssetPath);
         }
 
-        // If there is no cacheEntry for this path, or the sourceFilename has changed (due to anchor changing) then add to cache.
+        // Create a hash from original URI.
+        std::size_t assetHash = std::hash<std::string> {}(assetPath.c_str());
+
+        // All images are assigned .exr extension currently.
+        string ext = ".exr";
+
+// Even LDR images are converted to EXR currently.
+// TODO: Image processing algoritm should define the output extension.
+#if 0   
+        if (cacheEntry.sourceFilename.find_last_of(".png") != string::npos ||
+            cacheEntry.sourceFilename.find_last_of(".jpg") != string::npos ||
+            cacheEntry.sourceFilename.find_last_of(".bmp") != string::npos ||
+            cacheEntry.sourceFilename.find_last_of(".tif") != string::npos)
+                ext = ".png";
+#endif
+
+        // Create generated asset path from hash.
+        ArResolvedPath generatedAssetPath =
+            ArResolvedPath(assetPathPrefix + Aurora::Foundation::sHash(assetHash) + ext);
+        cacheEntry.assetPath = generatedAssetPath;
+
+        // If there is no cacheEntry for this path, or the sourceFilename has changed (due to anchor
+        // changing) then add to cache.
         auto& assetCache = const_cast<ImageProcessingResolverPlugin*>(this)->_assetCache;
-        auto recordIter = assetCache.find(generatedAssetPath);
-        if (recordIter == assetCache.end() || recordIter->second.sourceFilename.compare(cacheEntry.sourceFilename)!=0)
+        auto recordIter  = assetCache.find(generatedAssetPath);
+        if (recordIter == assetCache.end() ||
+            recordIter->second.sourceFilename.compare(cacheEntry.sourceFilename) != 0)
             assetCache[generatedAssetPath] = cacheEntry;
 
         // Return processed asset path.
         return cacheEntry.assetPath.GetPathString();
-
     }
     return "";
 }

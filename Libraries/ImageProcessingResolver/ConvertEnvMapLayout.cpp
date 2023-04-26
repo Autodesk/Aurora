@@ -31,7 +31,8 @@
 #pragma warning(disable : 4100) // disable simd.h warning about unreferenced formal parameters.
 #pragma warning(disable : 4244) // disable simd.h warning about type conversion.
 #pragma warning(disable : 4267) // disable harmhash.h warning conversion from 'size_t' to 'uint32_t'
-#pragma warning(disable : 4456) // disable harmhash.h warning declaration hides previous local declaration
+#pragma warning(                                                                                   \
+    disable : 4456) // disable harmhash.h warning declaration hides previous local declaration
 #include "OpenImageIO/imagebuf.h"
 #include "OpenImageIO/imagebufalgo.h"
 #include "OpenImageIO/imageio.h"
@@ -40,8 +41,6 @@
 #if __clang__
 #pragma clang diagnostic pop
 #endif
-
-
 
 OIIO::TypeDesc::BASETYPE convertToOIIODataType(pxr::HioType type)
 {
@@ -80,16 +79,15 @@ int gcd(int a, int b)
 
 std::vector<OIIO::ImageBuf> getSixFacesFromSourceImage(pxr::HioImage::StorageSpec& imageData)
 {
-    int numChannels = pxr::HioGetComponentCount(imageData.format);
-    pxr::HioType hioType                          = pxr::HioGetHioType(imageData.format);
+    int numChannels                          = pxr::HioGetComponentCount(imageData.format);
+    pxr::HioType hioType                     = pxr::HioGetHioType(imageData.format);
     int iGcd                                 = gcd(imageData.width, imageData.height);
     int iRatio                               = 0;
     iRatio                                   = imageData.width / iGcd;
     std::vector<OIIO::ImageBuf> vecImageList = {};
     OIIO::TypeDesc type                      = convertToOIIODataType(hioType);
     OIIO::ImageSpec subImageSpec(iGcd, iGcd, numChannels, type);
-    OIIO::ImageSpec srcImageSpec(
-        imageData.width, imageData.height, numChannels, type);
+    OIIO::ImageSpec srcImageSpec(imageData.width, imageData.height, numChannels, type);
     OIIO::ImageBuf srcBuf(srcImageSpec, imageData.data);
     OIIO::ImageBuf des(subImageSpec);
     std::stringstream s;
@@ -156,20 +154,20 @@ std::vector<OIIO::ImageBuf> getSixFacesFromSourceImage(pxr::HioImage::StorageSpe
 }
 
 bool convertToLatLongLayout(
-    pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char> &imageBuf)
+    pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf)
 {
-    int nChannels   = pxr::HioGetComponentCount(imageData.format);
-    pxr::HioType hioType     = pxr::HioGetHioType(imageData.format);
+    int nChannels        = pxr::HioGetComponentCount(imageData.format);
+    pxr::HioType hioType = pxr::HioGetHioType(imageData.format);
 
     OIIO::TypeDesc type = convertToOIIODataType(hioType);
     OIIO::ImageSpec spec(imageData.width, imageData.height, nChannels, type);
-    spec.full_x      = spec.x;
-    spec.full_y      = spec.y;
-    spec.full_z      = spec.z;
-    spec.full_width  = spec.width;
-    spec.full_height = spec.height;
-    spec.full_depth  = spec.depth;
-    int patch        = gcd(imageData.width, imageData.height);
+    spec.full_x       = spec.x;
+    spec.full_y       = spec.y;
+    spec.full_z       = spec.z;
+    spec.full_width   = spec.width;
+    spec.full_height  = spec.height;
+    spec.full_depth   = spec.depth;
+    int patch         = gcd(imageData.width, imageData.height);
     size_t outputSize = 4 * patch * 2 * patch * nChannels * sizeof(float);
     OIIO::ImageSpec latlongspec(4 * patch, 2 * patch, nChannels, type);
     std::vector<unsigned char> newPixels(outputSize);
@@ -218,7 +216,7 @@ bool convertToLatLongLayout(
         }
     }
     imageBuf         = newPixels;
-    imageData.width = 4 * patch;
+    imageData.width  = 4 * patch;
     imageData.height = 2 * patch;
     imageData.data   = imageBuf.data();
     return true;
@@ -227,6 +225,24 @@ bool convertToLatLongLayout(
 bool convertEnvMapLayout(const AssetCacheEntry& record, pxr::HioImageSharedPtr const /*pImage*/,
     pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf)
 {
+
+    std::string targetLayout;
+    record.getQuery("targetLayout", &targetLayout);
+    if (targetLayout.compare("latlon") != 0)
+    {
+        AU_WARN("Only latlon target layout supported.");
+        return false;
+    }
+
+    // If the width is 2x the height then we infer the image is already in lat-long layout.
+    if (imageData.width == imageData.height * 2)
+    {
+        AU_WARN(
+            "Image dimensions imply image is already in lat-long format, returning unconverted "
+            "image.");
+        return true;
+    }
+
     if (imageData.format != pxr::HioFormatFloat32Vec3)
     {
         AU_WARN("Unsupported format for env map conversion");
@@ -238,14 +254,6 @@ bool convertEnvMapLayout(const AssetCacheEntry& record, pxr::HioImageSharedPtr c
     if (sourceLayout.compare("cube") != 0)
     {
         AU_WARN("Only cube source layout supported.");
-        return false;
-    }
-
-    std::string targetLayout;
-    record.getQuery("targetLayout", &targetLayout);
-    if (targetLayout.compare("latlon") != 0)
-    {
-        AU_WARN("Only latlon target layout supported.");
         return false;
     }
 

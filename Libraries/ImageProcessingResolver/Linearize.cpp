@@ -48,20 +48,33 @@ float reverseSpectrumToneMappingHigh(float x)
     return a * (t1 * x + t2 * x2 + t3 * x3) / (d0 + d1 * x + d2 * x2 + d3 * x3);
 }
 
-void canonInverse(pxr::HioImage::StorageSpec& srcBlob, float exposure)
+void canonInverse(
+    pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf, float exposure)
 {
     // Work out channel count from HIO format.
-    int numChannels = pxr::HioGetComponentCount(srcBlob.format);
+    int numChannels = pxr::HioGetComponentCount(imageData.format);
 
+    // Compute 2^exposure.
     float exposure2 = exp2(exposure);
-    float* dst      = static_cast<float*>(srcBlob.data);
-    int imagewidth  = srcBlob.width;
-    int imageheight = srcBlob.height;
+
+    // Image dims and pixel count.
+    int imagewidth  = imageData.width;
+    int imageheight = imageData.height;
     int pixels      = imagewidth * imageheight * numChannels;
 
+    // If the input format is LDR we must convert to float first, use temp buffer.
+    bool isConversionRequired = imageData.format == pxr::HioFormatUNorm8Vec3srgb;
+    unsigned char* srcBytes   = imageBuf.data();
+    float* dst                = reinterpret_cast<float*>(srcBytes);
     if (!dst)
     {
         return;
+    }
+    vector<unsigned char> newPixels;
+    if (isConversionRequired)
+    {
+        newPixels.resize(pixels * sizeof(float));
+        dst = reinterpret_cast<float*>(newPixels.data());
     }
 
     const float spectrumTonemapMin = -2.152529302052785809f;
@@ -72,27 +85,45 @@ void canonInverse(pxr::HioImage::StorageSpec& srcBlob, float exposure)
     const float shift = 0.18f;
     for (int i = 0; i < pixels; ++i)
     {
-        if (dst[i] < lowHighBreak)
+        float val;
+        if (isConversionRequired)
+            val = float(srcBytes[i]) / 255.0f;
+        else
+            val = dst[i];
+
+        if (val < lowHighBreak)
         {
-            dst[i] = reverseSpectrumToneMappingLow(dst[i]);
+            val = reverseSpectrumToneMappingLow(val);
         }
         else
         {
-            dst[i] = reverseSpectrumToneMappingHigh(dst[i]);
+            val = reverseSpectrumToneMappingHigh(val);
         }
-        dst[i] = pxr::GfClamp(dst[i], 0.0f, 1.0f);
-        dst[i] = dst[i] * (spectrumTonemapMax - spectrumTonemapMin) + spectrumTonemapMin;
-        dst[i] = pxr::GfPow(10.0f, dst[i]);
-        dst[i] /= exposure2;
-        dst[i] *= shift;
+        val = pxr::GfClamp(val, 0.0f, 1.0f);
+        val = val * (spectrumTonemapMax - spectrumTonemapMin) + spectrumTonemapMin;
+        val = pxr::GfPow(10.0f, val);
+        val /= exposure2;
+        val *= shift;
+
+        dst[i] = val;
+    }
+
+    // Copy the temp buffer to the output buffer, if used.
+    if (isConversionRequired)
+    {
+        imageBuf = newPixels;
+        imageData.data = imageBuf.data();
+        imageData.format = pxr::HioFormatFloat32Vec3;
     }
 }
 
 bool linearize(const AssetCacheEntry& cacheEntry, pxr::HioImageSharedPtr const /*pImage*/,
-    pxr::HioImage::StorageSpec& imageData) {
+    pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf)
+{
 
     // If not RGB float32 return false;
-    if (imageData.format != pxr::HioFormatFloat32Vec3)
+    if (imageData.format != pxr::HioFormatFloat32Vec3 &&
+        imageData.format != pxr::HioFormatUNorm8Vec3srgb)
     {
         AU_WARN("Unsupported format for linearizatoin");
         return false;
@@ -103,7 +134,7 @@ bool linearize(const AssetCacheEntry& cacheEntry, pxr::HioImageSharedPtr const /
     cacheEntry.getQuery("exposure", &exposure);
 
     // Run inverse tone mapping to linearize image.
-    canonInverse(imageData, exposure);
+    canonInverse(imageData, imageBuf, exposure);
 
     // Return success.
     return true;
