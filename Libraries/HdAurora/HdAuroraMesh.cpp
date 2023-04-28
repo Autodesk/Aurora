@@ -108,6 +108,10 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
     _pVertexData->tangents = delegate->Get(id, pxr::TfToken("tangents")).Get<VtVec3fArray>();
     _pVertexData->uvs      = delegate->Get(id, pxr::TfToken("map1")).Get<VtVec2fArray>();
 
+    // Attempt to get UVs using "st" token if "map1" fails.  Both can be used in different circumstances.
+    if (_pVertexData->uvs.size()==0)
+        _pVertexData->uvs = delegate->Get(id, pxr::TfToken("st")).Get<VtVec2fArray>();
+
     // Sample code for extracting extra uv set
     // The name for the base uv set is st, other uv sets (st0, st1, etc.)
     HdPrimvarDescriptorVector pvs =

@@ -13,8 +13,6 @@
 // limitations under the License.
 
 // Prefix containing the common code used by all material types.
-// NOTE: Does not contain a hit shader. Hit shaders for the different material types must be
-// appended to this file.
 #include "PathTracingCommon.slang"
 
 // The background miss shader, which evaluates the environment as a background. This is

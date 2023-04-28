@@ -37,7 +37,7 @@ class MaterialGenerator;
 // Forward references.
 class AssetManager;
 class PTDevice;
-class PTMaterialType;
+class MaterialShader;
 class PTShaderLibrary;
 class ScratchBufferPool;
 class VertexBufferPool;
@@ -134,7 +134,7 @@ private:
     void createUAV(ID3D12Resource* pTexture, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle);
     void copyTextureToTarget(ID3D12Resource* pTexture, PTTarget* pTarget);
     bool isDenoisingAOVsEnabled() const;
-    shared_ptr<PTMaterialType> generateMaterialX(
+    shared_ptr<MaterialShader> generateMaterialX(
         const string& document, shared_ptr<MaterialDefinition>* pDefOut);
     PTScenePtr dxScene() { return static_pointer_cast<PTScene>(_pScene); }
 

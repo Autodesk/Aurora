@@ -1,0 +1,76 @@
+<?xml version='1.0' encoding='utf-8'?>
+<materialx version="1.38">
+  <nodegraph name="NG_NormalMapExample">
+    <output name="normal_output" type="vector3" nodename="node_normalmap" />
+    <texcoord name="node_texcoord_vector2_6" type="vector2">
+      <input name="index" type="integer" value="0" />
+    </texcoord>
+    <multiply name="node_multiply_5" type="vector2">
+      <input name="in1" type="vector2" nodename="node_texcoord_vector2_6" />
+      <input name="in2" type="float" nodename="UVScale" />
+    </multiply>
+    <image name="node_image_vector3_9" type="vector3" GLSLFX_usage="normal" expose="true">
+      <input name="texcoord" type="vector2" nodename="node_multiply_5" />
+      <input name="file" type="filename" value="../textures/Verde_Guatemala_Slatted_Marble_normal.png"  colorspace="lin_rec709" />
+      <input name="layer" type="string" value="" />
+      <input name="default" type="vector3" value=" 0.000000, 0.000000, 0.000000" />
+      <input name="uaddressmode" type="string" value="periodic" />
+      <input name="vaddressmode" type="string" value="periodic" />
+      <input name="filtertype" type="string" value="linear" />
+      <input name="framerange" type="string" value="" />
+      <input name="frameoffset" type="integer" value="0" />
+      <input name="frameendaction" type="string" value="constant" />
+    </image>
+    <normalmap name="node_normalmap" type="vector3">
+      <input name="in" type="vector3" nodename="node_image_vector3_9" />
+    </normalmap>
+    <constant name="UVScale" type="float">
+      <input name="value" type="float" value="0.75" />
+    </constant>
+  </nodegraph>
+  <standard_surface name="SR_NormalMapExample" type="surfaceshader">
+    <input name="base" type="float" value="0.800000011920929" />
+    <input name="base_color" type="color3" value=" 0.6000000, 0.6000000, 1.000000" />
+    <input name="diffuse_roughness" type="float" value="0.0" />
+    <input name="metalness" type="float" value="0.0" />
+    <input name="specular" type="float" value="1.0" />
+    <input name="specular_color" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="specular_roughness" type="float" value="0.1" />
+    <input name="specular_IOR" type="float" value="1.5" />
+    <input name="specular_anisotropy" type="float" value="0.0" />
+    <input name="specular_rotation" type="float" value="0.0" />
+    <input name="transmission" type="float" value="0.0" />
+    <input name="transmission_color" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="transmission_depth" type="float" value="0.0" />
+    <input name="transmission_scatter" type="color3" value=" 0.000000, 0.000000, 0.000000" />
+    <input name="transmission_scatter_anisotropy" type="float" value="0.0" />
+    <input name="transmission_dispersion" type="float" value="0.0" />
+    <input name="transmission_extra_roughness" type="float" value="0.0" />
+    <input name="subsurface" type="float" value="0.0" />
+    <input name="subsurface_color" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="subsurface_radius" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="subsurface_scale" type="float" value="1.0" />
+    <input name="subsurface_anisotropy" type="float" value="0.0" />
+    <input name="sheen" type="float" value="0.0" />
+    <input name="sheen_color" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="sheen_roughness" type="float" value="0.30000001192092896" />
+    <input name="coat" type="float" value="0.0" />
+    <input name="coat_color" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="coat_roughness" type="float" value="0.10000000149011612" />
+    <input name="coat_anisotropy" type="float" value="0.0" />
+    <input name="coat_rotation" type="float" value="0.0" />
+    <input name="coat_IOR" type="float" value="1.5" />
+    <input name="coat_affect_color" type="float" value="0.0" />
+    <input name="coat_affect_roughness" type="float" value="0.0" />
+    <input name="thin_film_thickness" type="float" value="0.0" />
+    <input name="thin_film_IOR" type="float" value="1.5" />
+    <input name="emission" type="float" value="0.0" />
+    <input name="emission_color" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="opacity" type="color3" value=" 1.000000, 1.000000, 1.000000" />
+    <input name="thin_walled" type="boolean" value="false" />
+    <input name="normal" type="vector3" output="normal_output" nodegraph="NG_NormalMapExample"  />
+  </standard_surface>
+  <surfacematerial name="NormalMapExample" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="SR_NormalMapExample" />
+  </surfacematerial>
+</materialx>

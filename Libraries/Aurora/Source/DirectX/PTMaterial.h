@@ -19,7 +19,7 @@ BEGIN_AURORA
 
 // Forward declarations.
 class PTRenderer;
-class PTMaterialType;
+class MaterialShader;
 class PTShaderLibrary;
 struct MaterialDefaultValues;
 
@@ -44,7 +44,7 @@ public:
 
     /*** Lifetime Management ***/
 
-    PTMaterial(PTRenderer* pRenderer, shared_ptr<PTMaterialType> pType,
+    PTMaterial(PTRenderer* pRenderer, MaterialShaderPtr pShader,
         shared_ptr<MaterialDefinition> pDef);
     ~PTMaterial() {};
 
@@ -67,9 +67,6 @@ public:
     // Gets the constant buffer for this material.
     ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
 
-    // Gets the material type for this material.
-    shared_ptr<PTMaterialType> materialType() const { return _pType; }
-
     bool update();
     void createDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT increment) const;
     void createSamplerDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT increment) const;
@@ -86,7 +83,6 @@ private:
 
     PTRenderer* _pRenderer = nullptr;
     ID3D12ResourcePtr _pConstantBuffer;
-    shared_ptr<PTMaterialType> _pType;
 };
 MAKE_AURORA_PTR(PTMaterial);
 

@@ -15,111 +15,9 @@
 
 #include "Properties.h"
 #include "UniformBuffer.h"
+#include "MaterialDefinition.h"
 
 BEGIN_AURORA
-
-class MaterialBase;
-
-// Representation of the shader source for a material type.  Contains source code itself and a
-// unique name string.
-struct MaterialTypeSource
-{
-    MaterialTypeSource(const string& typeName = "", const string& setupSource = "",
-        const string& bsdfSource = "") :
-        name(typeName), setup(setupSource), bsdf(bsdfSource)
-    {
-    }
-
-    // Compare the source itself.
-    bool compareSource(const MaterialTypeSource& other) const
-    {
-        return (setup.compare(other.setup) == 0 && bsdf.compare(other.bsdf) == 0);
-    }
-
-    // Compare the name.
-    bool compare(const MaterialTypeSource& other) const { return (name.compare(other.name) == 0); }
-
-    // Reset the contents to empty strings.
-    void reset()
-    {
-        name  = "";
-        setup = "";
-        bsdf  = "";
-    }
-
-    // Is there actually source associated with this material type?
-    bool empty() const { return name.empty(); }
-
-    // Unique name (assigning different source the same name will result in errors).
-    string name;
-
-    // Shader source for material setup.
-    string setup;
-
-    // Optional shader source for bsdf.
-    string bsdf;
-};
-
-// The default values for the properties and textures contained in a material.
-struct MaterialDefaultValues
-{
-    MaterialDefaultValues() {}
-    MaterialDefaultValues(const UniformBufferDefinition& propertyDefs,
-        const vector<PropertyValue>& defaultProps, const vector<TextureDefinition>& defaultTxt) :
-        propertyDefinitions(propertyDefs), properties(defaultProps), textures(defaultTxt)
-    {
-        AU_ASSERT(defaultProps.size() == propertyDefs.size(),
-            "Default properties do not match definition");
-        for (size_t i = 0; i < defaultTxt.size(); i++)
-        {
-            textureNames.push_back(defaultTxt[i].name);
-        }
-    }
-
-    // The names of the textures defined for this material.
-    vector<string> textureNames;
-
-    // The definitions of the properties defined for this material.
-    UniformBufferDefinition propertyDefinitions;
-
-    // Default values for properties, must match order and size of propertyDefinitions.
-    vector<PropertyValue> properties;
-
-    // Default values (include texture filename and sampler properties) for textures, must match
-    //  match order and size of textureNames.
-    vector<TextureDefinition> textures;
-};
-
-// The definition of a material. All the data need to create a material: the shader source code, a
-// set of default values, and an update callback function.
-class MaterialDefinition
-{
-public:
-    MaterialDefinition(const MaterialTypeSource& source, const MaterialDefaultValues& defaults,
-        function<void(MaterialBase&)> updateFunc) :
-        _source(source), _defaults(defaults), _updateFunc(updateFunc)
-    {
-    }
-    MaterialDefinition() {}
-
-    // Get the material source code.
-    const MaterialTypeSource& source() const { return _source; }
-
-    // Get the default value.
-    const MaterialDefaultValues& defaults() const { return _defaults; }
-
-    // Get the update the function, that is invoked when the material is updated.
-    const function<void(MaterialBase&)>& updateFunction() const { return _updateFunc; }
-
-private:
-    // A shared pointer to the material type, shared_ptr so material type will kept alive for
-    // lifetime of this object.
-    MaterialTypeSource _source;
-    // The default values for the material.
-    MaterialDefaultValues _defaults;
-    // The update function, called when material is changed.
-    function<void(MaterialBase&)> _updateFunc;
-};
 
 // A base class for implementations of IMaterial.
 class MaterialBase : public IMaterial, public FixedValues
@@ -127,12 +25,15 @@ class MaterialBase : public IMaterial, public FixedValues
 public:
     /*** Lifetime Management ***/
 
-    MaterialBase(shared_ptr<MaterialDefinition> pDef);
+    MaterialBase(MaterialShaderPtr pShader, MaterialDefinitionPtr pDef);
 
     /*** IMaterial Functions ***/
 
-    IValues& values() override { return *this; }
+    // Gets the material shader for this material.
+    MaterialShaderPtr shader() const { return _pShader; }
 
+    IValues& values() override { return *this; }
+    
     // Override default setter.
     void setBoolean(const string& name, bool value) override
     {
@@ -219,11 +120,14 @@ public:
     // Update function for built-in materials.
     static void updateBuiltInMaterial(MaterialBase& mtl);
 
+    shared_ptr<MaterialDefinition> definition() { return _pDef; }
+
 protected:
     bool _isOpaque = true;
 
 private:
-    shared_ptr<MaterialDefinition> _pDef;
+    MaterialDefinitionPtr _pDef;
+    MaterialShaderPtr _pShader;
     UniformBuffer _uniformBuffer;
 };
 

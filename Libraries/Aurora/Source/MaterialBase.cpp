@@ -226,9 +226,10 @@ vector<PropertyValue> StandardSurfaceDefaultProperties = {
 MaterialDefaultValues MaterialBase::StandardSurfaceDefaults(
     StandardSurfaceUniforms, StandardSurfaceDefaultProperties, StandardSurfaceDefaultTextures);
 
-MaterialBase::MaterialBase(shared_ptr<MaterialDefinition> pDef) :
+MaterialBase::MaterialBase(MaterialShaderPtr pShader, MaterialDefinitionPtr pDef) :
     FixedValues(propertySet()),
     _pDef(pDef),
+    _pShader(pShader),
     _uniformBuffer(pDef->defaults().propertyDefinitions, pDef->defaults().properties)
 {
 }

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 // Prefix containing the common code used by all material types.
-// NOTE: Does not contain a hit shader. Hit shaders for the different material types must be
-// appended to this file.
+#ifndef PATHTRACINGCOMMON_H
+#define PATHTRACINGCOMMON_H
 
 // Define this symbol for NRD.
 #define COMPILER_DXC
@@ -213,3 +213,5 @@ void adjustRadiance(float maxLuminance, bool displayErrors, inout float3 radianc
         radiance = displayErrors ? INF_COLOR : BLACK;
     }
 }
+
+#endif // PATHTRACINGCOMMON_H

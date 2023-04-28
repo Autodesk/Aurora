@@ -88,7 +88,7 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
     // Get the materialX folder relative to the module path.
     string mtlxFolder = Foundation::getModulePath() + "MaterialX";
     // Initialize the MaterialX code generator.
-    _pMaterialXGenerator = make_unique<MaterialXCodeGen::MaterialGenerator>(this, mtlxFolder);
+    _pMaterialXGenerator = make_unique<MaterialXCodeGen::MaterialGenerator>(mtlxFolder);
 
     // Default to MaterialX distance unit to centimeters.
     _pShaderLibrary->setOption(
@@ -172,8 +172,8 @@ IMaterialPtr PTRenderer::createMaterialPointer(
     // This has no overhead, so just do it each time.
     _pAssetMgr->enableVerticalFlipOnImageLoad(_values.asBoolean(kLabelIsFlipImageYEnabled));
 
-    // The material type and definition for this material.
-    PTMaterialTypePtr pMtlType;
+    // The material shader and definition for this material.
+    MaterialShaderPtr pShader;
     shared_ptr<MaterialDefinition> pDef;
 
     // Create a material type based on the material type name provided.
@@ -183,22 +183,22 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         string builtInType = document;
 
         // Get the built-in material type and definition for built-in.
-        pMtlType = _pShaderLibrary->getBuiltInMaterialType(builtInType);
-        pDef     = _pShaderLibrary->getBuiltInMaterialDefinition(builtInType);
+        pShader = _pShaderLibrary->getBuiltInShader(builtInType);
+        pDef    = _pShaderLibrary->getBuiltInMaterialDefinition(builtInType);
 
-        // Print error and provide null material type if built-in not found.
+        // Print error and provide null material shader if built-in not found.
         // TODO: Proper error handling for this case.
-        if (!pMtlType)
+        if (!pShader)
         {
             AU_ERROR("Unknown built-in material type %s for material %s", document.c_str(),
                 name.c_str());
-            pMtlType = nullptr;
+            pShader = nullptr;
         }
     }
     else if (materialType.compare(Names::MaterialTypes::kMaterialX) == 0)
     {
-        // Generate a material type and definition from the materialX document.
-        pMtlType = generateMaterialX(document, &pDef);
+        // Generate a material shader and definition from the materialX document.
+        pShader = generateMaterialX(document, &pDef);
 
         // If flag is set dump the document to disk for development purposes.
         if (AU_DEV_DUMP_MATERIALX_DOCUMENTS)
@@ -222,29 +222,29 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         {
             AU_ERROR("Failed to load MaterialX document %s for material %s", document.c_str(),
                 name.c_str());
-            pMtlType = nullptr;
+            pShader = nullptr;
         }
         else
         {
-            // If Material XML document loaded, use it to generate the material type and definition.
-            pMtlType = generateMaterialX(*pMtlxDocument, &pDef);
+            // If Material XML document loaded, use it to generate the material shader and definition.
+            pShader = generateMaterialX(*pMtlxDocument, &pDef);
         }
     }
     else
     {
-        // Print error and return null material type if material type not found.
+        // Print error and return null material shader if material type not found.
         // TODO: Proper error handling for this case.
         AU_ERROR(
             "Unrecognized material type %s for material %s.", materialType.c_str(), name.c_str());
-        pMtlType = nullptr;
+        pShader = nullptr;
     }
 
     // Error case, just return null material.
-    if (!pMtlType || !pDef)
+    if (!pShader || !pDef)
         return nullptr;
 
-    // Create the material object with the material type.
-    auto pNewMtl = make_shared<PTMaterial>(this, pMtlType, pDef);
+    // Create the material object with the material shader and definition.
+    auto pNewMtl = make_shared<PTMaterial>(this, pShader, pDef);
 
     // Set the default textures on the new material.
     for (int i = 0; i < pDef->defaults().textures.size(); i++)
@@ -727,7 +727,8 @@ void PTRenderer::updateRayGenShaderTable()
         _pRayGenShaderTable->Map(0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
 
     // Write the shader identifier for the ray gen shader.
-    ::memcpy_s(pShaderTableMappedData, _rayGenShaderTableSize, _pShaderLibrary->getRayGenShaderID(),
+    ::memcpy_s(pShaderTableMappedData, _rayGenShaderTableSize,
+        _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kRayGen),
         SHADER_ID_SIZE);
 
     // Close the shader table buffer.
@@ -1419,7 +1420,7 @@ bool PTRenderer::isDenoisingAOVsEnabled() const
         _values.asInt(kLabelDebugMode) > kDebugModeErrors;
 }
 
-shared_ptr<PTMaterialType> PTRenderer::generateMaterialX([[maybe_unused]] const string& document,
+shared_ptr<MaterialShader> PTRenderer::generateMaterialX([[maybe_unused]] const string& document,
     [[maybe_unused]] shared_ptr<MaterialDefinition>* pDefOut)
 {
 #if ENABLE_MATERIALX
@@ -1431,22 +1432,16 @@ shared_ptr<PTMaterialType> PTRenderer::generateMaterialX([[maybe_unused]] const 
         return nullptr;
     }
 
-    // Set the shared definitions, this will only change anything if string is different to current
-    // one.
-    string definitions;
-    _pMaterialXGenerator->generateDefinitions(definitions);
-    _pShaderLibrary->setDefinitionsHLSL(definitions);
-
-    // Acquire a material type for the definition.
+    // Acquire a material shader for the definition.
     // This will create a new one if needed (and trigger a rebuild), otherwise will it will return
     // existing one.
-    auto pType = _pShaderLibrary->acquireMaterialType(*pDef);
+    auto pShader = _pShaderLibrary->acquireShader(*pDef);
 
     // Output the definition pointer.
     if (pDefOut)
         *pDefOut = pDef;
 
-    return pType;
+    return pShader;
 #else
     return nullptr;
 #endif

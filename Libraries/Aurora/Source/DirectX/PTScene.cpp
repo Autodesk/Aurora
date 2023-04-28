@@ -133,25 +133,32 @@ PTInstance::PTInstance(PTScene* pScene, const PTGeometryPtr& pGeometry,
         _layers.push_back(make_pair(dynamic_pointer_cast<PTMaterial>(layers[i].first),
             dynamic_pointer_cast<PTGeometry>(layers[i].second)));
 
-        _layers[i].first->materialType()->incrementRefCount(PTMaterialType::EntryPoint::kLayerMiss);
+        _layers[i].first->shader()->incrementRefCount(EntryPointTypes::kLayerMiss);
     }
 }
 
 PTInstance::~PTInstance()
 {
     if (_pMaterial)
-        _pMaterial->materialType()->decrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
+    {
+        _pMaterial->shader()->decrementRefCount(EntryPointTypes::kRadianceHit);
+        // Decrement the shadow anyhit ref count, if the material is not always opaque.
+        if (!_pMaterial->definition()->isAlwaysOpaque())
+            _pMaterial->shader()->decrementRefCount(
+                EntryPointTypes::kShadowAnyHit);
+
+    }
 
     for (size_t i = 0; i < _layers.size(); i++)
     {
-        _layers[i].first->materialType()->decrementRefCount(PTMaterialType::EntryPoint::kLayerMiss);
+        _layers[i].first->shader()->decrementRefCount(EntryPointTypes::kLayerMiss);
     }
 }
 
 void PTInstance::setMaterial(const IMaterialPtr& pMaterial)
 {
     if (_pMaterial)
-        _pMaterial->materialType()->decrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
+        _pMaterial->shader()->decrementRefCount(EntryPointTypes::kRadianceHit);
 
     // Cast the (optional) material to the renderer implementation. Use the default material if one
     // is / not specified.
@@ -159,7 +166,10 @@ void PTInstance::setMaterial(const IMaterialPtr& pMaterial)
         ? dynamic_pointer_cast<PTMaterial>(pMaterial)
         : dynamic_pointer_cast<PTMaterial>(_pScene->defaultMaterialResource()->resource());
 
-    _pMaterial->materialType()->incrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
+    _pMaterial->shader()->incrementRefCount(EntryPointTypes::kRadianceHit);
+    // Increment the shadow anyhit ref count, if the material is not always opaque.
+    if (!_pMaterial->definition()->isAlwaysOpaque())
+        _pMaterial->shader()->incrementRefCount(EntryPointTypes::kShadowAnyHit);
 
     // Set the instance as dirty.
     _bIsDirty = true;
@@ -617,11 +627,11 @@ void PTScene::updateShaderTables()
         for (int i = 0; i < _lstInstanceData.size(); i++)
         {
             const auto& instanceData = _lstInstanceData[i];
-            // Get the hit group shader ID from the material type, which will change if the shader
+            // Get the hit group shader ID from the material shader, which will change if the shader
             // library is rebuilt.
             PTMaterial& instanceMtl = activeMaterialResources[instanceData.mtlIndex];
             const DirectXShaderIdentifier hitGroupShaderID =
-                instanceMtl.materialType()->getShaderID();
+                _pShaderLibrary->getShaderID(instanceMtl.shader());
 
             // Lookup texture and sampler handle for instance.
             CD3DX12_GPU_DESCRIPTOR_HANDLE mtlTextureHandle =
@@ -669,12 +679,18 @@ void PTScene::updateShaderTables()
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE, kNullShaderID.data(), SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
-            _pShaderLibrary->getBackgroundMissShaderID(), SHADER_ID_SIZE);
+            _pShaderLibrary->getSharedEntryPointShaderID(
+                EntryPointTypes::kBackgroundMiss),
+            SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
-            _pShaderLibrary->getRadianceMissShaderID(), SHADER_ID_SIZE);
+            _pShaderLibrary->getSharedEntryPointShaderID(
+                EntryPointTypes::kRadianceMiss),
+            SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
-        ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE, _pShaderLibrary->getShadowMissShaderID(),
+        ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
+            _pShaderLibrary->getSharedEntryPointShaderID(
+                EntryPointTypes::kShadowMiss),
             SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
 
@@ -686,8 +702,8 @@ void PTScene::updateShaderTables()
             auto& parentInstanceData = _lstInstanceData[layerData.index];
             PTMaterial& layerMtl     = activeMaterialResources[layerData.instanceData.mtlIndex];
 
-            // Get the material type
-            auto pMtlType = layerMtl.materialType();
+            // Get the material shader
+            auto pShader = layerMtl.shader();
 
             // Create the geometry by merging the layer geometry with parent instance's geometry.
             PTGeometry::GeometryBuffers geometryLayerBuffers =
@@ -739,8 +755,8 @@ void PTScene::updateShaderTables()
 
             // Create hit group (as layer miss shader has same layout as luminance closest hit
             // shader)
-            HitGroupShaderRecord layerRecord(pMtlType->getLayerShaderID(), geometryLayerBuffers,
-                layerMtl, nullptr, mtlTextureHandle, mtlSamplerHandle, 0);
+            HitGroupShaderRecord layerRecord(_pShaderLibrary->getLayerShaderID(pShader),
+                geometryLayerBuffers, layerMtl, nullptr, mtlTextureHandle, mtlSamplerHandle, 0);
             layerRecord.copyTo(pShaderTableMappedData);
             pShaderTableMappedData += _missShaderRecordStride;
         }

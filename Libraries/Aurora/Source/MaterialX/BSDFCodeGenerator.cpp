@@ -214,6 +214,12 @@ public:
     // Clear all the temp variables.
     void clearTempVariables() { _tempVariables.clear(); }
 
+    // Clear the generated definitions and includes.
+    void clearGeneratedDefinitions() { 
+        _pGeneratedDefinitions->clear();
+        _pGeneratedIncludes->clear();
+    }
+
 protected:
     map<string, string> _tempVariables;
     unique_ptr<map<size_t, string>> _pGeneratedDefinitions;
@@ -627,6 +633,9 @@ void BSDFCodeGenerator::clearDefinitions()
     // Clear the definitions, which are accumulated after each generate call.
     _definitions.clear();
     _definitionMap.clear();
+    
+    // Clear the includes and defs in the shader generator.
+    _pGenerator->clearGeneratedDefinitions();
 }
 
 int BSDFCodeGenerator::generateDefinitions(string* pResultOut)

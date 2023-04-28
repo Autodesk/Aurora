@@ -21,10 +21,10 @@
 #include <gmock/gmock-matchers.h>
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <fstream>
 #include <regex>
 #include <streambuf>
-#include <filesystem>
 
 using namespace Aurora;
 
@@ -75,9 +75,7 @@ public:
     ~MaterialTest() {}
 
     // Test for the existence of the ADSK materialX libraries (in the working folder for the tests)
-    bool adskMaterialXSupport() { 
-        return std::filesystem::exists("MaterialX/libraries/adsk");
-    }
+    bool adskMaterialXSupport() { return std::filesystem::exists("MaterialX/libraries/adsk"); }
 
     // Load a MaterialX document and process file paths to correct locations for unit tests.
     string loadAndProcessMaterialXFile(const string& filename)
@@ -1069,6 +1067,116 @@ TEST_P(MaterialTest, TestMaterialXFlipImageY)
     }
 }
 
+// Test material creation using MaterialX
+TEST_P(MaterialTest, TestLotsOfMaterialX)
+{
+    // No MaterialX on HGI yet.
+    if (!isDirectX())
+        return;
+
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    setDefaultRendererPathTracingIterations(256);
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // clang-format off
+    // Test Material
+    string testMtl0 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37"> 
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                  <bindinput name="base_color" type="color3" value="1,0,1" />
+                  <bindinput name="specular_color" type="color3" value="0,1,0" />
+                  <bindinput name="specular_roughness" type="float" value="0.8" />
+                  <bindinput name="specular_IOR" type="float" value = "0.75" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+        string testMtl1 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37"> 
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                  <bindinput name="base_color" type="color3" value="0,1,1" />
+                  <bindinput name="specular_color" type="color3" value="0,1,0" />
+                  <bindinput name="specular_IOR" type="float" value = "0.75" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+                string testMtl2 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37"> 
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                  <bindinput name="base_color" type="color3" value="0,1,1" />
+                  <bindinput name="specular_color" type="color3" value="1,0,0" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+    string testMtl3 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37"> 
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                  <bindinput name="base_color" type="color3" value="0,1,0" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+    // clang-format on
+
+    // Create teapot instance.
+    Path geometry = createTeapotGeometry(*pScene);
+    Path testMaterial0("TestMaterialX0");
+    pScene->setMaterialType(testMaterial0, Names::MaterialTypes::kMaterialX, testMtl0);
+    Path testMaterial1("TestMaterialX1");
+    pScene->setMaterialType(testMaterial1, Names::MaterialTypes::kMaterialX, testMtl1);
+    Path testMaterial2("TestMaterialX2");
+    pScene->setMaterialType(testMaterial2, Names::MaterialTypes::kMaterialX, testMtl2);
+    Path testMaterial3("TestMaterialX3");
+    pScene->setMaterialType(testMaterial3, Names::MaterialTypes::kMaterialX, testMtl3);
+
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance0", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial0 },
+            { Names::InstanceProperties::kTransform, translate(vec3(+1.5, 0.0, 4.0)) } }));
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance1", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial1 },
+            { Names::InstanceProperties::kTransform, translate(vec3(-1.5, 0.0, 4.0)) } }));
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance2", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial2 },
+            { Names::InstanceProperties::kTransform, translate(vec3(+1.5, -2.0, 4.0)) } }));
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance3", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial3 },
+            { Names::InstanceProperties::kTransform, translate(vec3(-1.5, -2.0, 4.0)) } }));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
+}
+
 // Test different MtlX file that loads a BMP.
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMaterialXBMP)
@@ -1336,6 +1444,52 @@ TEST_P(MaterialTest, TestMaterialMaterialXLayers)
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName() + "_Removed");
 }
 
+// Normal map image test.
+TEST_P(MaterialTest, TestNormalMapMaterialX)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    setupAssetPaths();
+
+
+    rgb lightColor(1, 1, 1);
+    vec3 lightDirection(0.0f, -0.25f, +1.0f);
+    pScene->setLight(2.0f, lightColor, lightDirection);
+
+
+    // Create geometry.
+    Path planePath  = createPlaneGeometry(*pScene);
+    Path teapotPath = createTeapotGeometry(*pScene);
+
+    // Create material from mtlx document containing normal map.
+    string materialXFullPath = dataPath() + "/Materials/NormalMapExample.mtlx";
+    string processedMtlXString = loadAndProcessMaterialXFile(materialXFullPath);
+    EXPECT_FALSE(processedMtlXString.empty());
+    const Path kMaterialPath = "NormalMaterial";
+    pScene->setMaterialType(kMaterialPath, Names::MaterialTypes::kMaterialX, processedMtlXString);
+
+    mat4 scaleMtx = scale(vec3(2, 2, 2));
+
+    // Create geometry with the material.
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial]  = kMaterialPath;
+    instProps[Names::InstanceProperties::kTransform] = scaleMtx;
+    EXPECT_TRUE(pScene->addInstance(nextPath(), planePath, instProps));
+
+    instProps[Names::InstanceProperties::kMaterial]  = kMaterialPath;
+    instProps[Names::InstanceProperties::kTransform] = mat4();
+    EXPECT_TRUE(pScene->addInstance(nextPath(), teapotPath, instProps));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
+}
+
 // Test object space normal in materialX.
 TEST_P(MaterialTest, TestObjectSpaceMaterialX)
 {
@@ -1375,7 +1529,6 @@ TEST_P(MaterialTest, TestObjectSpaceMaterialX)
     // Render the scene and check baseline image.
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_ThreadMtlX", "Materials");
 }
-
 
 INSTANTIATE_TEST_SUITE_P(MaterialTests, MaterialTest, TEST_SUITE_RENDERER_TYPES());
 

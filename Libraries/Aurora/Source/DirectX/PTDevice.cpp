@@ -17,6 +17,12 @@
 
 BEGIN_AURORA
 
+// If true then DirectX debug layer is enabled (if available.)
+// Will only be available if the Graphics Tools are installed via "Apps->Optional Features" in
+// Windows Settings.
+// https://learn.microsoft.com/en-us/windows/uwp/gaming/use-the-directx-runtime-and-visual-studio-graphics-diagnostic-features
+#define AU_DEVICE_DEBUG_ENABLED defined(_DEBUG) && !defined(NODXDEBUG)
+
 static bool checkDeviceFeatures(ID3D12Device5* pDevice, PTDevice::Features features)
 {
     // Check for low-power support.
@@ -85,22 +91,27 @@ bool PTDevice::initialize(PTDevice::Features features, int sampleCount)
     // Enable the use of the debug layer on debug builds, and when NODXDEBUG is not defined.
     // NOTE: The debug layer requires installation of Graphics Tools for Windows 10, which may not
     // be desired by some clients.
-#if defined(_DEBUG) && !defined(NODXDEBUG)
+#if AU_DEVICE_DEBUG_ENABLED
     // Enable the D3D12 debug layer.
+    // D3D12GetDebugInterface return a null pointer if the Graphics Tools are not installed.
     ComPtr<ID3D12Debug> pDebugInterface;
     checkHR(::D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugInterface)));
-    pDebugInterface->EnableDebugLayer();
+    if (pDebugInterface) 
+    {
+        // Enable the debug layer.
+        pDebugInterface->EnableDebugLayer();
 
-    // Break on DXGI errors.
-    ComPtr<IDXGIInfoQueue> pDXGIInfoQueue;
-    checkHR(::DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDXGIInfoQueue)));
-    checkHR(pDXGIInfoQueue->SetBreakOnSeverity(
-        DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true));
-    checkHR(pDXGIInfoQueue->SetBreakOnSeverity(
-        DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true));
+        // Break on DXGI errors.
+        ComPtr<IDXGIInfoQueue> pDXGIInfoQueue;
+        checkHR(::DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDXGIInfoQueue)));
+        checkHR(pDXGIInfoQueue->SetBreakOnSeverity(
+            DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true));
+        checkHR(pDXGIInfoQueue->SetBreakOnSeverity(
+            DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true));
 
-    // Create the factory with the debug flag.
-    dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+        // Create the factory with the debug flag.
+        dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+    }
 #endif
 
     // Create the DXGI factory.
@@ -140,11 +151,14 @@ bool PTDevice::initialize(PTDevice::Features features, int sampleCount)
         }
 
         // Enable breaking on DirectX errors on debug builds, and when NODXDEBUG is not defined.
-#if defined(_DEBUG) && !defined(NODXDEBUG)
+#if AU_DEVICE_DEBUG_ENABLED
         ComPtr<ID3D12InfoQueue> pD3D12InfoQueue;
         pDevice.As(&pD3D12InfoQueue);
-        checkHR(pD3D12InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
-        checkHR(pD3D12InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true));
+        if (pD3D12InfoQueue)
+        {
+            checkHR(pD3D12InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
+            checkHR(pD3D12InfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true));
+        }
 #endif
 
         // Record the factory, device, and name for the selected adapter.

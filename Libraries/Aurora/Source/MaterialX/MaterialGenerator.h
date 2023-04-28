@@ -18,7 +18,7 @@
 
 BEGIN_AURORA
 
-struct MaterialTypeSource;
+struct MaterialShaderSource;
 
 namespace MaterialXCodeGen
 {
@@ -26,13 +26,10 @@ namespace MaterialXCodeGen
 class MaterialGenerator
 {
 public:
-    MaterialGenerator(IRenderer* pRenderer, const string& mtlxFolder);
+    MaterialGenerator(const string& mtlxFolder);
 
     /// Generate shader code for material.
     shared_ptr<MaterialDefinition> generate(const string& document);
-
-    // Generate shared definition functions.
-    void generateDefinitions(string& definitionHLSLOut);
 
     // Get the code generator used to generate material shader code.
     BSDFCodeGenerator& codeGenerator() { return *_pCodeGenerator; }
@@ -43,8 +40,6 @@ private:
 
     // Mapping from a MaterialX output property to a Standard Surface property.
     map<string, string> _bsdfInputParamMapping;
-
-    IRenderer* _pRenderer;
 
     map<string, weak_ptr<MaterialDefinition>> _definitions;
 };

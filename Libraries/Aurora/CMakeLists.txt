@@ -80,6 +80,11 @@ set(COMMON_SOURCE
     "Source/GeometryBase.h"
     "Source/MaterialBase.cpp"
     "Source/MaterialBase.h"
+    "Source/MaterialBase.cpp"
+    "Source/MaterialDefinition.h"
+    "Source/MaterialDefinition.cpp"
+    "Source/MaterialShader.h"
+    "Source/MaterialShader.cpp"
     "Source/pch.h"
     "Source/Properties.h"
     "Source/RendererBase.cpp"
@@ -104,6 +109,7 @@ file(MAKE_DIRECTORY "${COMPILED_SHADERS_DIR}")
 
 # The slang shaders that are shared by DX and HGI backends.
 set(COMMON_SHADERS
+    "Source/Shaders/BackgroundMissShader.slang"
     "Source/Shaders/BSDF.slang"
     "Source/Shaders/BSDFCommon.slang"
     "Source/Shaders/Colors.slang"
@@ -113,13 +119,11 @@ set(COMMON_SHADERS
     "Source/Shaders/Globals.slang"
     "Source/Shaders/GLSLToHLSL.slang"
     "Source/Shaders/GroundPlane.slang"
-    "Source/Shaders/ClosestHitEntryPointTemplate.slang"
-    "Source/Shaders/ShadowHitEntryPointTemplate.slang"
-    "Source/Shaders/LayerShaderEntryPointTemplate.slang"
+    "Source/Shaders/InitializeDefaultMaterialType.slang"
+    "Source/Shaders/MainEntryPoints.slang"
     "Source/Shaders/Material.slang"
     "Source/Shaders/MaterialXCommon.slang"
     "Source/Shaders/PathTracingCommon.slang"
-    "Source/Shaders/BackgroundMissShader.slang"
     "Source/Shaders/ShadowMissShader.slang"
     "Source/Shaders/RadianceMissShader.slang"
     "Source/Shaders/RayGenShader.slang"
@@ -128,7 +132,6 @@ set(COMMON_SHADERS
     "Source/Shaders/RayTrace.slang"
     "Source/Shaders/ReferenceBSDF.slang"
     "Source/Shaders/StandardSurfaceBSDF.slang"
-    "Source/Shaders/InitializeDefaultMaterialType.slang"
     "Source/Shaders/Sampling.slang"
 )
 

@@ -25,45 +25,6 @@ namespace Aurora
 namespace MaterialXCodeGen
 {
 
-static string mapMaterialXTextureName(const string& name)
-{
-    string mappedName = "";
-
-    // Any image input containing string 'diffuse' or 'base' is mapped to the
-    // base_color_image texture (e.g. "generic_diffuse_file" or "base_color_image".).
-    if (name.find("diffuse") != string::npos || name.find("base") != string::npos)
-    {
-        mappedName = "base_color_image";
-    }
-    // Any image input containing string 'roughness' or 'specular' is mapped to the
-    // specular_roughness_image texture.
-    else if (name.find("roughness") != string::npos || name.find("specular") != string::npos)
-    {
-        mappedName = "specular_roughness_image";
-    }
-    // Any image input containing string 'normal' or 'bump' is mapped to the
-    // normal_image texture.
-    else if (name.find("normal") != string::npos || name.find("bump") != string::npos)
-    {
-        mappedName = "normal_image";
-    }
-    // Any image input containing string 'opacity', 'alpha', 'cutout', or 'transmission'
-    // is mapped to the opacity_image texture.
-    else if (name.find("opacity") != string::npos || name.find("alpha") != string::npos ||
-        name.find("cutout") != string::npos || name.find("transmission") != string::npos)
-    {
-        mappedName = "opacity_image";
-    }
-    // If nothing else matches, then map any image containing color to base_color_image
-    // texture.
-    else if (name.find("color") != string::npos)
-    {
-        mappedName = "base_color_image";
-    }
-
-    return mappedName;
-}
-
 // Extremely primitive GLSL-to-HLSL conversion function, that handles cases not dealt with in shader
 // code prefix.
 // TODO: This is a very basic placeholder, we need a better solution for this.
@@ -80,8 +41,7 @@ static string GLSLToHLSL(const string& glslStr)
     return hlslStr;
 }
 
-MaterialGenerator::MaterialGenerator(IRenderer* pRenderer, const string& mtlxFolder) :
-    _pRenderer(pRenderer)
+MaterialGenerator::MaterialGenerator(const string& mtlxFolder)
 {
     // Create code generator.
     _pCodeGenerator = make_unique<MaterialXCodeGen::BSDFCodeGenerator>(mtlxFolder);
@@ -137,7 +97,8 @@ MaterialGenerator::MaterialGenerator(IRenderer* pRenderer, const string& mtlxFol
         { "specular_roughness_image_scale", "specularRoughnessTexTransform.scale" },
         { "specular_roughness_image_offset", "specularRoughnessTexTransform.offset" },
         { "specular_roughness_image_rotation", "specularRoughnessTexTransform.rotation" },
-        { "thin_walled", "thinWalled" }
+        { "thin_walled", "thinWalled" },
+        { "normal", "normal" }
     };
     // clang-format on
 }
@@ -146,7 +107,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
 {
     shared_ptr<MaterialDefinition> pDef;
 
-    // If we have already generated this material type, then just used cached material type.
+    // If we have already generated this material document, then just used cached material type.
     auto mtliter = _definitions.find(document);
     if (mtliter != _definitions.end())
     {
@@ -161,6 +122,8 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
         }
     }
 
+    // Currently every material has its own definitions.
+    _pCodeGenerator->clearDefinitions();
 
     // Create code generator result struct.
     MaterialXCodeGen::BSDFCodeGenerator::Result res;
@@ -184,8 +147,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // the document, the generated HLSL is based on a hardcoded name string for caching purposes.
     // NOTE: This will immediate run the code generator and invoke the inputMapper and outputMapper
     // function populate hardcodedInputs and set modifiedNormal.
-    if (!_pCodeGenerator->generate(
-            document, &res, supportedBSDFInputs, "MaterialXDocument"))
+    if (!_pCodeGenerator->generate(document, &res, supportedBSDFInputs, "MaterialXDocument"))
     {
         // Fail if code generation fails.
         // TODO: Proper error handling here.
@@ -225,7 +187,8 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     generatedMtlxSetupFunction += GLSLToHLSL(res.materialSetupCode);
 
     // Create a wrapper function that is called by the ray hit entry point to initialize material.
-    generatedMtlxSetupFunction += "\nMaterial initializeMaterial"
+    generatedMtlxSetupFunction +=
+        "\nMaterial initializeMaterial"
         "(ShadingData shading, float3x4 objToWorld, out float3 "
         "materialNormal, out bool "
         "isGeneratedNormal) {\n";
@@ -299,7 +262,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // Map any additional textures to base color image.
     for (size_t i = textureVars.size(); i < res.textures.size(); i++)
     {
-        TextureDefinition txtDef = textureVars[i];
+        TextureDefinition txtDef = textureVars[0];
         txtDef.name              = "base_color_image";
         textureVars.push_back(txtDef);
     }
@@ -313,9 +276,9 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // Fill struct using the byte address buffer accessors.
     for (int i = 0; i < res.materialProperties.size(); i++)
     {
-        generatedMtlxSetupFunction += "\tsetupMaterialStruct." + res.materialProperties[i].variableName +
-            " = " + res.materialStructName + "_" + res.materialProperties[i].variableName +
-            "(gMaterialConstants);\n";
+        generatedMtlxSetupFunction += "\tsetupMaterialStruct." +
+            res.materialProperties[i].variableName + " = " + res.materialStructName + "_" +
+            res.materialProperties[i].variableName + "(gMaterialConstants);\n";
         ;
     }
 
@@ -378,38 +341,39 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
 
     // Finish setup wrapper function.
     generatedMtlxSetupFunction += "}\n";
-    
+
     // Output the material name
-    MaterialTypeSource source(materialName, generatedMtlxSetupFunction);
+    MaterialShaderSource source(materialName, generatedMtlxSetupFunction);
+
+    // Generate the function definitions used by the MaterialX code.
+    string definitionGLSL;
+    _pCodeGenerator->generateDefinitions(&definitionGLSL);
+
+    // Convert the definitions to HLSL and add to definitions string of the source object.
+    source.definitions = "#include \"GLSLToHLSL.slang\"\n";
+    source.definitions += "#include \"MaterialXCommon.slang\"\n";
+    source.definitions += (GLSLToHLSL(definitionGLSL));
+
+    // Create the default values object from the generated properties and textures.
     MaterialDefaultValues defaults(
         res.materialProperties, res.materialPropertyDefaults, textureVars);
 
-    // Material type is opaque if neither opacity or transmission input is used.
+    // Material is opaque if neither opacity or transmission input is used.
     bool isOpaque = bsdfInputs.find("opacity") == bsdfInputs.end() &&
         bsdfInputs.find("transmission") == bsdfInputs.end();
 
-    // Create update function which just sets opacity flag based on material type opacity.
+    // Create update function which just sets opacity flag based on materialX inputs.
     function<void(MaterialBase&)> updateFunc = [isOpaque](MaterialBase& mtl) {
         mtl.setIsOpaque(isOpaque);
     };
 
-    pDef = make_shared<MaterialDefinition>(source, defaults, updateFunc);
+    // Create the material definition.
+    pDef = make_shared<MaterialDefinition>(source, defaults, updateFunc, isOpaque);
 
+    // Set in the cache.
     _definitions[document] = pDef;
 
     return pDef;
-}
-
-
-void MaterialGenerator::generateDefinitions(string& definitionHLSLOut)
-{
-
-    // Generate the  shared definitions used by all MaterialX material types.
-    string definitionGLSL;
-    _pCodeGenerator->generateDefinitions(&definitionGLSL);
-
-    // Set the shared definitions;
-    definitionHLSLOut = (GLSLToHLSL(definitionGLSL));
 }
 
 } // namespace MaterialXCodeGen

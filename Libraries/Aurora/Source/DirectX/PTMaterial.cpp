@@ -144,8 +144,8 @@ bool PTMaterial::validateOffsets(const PTShaderLibrary& pShaderLibrary)
     return isValid;
 }
 
-PTMaterial::PTMaterial(PTRenderer* pRenderer, shared_ptr<PTMaterialType> pType, shared_ptr<MaterialDefinition> pDef) :
-    MaterialBase(pDef), _pRenderer(pRenderer), _pType(pType)
+PTMaterial::PTMaterial(PTRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef) :
+    MaterialBase(pShader, pDef), _pRenderer(pRenderer)
 {
 }
 
@@ -158,7 +158,7 @@ bool PTMaterial::update()
     }
 
     // Run the type-specific update function on this material.
-    _pType->runUpdateFunc(*this);
+    definition()->updateFunction()(*this);
 
     // Create a constant buffer for the data if it doesn't already exist.
     if (!_pConstantBuffer)
