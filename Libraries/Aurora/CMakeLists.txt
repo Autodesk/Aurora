@@ -135,6 +135,14 @@ set(COMMON_SHADERS
     "Source/Shaders/Sampling.slang"
 )
 
+#  On windows, the version resource and header files that add the version information to the DLL.
+if(WIN32)
+set(VERSION_FILES
+    ${VERSION_FOLDER}/AuroraVersion.h
+    Aurora.rc
+)
+endif()
+
 # Set MINIFIED_SHADERS_HEADER to filename of auto-generated header file containing minified Slang shader strings.
 set(MINIFIED_COMMON_SHADERS_HEADER "${COMPILED_SHADERS_DIR}/CommonShaders.h")
 # Add commands to minifiy common shaders.
@@ -240,6 +248,7 @@ add_library(${PROJECT_NAME} SHARED
     ${HGI_SOURCE}
     ${HGI_SHADERS}
     ${MINIFIED_HGI_SHADERS_HEADER}
+    ${VERSION_FILES}
 )
 
 # Add to libraries folder
@@ -397,6 +406,7 @@ PUBLIC
 PRIVATE
     "Source"                  # Source folder for PCH
     "${PROJECT_BINARY_DIR}"
+    ${VERSION_FOLDER}
 )
 
 # Set the default compile definitions.

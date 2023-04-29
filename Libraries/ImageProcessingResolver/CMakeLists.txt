@@ -9,6 +9,14 @@ find_package(OpenImageIO REQUIRED)
 find_package(miniz REQUIRED)
 find_package(uriparser REQUIRED)
 
+# On windows, the version resource and header files that add the version information to the DLL.
+if(WIN32)
+set(VERSION_FILES
+    ${VERSION_FOLDER}/AuroraVersion.h
+    ImageProcessingResolver.rc
+)
+endif()
+
 # Add shared library with all source files.
 add_library(${PROJECT_NAME} SHARED
     "DLL.cpp"
@@ -19,6 +27,7 @@ add_library(${PROJECT_NAME} SHARED
     "ConvertEnvMapLayout.cpp"
     "ConvertEnvMapLayout.h"
     "pch.h"
+    ${VERSION_FILES}
 )
 
 # Set custom output properties.
@@ -50,6 +59,7 @@ PRIVATE
 target_include_directories(${PROJECT_NAME}
 PRIVATE
     "${tinyexr_ROOT}/include"
+    ${VERSION_FOLDER}
 )
 
 # Add default compile definitions (set in root CMakefile)

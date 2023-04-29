@@ -9,6 +9,14 @@ find_package(pxr REQUIRED) # Find the Universal Scene Description (USD) library
 # Alias the namespace to meet the cmake convention on imported targets
 add_library(MaterialX::GenGlsl ALIAS MaterialXGenGlsl)
 
+# On windows, the version resource and header files that add the version information to the DLL.
+if(WIN32)
+set(VERSION_FILES
+    ${VERSION_FOLDER}/AuroraVersion.h
+    HdAurora.rc
+)
+endif()
+
 # Add shard library with all source files.
 add_library(${PROJECT_NAME} SHARED
     "DLL.cpp"
@@ -32,6 +40,7 @@ add_library(${PROJECT_NAME} SHARED
     "HdAuroraRenderPass.h"
     "HdAuroraTokens.h"
     "pch.h"
+    ${VERSION_FILES}
 )
 
 # Set custom output properties.
@@ -94,6 +103,12 @@ if(WIN32)
 else() # Linux
     #TODO anything we need to set to support the Aurora execution?
 endif()
+
+# Add the version folder required by HdAurora.rc
+target_include_directories(${PROJECT_NAME}
+PRIVATE
+    ${VERSION_FOLDER}
+)
 
 # Install the binaries.
 install(TARGETS ${PROJECT_NAME}  DESTINATION ${INSTALL_BIN}/usd)
