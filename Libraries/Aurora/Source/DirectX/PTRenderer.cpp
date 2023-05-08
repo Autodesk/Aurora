@@ -27,7 +27,7 @@
 #include "PTMaterial.h"
 #include "PTScene.h"
 #include "PTShaderLibrary.h"
-#include "PTTarget.h"
+#include "PTLight.h"
 
 #if ENABLE_MATERIALX
 #include "MaterialX/MaterialGenerator.h"

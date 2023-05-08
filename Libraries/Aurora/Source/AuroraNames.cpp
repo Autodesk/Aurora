@@ -58,4 +58,12 @@ const string Names::AddressModes::kMirrorOnce("MirrorOnce");
 const string Names::SamplerProperties::kAddressModeU("AddressModeU");
 const string Names::SamplerProperties::kAddressModeV("AddressModeV");
 
+const string Names::LightTypes::kDistantLight("DistantLight");
+
+const std::string Names::LightProperties::kDirection       = "direction";
+const std::string Names::LightProperties::kAngularDiameter = "angular_diameter_radians";
+const std::string Names::LightProperties::kExposure        = "exposure";
+const std::string Names::LightProperties::kIntensity       = "intensity";
+const std::string Names::LightProperties::kColor           = "color";
+
 END_AURORA

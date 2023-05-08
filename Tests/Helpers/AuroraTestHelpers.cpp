@@ -672,6 +672,9 @@ IScenePtr FixtureBase::createDefaultScene()
     vec3 boundsMax(+1, +1, +1);
     _pDefaultScene->setBounds(boundsMin, boundsMax);
 
+    _pDefaultDistantLight =
+        _pDefaultScene->addLightPointer(Aurora::Names::LightTypes::kDistantLight);
+
     // Set the default scene in renderer.
     _pDefaultRenderer->setScene(_pDefaultScene);
 

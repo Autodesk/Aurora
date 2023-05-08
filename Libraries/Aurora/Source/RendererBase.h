@@ -15,6 +15,7 @@
 
 #include "AssetManager.h"
 #include "Properties.h"
+#include "SceneBase.h"
 
 BEGIN_AURORA
 
@@ -96,29 +97,67 @@ public:
     static const int kMaxTraceDepth;
 
 protected:
-    // Per-frame GPU uniform data.
+    // Layout of per-frame parameters.
+    // Must match the GPU version Frame.slang.
     struct FrameData
     {
+        // The view-projection matrix.
         mat4 cameraViewProj;
+
+        // The inverse view matrix, also transposed. The *rows* must have the desired vectors:
+        // right, up, front, and eye position. HLSL array access with [] returns rows, not columns,
+        // hence the need for the matrix to be supplied transposed.
         mat4 cameraInvView;
+
+        // The dimensions of the view (in world units) at a distance of 1.0 from the camera, which
+        // is useful to build ray directions.
         vec2 viewSize;
+
+        // Whether the camera is using an orthographic projection. Otherwise a perspective
+        // projection is assumed.
         int isOrthoProjection;
+
+        // The distance from the camera for sharpest focus, for depth of field.
         float focalDistance;
+
+        // The diameter of the lens for depth of field. If this is zero, there is no depth of field,
+        // i.e. pinhole camera.
         float lensRadius;
+
+        // The size of the scene, specifically the maximum distance between any two points in the
+        // scene.
         float sceneSize;
-        vec2 _padding1;
-        vec3 lightDir;
-        float _padding2;
-        vec4 lightColorAndIntensity;
-        float lightCosRadius;
+
+        // Whether shadow evaluation should treat all objects as opaque, as a performance
+        // optimization.
         int isOpaqueShadowsEnabled;
+
+        // Whether to write the NDC depth result to an output texture.
         int isDepthNDCEnabled;
+
+        // Whether to render the diffuse material component only.
         int isDiffuseOnlyEnabled;
+
+        // Whether to display shading errors as bright colored samples.
         int isDisplayErrorsEnabled;
+
+        // Whether denoising is enabled, which affects how path tracing is performed.
         int isDenoisingEnabled;
+
+        // Whether to write the AOV data required for denoising.
         int isDenoisingAOVsEnabled;
+
+        // The maximum recursion level (or path length) when tracing rays.
         int traceDepth;
+
+        // The maximum luminance for path tracing samples, for simple firefly clamping.
         float maxLuminance;
+
+        // Pad to 16 byte boundary.
+        vec2 _padding1;
+
+        // Current light data for scene (duplicated each frame in flight.)
+        SceneBase::LightData lights;
     };
 
     // Accumulation settings GPU data.

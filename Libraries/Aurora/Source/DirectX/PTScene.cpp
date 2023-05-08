@@ -18,6 +18,7 @@
 #include "PTEnvironment.h"
 #include "PTGeometry.h"
 #include "PTGroundPlane.h"
+#include "PTLight.h"
 #include "PTMaterial.h"
 #include "PTRenderer.h"
 #include "PTShaderLibrary.h"
@@ -144,9 +145,7 @@ PTInstance::~PTInstance()
         _pMaterial->shader()->decrementRefCount(EntryPointTypes::kRadianceHit);
         // Decrement the shadow anyhit ref count, if the material is not always opaque.
         if (!_pMaterial->definition()->isAlwaysOpaque())
-            _pMaterial->shader()->decrementRefCount(
-                EntryPointTypes::kShadowAnyHit);
-
+            _pMaterial->shader()->decrementRefCount(EntryPointTypes::kShadowAnyHit);
     }
 
     for (size_t i = 0; i < _layers.size(); i++)
@@ -231,6 +230,28 @@ PTScene::PTScene(
     createDefaultResources();
 }
 
+ILightPtr PTScene::addLightPointer(const string& lightType)
+{
+    // Only distant lights are currently supported.
+    AU_ASSERT(lightType.compare(Names::LightTypes::kDistantLight) == 0,
+        "Only distant lights currently supported");
+
+    // The remaining operations are not yet thread safe.
+    std::lock_guard<std::mutex> lock(_mutex);
+
+    // Assign arbritary index to ensure deterministic ordering.
+    int index = _currentLightIndex++;
+
+    // Create the light object.
+    PTLightPtr pLight = make_shared<PTLight>(this, lightType, index);
+
+    // Add weak pointer to distant light map.
+    _distantLights[index] = pLight;
+
+    // Return the new light.
+    return pLight;
+}
+
 IInstancePtr PTScene::addInstancePointer(const Path& /* path*/, const IGeometryPtr& pGeom,
     const IMaterialPtr& pMaterial, const mat4& transform, const LayerDefinitions& materialLayers)
 {
@@ -277,6 +298,12 @@ ID3D12Resource* PTScene::getHitGroupShaderTable(size_t& recordStride, uint32_t& 
     return _pHitGroupShaderTable.Get();
 }
 
+// Sort function, used to sort lights to ensure deterministic ordering.
+bool compareLights(PTLight* first, PTLight* second)
+{
+    return (first->index() < second->index());
+}
+
 void PTScene::update()
 {
     // Update base class.
@@ -292,6 +319,63 @@ void PTScene::update()
 
     // Update the ground plane.
     _pGroundPlane->update();
+
+    // See if any distant lights have been changed this frame, and build vector of active lights.
+    bool distantLightsUpdated = false;
+    vector<PTLight*> currLights;
+    for (auto iter = _distantLights.begin(); iter != _distantLights.end(); iter++)
+    {
+        // Get the light and ensure weak pointer still valid.
+        PTLightPtr pLight = iter->second.lock();
+        if (pLight)
+        {
+            // Add to currently active light vector.
+            currLights.push_back(pLight.get());
+
+            // If the dirty flag is set, GPU data must be updated.
+            if (pLight->isDirty())
+            {
+                distantLightsUpdated = true;
+                pLight->clearDirtyFlag();
+            }
+        }
+        else
+        {
+            // If the weak pointer is not valid remove it from the map, and ensure GPU data is
+            // updated (as a light has been removed.)
+            _distantLights.erase(iter->first);
+            distantLightsUpdated = true;
+        }
+    }
+
+    // If distant lights have changed update the LightData struct that is passed to the GPU.
+    if (distantLightsUpdated)
+    {
+        // Sort the lights by index, to ensure deterministic ordering.
+        sort(currLights.begin(), currLights.end(), compareLights);
+
+        // Set the distant light count to minimum of current light vector size and the max distant
+        // light limit.  Lights in the sorted array past LightLimits::kMaxDistantLights are ignored.
+        _lights.distantLightCount =
+            std::min(int(currLights.size()), int(LightLimits::kMaxDistantLights));
+
+        // Add to the light data buffer that is copied to the frame data for this frame.
+        for (int i = 0; i < _lights.distantLightCount; i++)
+        {
+            // Store the cosine of the radius for use in the shader.
+            _lights.distantLights[i].cosRadius =
+                cos(0.5f * currLights[i]->asFloat(Names::LightProperties::kAngularDiameter));
+
+            // Invert the direction for use in the shader.
+            _lights.distantLights[i].direction =
+                -currLights[i]->asFloat3(Names::LightProperties::kDirection);
+
+            // Store color in RGB and intensity in alpha.
+            _lights.distantLights[i].colorAndIntensity =
+                vec4(currLights[i]->asFloat3(Names::LightProperties::kColor),
+                    currLights[i]->asFloat(Names::LightProperties::kIntensity));
+        }
+    }
 
     // If any active geometry resources have been modified, flush the vertex buffer pool in case
     // there are any pending vertex buffers that are required to update the geometry, and then
@@ -679,18 +763,15 @@ void PTScene::updateShaderTables()
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE, kNullShaderID.data(), SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
-            _pShaderLibrary->getSharedEntryPointShaderID(
-                EntryPointTypes::kBackgroundMiss),
+            _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kBackgroundMiss),
             SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
-            _pShaderLibrary->getSharedEntryPointShaderID(
-                EntryPointTypes::kRadianceMiss),
+            _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kRadianceMiss),
             SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
-            _pShaderLibrary->getSharedEntryPointShaderID(
-                EntryPointTypes::kShadowMiss),
+            _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kShadowMiss),
             SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
 

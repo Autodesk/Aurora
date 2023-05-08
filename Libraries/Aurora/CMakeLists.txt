@@ -179,6 +179,8 @@ if(ENABLE_DIRECTX_BACKEND)
         "Source/DirectX/PTGroundPlane.h"
         "Source/DirectX/PTImage.cpp"
         "Source/DirectX/PTImage.h"
+        "Source/DirectX/PTLight.cpp"
+        "Source/DirectX/PTLight.h"
         "Source/DirectX/PTMaterial.cpp"
         "Source/DirectX/PTMaterial.h"
         "Source/DirectX/PTRenderer.cpp"

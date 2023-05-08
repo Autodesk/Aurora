@@ -24,7 +24,40 @@ struct SampleData
     uint seedOffset;
 };
 
+// Maximum number of distant lights.
+// Must match CPU limit in SceneBase::LightLimits::kMaxDistantLights
+#define kMaxDistantLights 4
+
+// Structure representing a single distant light.
+// Must match CPU struct in SceneBase::DistantLight
+struct DistantLight
+{
+    // Light color (in RGB) and intensity (in alpha channel.)
+    float4 colorAndIntensity;
+
+    // Direction of light (inverted as expected by shaders.)
+    float3 direction;
+
+    // The light size is converted from a diameter in radians to the cosine of the radius.
+    float cosRadius;
+};
+
+// Structure representing the lights in the scene.
+// Must match GPU struct in SceneBase::LightData
+struct LightData
+{
+    // Array of distant lights, only first distantLightCount are used.
+    DistantLight distantLights[kMaxDistantLights];
+
+    // Number of active distant lights.
+    int distantLightCount = 0;
+
+    // Explicitly  pad struct to 16-byte boundary.
+    int pad[3];
+};
+
 // Layout of per-frame parameters.
+// Must match CPU struct in RendererBase.h.
 struct FrameData
 {
     // The view-projection matrix.
@@ -53,20 +86,6 @@ struct FrameData
     // The size of the scene, specifically the maximum distance between any two points in the scene.
     float sceneSize;
 
-    float2 _padding1;
-
-    // The direction of the global light.
-    // NOTE: This is *toward* the light.
-    float3 lightDir;
-
-    float _padding2;
-
-    // The color of the light (RGB) and its intensity (A).
-    float4 lightColorAndIntensity;
-
-    // The cosine of the light radius (as a disc).
-    float lightCosRadius;
-
     // Whether shadow evaluation should treat all objects as opaque, as a performance optimization.
     bool isOpaqueShadowsEnabled;
 
@@ -90,6 +109,12 @@ struct FrameData
 
     // The maximum luminance for path tracing samples, for simple firefly clamping.
     float maxLuminance;
+
+    // Explicitly pad to 16-byte boundary.
+    float2 _padding1;
+
+    // Current light data for scene (duplicated each frame in flight.)
+    LightData lights;
 };
 
 #endif // __FRAME_H__

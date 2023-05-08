@@ -746,6 +746,20 @@ protected:
 };
 MAKE_AURORA_PTR(IInstance);
 
+/// A class representing a light.  Which are added to the scene to provide direct illumination.
+class AURORA_API ILight
+{
+public:
+    /// Gets the lights's properties, which can be read and modified as needed.
+    ///
+    /// The properties are specific to the light type.
+    virtual IValues& values() = 0;
+
+protected:
+    virtual ~ILight() = default; // hidden destructor
+};
+MAKE_AURORA_PTR(ILight);
+
 /// The types of resources that can be associated with an Aurora scene (directly or indirectly).
 enum ResourceType
 {
@@ -756,6 +770,7 @@ enum ResourceType
     Sampler,
     GroundPlane,
     Image,
+    Light,
     Invalid
 };
 
@@ -893,33 +908,20 @@ public:
     /// result in undefined behavior. This may be updated internally in the future.
     virtual void setBounds(const float* min, const float* max) = 0;
 
-    /// Sets the properties of the global directional light.
-    ///
-    /// \param intensity The light intensity. Set this to zero to disable the light.
-    /// \param color The light color, which is multiplied by the intensity.
-    /// \param direction The light direction, away from the light / toward the scene.
-    /// \param angularDiameter The light angular diameter in radians. For example, the angular
-    /// diameter of the sun is about 0.017 radians.
-    virtual void setLight(
-        float intensity, const rgb& color, const vec3& direction, float angularDiameter = 0.1f) = 0;
-
-    /// Sets the properties of the global directional light.
-    ///
-    /// TODO: Remove. Replaced by GLM types.
-    /// \param intensity The light intensity. Set this to zero to disable the light.
-    /// \param color The light color, which is multiplied by the intensity.
-    /// \param direction The light direction, away from the light / toward the scene.
-    /// \param angularDiameter The light angular diameter in radians. For example, the angular
-    /// diameter of the sun is about 0.017 radians.
-    virtual void setLight(float intensity, const float* color, const float* direction,
-        float angularDiameter = 0.1f) = 0;
-
     /// Sets the ground plane for the scene.
     virtual void setGroundPlanePointer(const IGroundPlanePtr& pGroundPlane) = 0;
 
     virtual IInstancePtr addInstancePointer(const Path& path, const IGeometryPtr& geom,
         const IMaterialPtr& pMaterial, const mat4& pTransform,
         const LayerDefinitions& materialLayers = {}) = 0;
+
+    /// Add a new light to add illumination to the scene.
+    /// The light will be removed from the scene, when the shared pointer becomes unused.
+    ///
+    /// \param lightType Type of light (one of strings in
+    /// Aurora::Names::LightTypes).
+    /// \return A smart pointer to the new lights.
+    virtual ILightPtr addLightPointer(const string& lightType) = 0;
 
 protected:
     virtual ~IScene() = default; // hidden destructor

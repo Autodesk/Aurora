@@ -118,6 +118,30 @@ struct MaterialTypes
     static AURORA_API const std::string kMaterialXPath;
 };
 
+/// Types of light.
+struct LightTypes
+{
+    /// Distant (aka directional) light
+    static AURORA_API const std::string kDistantLight;
+};
+
+/// Light properties (only some will be valid properties for a given light type.)
+struct LightProperties
+{
+    /// Light direction (only valid for LightTypes::kDistantLight.)
+    static AURORA_API const std::string kDirection;
+    /// The angular diameter of the light in radians (only valid for LightTypes::kDistantLight.)
+    static AURORA_API const std::string kAngularDiameter;
+    /// Light exposure (defines the power of the light with kIntensity.)
+    /// TODO: Implement a more physically accurate photometric model with correct units.
+    static AURORA_API const std::string kExposure;
+    /// Light intensity (defines the power of the light with kExposure.)
+    /// TODO: Implement a more physically accurate photometric model with correct units.
+    static AURORA_API const std::string kIntensity;
+    /// Light color as RGB.
+    static AURORA_API const std::string kColor;
+};
+
 } // namespace Names
 
 } // namespace Aurora

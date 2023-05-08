@@ -16,6 +16,7 @@
 #include "PTEnvironment.h"
 #include "PTGeometry.h"
 #include "PTGroundPlane.h"
+#include "PTLight.h"
 #include "PTMaterial.h"
 #include "SceneBase.h"
 
@@ -108,6 +109,7 @@ public:
     IInstancePtr addInstancePointer(const Path& path, const IGeometryPtr& geom,
         const IMaterialPtr& pMaterial, const mat4& transform,
         const LayerDefinitions& materialLayers) override;
+    ILightPtr addLightPointer(const string& lightType) override;
 
     void update();
 
@@ -204,6 +206,9 @@ private:
     PTGroundPlanePtr _pGroundPlane;
     PTEnvironmentPtr _pEnvironment;
     uint32_t _numRendererDescriptors = 0;
+    map<int, weak_ptr<PTLight>> _distantLights;
+    int _currentLightIndex = 0;
+
     /*** DirectX 12 Objects ***/
 
     ID3D12ResourcePtr _pAccelStructure;

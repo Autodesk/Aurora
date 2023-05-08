@@ -122,24 +122,6 @@ void SceneBase::setBounds(const float* min, const float* max)
     assert(_bounds.isValid());
 }
 
-void SceneBase::setLight(
-    float intensity, const rgb& color, const vec3& direction, float angularDiameter)
-{
-    _lightIntensity       = intensity;
-    _lightColor           = color;
-    _lightDirection       = normalize(direction);
-    _lightAngularDiameter = angularDiameter;
-}
-
-void SceneBase::setLight(
-    float intensity, const float* color, const float* direction, float angularDiameter)
-{
-    _lightIntensity       = intensity;
-    _lightColor           = make_vec3(color);
-    _lightDirection       = normalize(make_vec3(direction));
-    _lightAngularDiameter = angularDiameter;
-}
-
 void SceneBase::addPermanent(const Path& path)
 {
     _resources[path]->incrementPermanentRefCount();

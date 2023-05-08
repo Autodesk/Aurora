@@ -554,6 +554,8 @@ bool Plasma::initialize()
         _camera.fit(_sceneContents.bounds, kDefaultDirection);
     }
 
+    _pDistantLight = _pScene->addLightPointer(Aurora::Names::LightTypes::kDistantLight);
+
     // Get the environment map file path from the env argument.
     if (arguments.count("env"))
     {
@@ -753,7 +755,12 @@ void Plasma::updateLighting()
             { Aurora::Names::EnvironmentProperties::kBackgroundTransform, transform } });
 
     // Update the directional light.
-    _pScene->setLight(lightIntensity, value_ptr(lightColor), value_ptr(_lightDirection));
+    _pDistantLight->values().setFloat(Aurora::Names::LightProperties::kIntensity, lightIntensity);
+    _pDistantLight->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(lightColor));
+    _pDistantLight->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(_lightDirection));
+
 }
 
 void Plasma::updateGroundPlane()

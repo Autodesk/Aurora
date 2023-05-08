@@ -261,9 +261,10 @@ TEST_P(ImageTest, TestNormalMapImage)
     if (!pRenderer)
         return;
 
-    rgb lightColor(1, 1, 1);
-    vec3 lightDirection(0.0f, -0.25f, +1.0f);
-    pScene->setLight(2.0f, lightColor, lightDirection);
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0.0f, -0.25f, +1.0f)));
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
 
     // Load pixels for test image file.
     const std::string txtName = dataPath() + "/Textures/fishscale_normal.png";

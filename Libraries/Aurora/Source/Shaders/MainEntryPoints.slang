@@ -17,17 +17,17 @@
 // replacing the tags surrounded by the ___ characters:
 // -___Material___ with the unique material shader name for this shader.
 
-#include "Options.slang"
 #include "Definitions.slang"
-#include "PathTracingCommon.slang"
 #include "InitializeMaterial.slang"
+#include "Options.slang"
+#include "PathTracingCommon.slang"
 #include "ShadeFunctions.slang"
 
 // RADIANCE_HIT is defined to 1 for shaders with the radiance hit entry point.
 #if RADIANCE_HIT
 // Closest hit shader for radiance rays.
-[shader("closesthit")] void ___Material___RadianceHitShader(inout RayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit)
-{
+[shader("closesthit")] void ___Material___RadianceHitShader(
+    inout RayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit) {
     int depth                   = rayPayload.radianceRay.depth;
     int maxDepth                = gFrameData.traceDepth;
     bool isOpaqueShadowsEnabled = gFrameData.isOpaqueShadowsEnabled;
@@ -35,8 +35,8 @@
     // Get the interpolated vertex data for the hit triangle, at the hit barycentric coordinates.
     uint triangleIndex  = PrimitiveIndex();
     float3 barycentrics = computeBarycentrics(hit);
-    ShadingData shading = computeShadingData(
-        gGeometry, triangleIndex, barycentrics, ObjectToWorld3x4());
+    ShadingData shading =
+        computeShadingData(gGeometry, triangleIndex, barycentrics, ObjectToWorld3x4());
 
     // Initialize the view direction.
     float3 V              = -WorldRayDirection();
@@ -45,11 +45,8 @@
 
     // Initialize the material values for repeated evaluations at the current shading point. Also
     // initialize the environment.
-    Material material = initializeMaterial(
-        shading, 
-        ObjectToWorld3x4(), 
-        materialNormal, 
-        isGeneratedNormal);
+    Material material =
+        initializeMaterial(shading, ObjectToWorld3x4(), materialNormal, isGeneratedNormal);
     Environment environment = prepareEnvironmentValues();
 
     // If a new normal has been generated, transform it to world space and build a corresponding
@@ -143,17 +140,29 @@
     rayPayload.radianceRay.metalness = material.metalness;
     rayPayload.radianceRay.indirect.clear();
 
-    // Shade with the global directional light. Skip this if the light intensity is zero.
-    if (gFrameData.lightColorAndIntensity.a > 0.0f)
+    // Shade with a randomly selected global distant light. Skip this if there are no distant lights.
+    if (gFrameData.lights.distantLightCount > 0)
     {
-        rayPayload.radianceRay.direct = shadeDirectionalLight(gFrameData.lightDir,
-            gFrameData.lightColorAndIntensity, gFrameData.lightCosRadius, gScene, material, shading,
-            V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
 
-        // Add the direct lighting to the color result.
-        // NOTE: For denoising purposes, "direct" lighting only includes the directional light, and
-        // not the environment light computed below.
-        rayPayload.radianceRay.color += rayPayload.radianceRay.direct;
+        // Choose a random distant light for this sample, by computing an index in range the 0 to (distantLightCount-1).
+        int lightIdx = int(
+            random2D(rayPayload.radianceRay.rng).x * float(gFrameData.lights.distantLightCount));
+
+        // Skip if the light has zero intensity.
+        if (gFrameData.lights.distantLights[lightIdx].colorAndIntensity.a > 0.0f)
+        {
+            // Shade the light.
+            rayPayload.radianceRay.direct =
+                shadeDirectionalLight(gFrameData.lights.distantLights[lightIdx].direction,
+                    gFrameData.lights.distantLights[lightIdx].colorAndIntensity,
+                    gFrameData.lights.distantLights[lightIdx].cosRadius, gScene, material, shading,
+                    V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
+
+            // Add the direct lighting to the color result.
+            // NOTE: For denoising purposes, "direct" lighting only includes the directional light,
+            // and not the environment light computed below.
+            rayPayload.radianceRay.color += rayPayload.radianceRay.direct;
+        }
     }
 
     // When denoising, primary rays for indirect lighting should not include the base color (also
@@ -177,14 +186,14 @@
             // TODO: This does not currently contribute to indirect lighting for denoising purposes.
             // That will require having the material evaluation return separate diffuse and glossy
             // components.
-            environmentRadiance =
-                shadeEnvironmentLightDirect(environment, gScene, material, shading,
-                    V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
+            environmentRadiance = shadeEnvironmentLightDirect(environment, gScene, material,
+                shading, V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
         }
         else if (IMPORTANCE_SAMPLING_MODE == IMPORTANCE_SAMPLING_MIS)
         {
-            environmentRadiance = shadeEnvironmentLightMIS(environment, gScene, material, shading, V, isOpaqueShadowsEnabled, depth,
-                    maxDepth, rayPayload.radianceRay.rng, rayPayload.radianceRay.indirect);
+            environmentRadiance = shadeEnvironmentLightMIS(environment, gScene, material, shading,
+                V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng,
+                rayPayload.radianceRay.indirect);
         }
 
         // Add the radiance from the environment light to the color result.
@@ -192,9 +201,9 @@
     }
 
     // Shade with indirect light from the surrounding scene (i.e. path tracing).
-    rayPayload.radianceRay.color += shadeIndirectLight(
-        gScene, environment, material, shading, V, depth, maxDepth, rayPayload.radianceRay.rng,
-        rayPayload.radianceRay.alpha, rayPayload.radianceRay.indirect);
+    rayPayload.radianceRay.color += shadeIndirectLight(gScene, environment, material, shading, V,
+        depth, maxDepth, rayPayload.radianceRay.rng, rayPayload.radianceRay.alpha,
+        rayPayload.radianceRay.indirect);
 
     // Scale the color components of the ray payload by opacity, and normalized by the probability
     // of this segment being considered opaque.
@@ -204,9 +213,10 @@
 }
 #endif
 
+// SHADOW_ANYHIT is defined to 1 for shaders with the shadow anyhit entry point.
 #if SHADOW_ANYHIT
-[shader("anyhit")] void ___Material___ShadowAnyHitShader(
-    inout ShadowRayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit)
+    [shader("anyhit")] void ___Material___ShadowAnyHitShader(
+        inout ShadowRayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit)
 {
     // If the material is opaque, set the visibility to zero, accept the hit, and stop searching for
     // hits, as the shadow ray is completely blocked. Doing this here is a performance optimization,
@@ -220,15 +230,16 @@
     // Get the interpolated vertex data for the hit triangle, at the hit barycentric coordinates.
     uint triangleIndex  = PrimitiveIndex();
     float3 barycentrics = computeBarycentrics(hit);
-    ShadingData shading = computeShadingData(
-        gGeometry, triangleIndex, barycentrics, ObjectToWorld3x4());
+    ShadingData shading =
+        computeShadingData(gGeometry, triangleIndex, barycentrics, ObjectToWorld3x4());
 
     // Initialize the material values.
     // NOTE: This evaluates all material properties, when only visibility (or opacity) is needed. It
     // may be more efficient to generate a dedicated function for getting the visibility alone.
     float3 materialNormal  = shading.normal;
     bool isGeneratedNormal = false;
-    Material material      = initializeMaterial(shading, ObjectToWorld3x4(), materialNormal, isGeneratedNormal);
+    Material material =
+        initializeMaterial(shading, ObjectToWorld3x4(), materialNormal, isGeneratedNormal);
 
     // Compute the opacity at the current hit from the opacity, transmission, and transmission color
     // properties. Then accumulate that (inverted) with the current visibility on the ray payload.
@@ -261,8 +272,7 @@
 
 // LAYER_MISS is defined to 1 for shaders with the layer miss entry point.
 #if LAYER_MISS
-[shader("miss")] void ___Material___LayerMissShader(inout RayPayload rayPayload)
-{
+[shader("miss")] void ___Material___LayerMissShader(inout RayPayload rayPayload) {
     int depth                   = rayPayload.radianceRay.depth;
     int maxDepth                = gFrameData.traceDepth;
     bool isOpaqueShadowsEnabled = gFrameData.isOpaqueShadowsEnabled;
@@ -271,8 +281,8 @@
     // coordinates.
     uint triangleIndex  = rayPayload.primitiveIndex;
     float3 barycentrics = computeBarycentrics(rayPayload.hit);
-    ShadingData shading = computeShadingData(
-        gGeometry, triangleIndex, barycentrics, rayPayload.objToWorld);
+    ShadingData shading =
+        computeShadingData(gGeometry, triangleIndex, barycentrics, rayPayload.objToWorld);
 
     // Initialize the view direction.
     float3 V              = rayPayload.viewDirection;
@@ -280,7 +290,8 @@
     bool isGeneratedNormal;
 
     // Initialize the material values for repeated evaluations at the current shading point.
-    Material material = initializeMaterial(shading, rayPayload.objToWorld, materialNormal, isGeneratedNormal);
+    Material material =
+        initializeMaterial(shading, rayPayload.objToWorld, materialNormal, isGeneratedNormal);
     Environment environment = prepareEnvironmentValues();
 
     // If a new normal has been generated, transform it to world space and build a corresponding
@@ -329,17 +340,29 @@
     rayPayload.radianceRay.metalness = material.metalness;
     rayPayload.radianceRay.indirect.clear();
 
-    // Shade with the global directional light. Skip this if the light intensity is zero.
-    if (gFrameData.lightColorAndIntensity.a > 0.0f)
+    // Shade with a randomly selected global distant light. Skip this if there are no distant lights.
+    if (gFrameData.lights.distantLightCount > 0)
     {
-        rayPayload.radianceRay.direct = shadeDirectionalLight(gFrameData.lightDir,
-            gFrameData.lightColorAndIntensity, gFrameData.lightCosRadius, gScene, material, shading,
-            V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
 
-        // Add the direct lighting to the color result.
-        // NOTE: For denoising purposes, "direct" lighting only includes the directional light, and
-        // not the environment light computed below.
-        rayPayload.radianceRay.color += rayPayload.radianceRay.direct;
+        // Choose a random distant light for this sample, by computing an index in range the 0 to (distantLightCount-1).
+        int lightIdx = int(
+            random2D(rayPayload.radianceRay.rng).x * float(gFrameData.lights.distantLightCount));
+
+        // Skip if the light has zero intensity.
+        if (gFrameData.lights.distantLights[lightIdx].colorAndIntensity.a > 0.0f)
+        {
+            // Shade the light.
+            rayPayload.radianceRay.direct =
+                shadeDirectionalLight(gFrameData.lights.distantLights[lightIdx].direction,
+                    gFrameData.lights.distantLights[lightIdx].colorAndIntensity,
+                    gFrameData.lights.distantLights[lightIdx].cosRadius, gScene, material, shading,
+                    V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
+
+            // Add the direct lighting to the color result.
+            // NOTE: For denoising purposes, "direct" lighting only includes the directional light,
+            // and not the environment light computed below.
+            rayPayload.radianceRay.color += rayPayload.radianceRay.direct;
+        }
     }
 
     // When denoising, primary rays for indirect lighting should not include the base color (also
@@ -364,14 +387,14 @@
             // TODO: This does not currently contribute to indirect lighting for denoising purposes.
             // That will require having the material evaluation return separate diffuse and glossy
             // components.
-            environmentRadiance =
-                shadeEnvironmentLightDirect(environment, gScene, material, shading,
-                    V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
+            environmentRadiance = shadeEnvironmentLightDirect(environment, gScene, material,
+                shading, V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
         }
         else if (IMPORTANCE_SAMPLING_MODE == IMPORTANCE_SAMPLING_MIS)
         {
-            environmentRadiance = shadeEnvironmentLightMIS(environment, gScene, material, shading, V, isOpaqueShadowsEnabled, depth,
-                    maxDepth, rayPayload.radianceRay.rng, rayPayload.radianceRay.indirect);
+            environmentRadiance = shadeEnvironmentLightMIS(environment, gScene, material, shading,
+                V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng,
+                rayPayload.radianceRay.indirect);
         }
 
         // Add the radiance from the environment light to the color result.
@@ -379,8 +402,8 @@
     }
 
     // Shade with indirect light from the surrounding scene (i.e. path tracing).
-    rayPayload.radianceRay.color += shadeIndirectLight(gScene, environment, material,
-        shading, V, depth, maxDepth, rayPayload.radianceRay.rng, rayPayload.radianceRay.alpha,
+    rayPayload.radianceRay.color += shadeIndirectLight(gScene, environment, material, shading, V,
+        depth, maxDepth, rayPayload.radianceRay.rng, rayPayload.radianceRay.alpha,
         rayPayload.radianceRay.indirect);
 
     // Scale the color components of the ray payload by opacity, and normalized by the probability

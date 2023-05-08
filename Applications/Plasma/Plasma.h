@@ -170,6 +170,7 @@ private:
     Aurora::IRenderer::Backend _rendererType = Aurora::IRenderer::Backend::Default;
     Aurora::IRendererPtr _pRenderer;
     Aurora::IGroundPlanePtr _pGroundPlane;
+    Aurora::ILightPtr _pDistantLight;
     Aurora::IScenePtr _pScene;
     Aurora::IWindowPtr _pWindow;
     vector<string> _assetPaths;

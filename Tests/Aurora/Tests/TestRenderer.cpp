@@ -1180,9 +1180,12 @@ TEST_P(RendererTest, TestRendererBackFaceLighting)
         return;
 
     // Rotate directional light facing to back-face of quad.
-    glm::vec3 lightDirec(0, 0, -1);
-    glm::vec3 lightColor(1, 1, 1);
-    pScene->setLight(2.0, &lightColor.x, &lightDirec.x);
+    defaultDistantLight()->values().setFloat(
+        Aurora::Names::LightProperties::kIntensity, 2.0f);
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0, 0, -1)));
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
 
     // Create a material (setting material type to default triggers creation.)
     const Path kMaterialPath = "DefaultMaterial";

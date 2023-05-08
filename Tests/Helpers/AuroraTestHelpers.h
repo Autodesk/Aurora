@@ -134,6 +134,8 @@ public:
     /// \brief Gets the default scene. (null if createDefaultScene not called)
     Aurora::IScenePtr defaultScene() { return _pDefaultScene; }
 
+    Aurora::ILightPtr defaultDistantLight() { return _pDefaultDistantLight;  }
+
     /// \brief Gets the default renderer's render buffer width.
     size_t defaultRendererWidth() { return _defaultRendererWidth; }
 
@@ -258,6 +260,9 @@ private:
 
     // Default renderer object
     Aurora::IRendererPtr _pDefaultRenderer;
+
+    // Default distant light.
+    Aurora::ILightPtr _pDefaultDistantLight;
 
     // Default renderer's render buffer object
     Aurora::IRenderBufferPtr _pDefaultRenderBuffer;

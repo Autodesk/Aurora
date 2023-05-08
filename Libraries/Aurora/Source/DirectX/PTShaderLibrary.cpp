@@ -641,7 +641,7 @@ void PTShaderLibrary::rebuild()
     // Should only be called if required (rebuilding requires stalling the GPU pipeline.)
     AU_ASSERT(rebuildRequired(), "Rebuild not needed");
 
-    // Build vector of compile jobs to execute in paralell.
+    // Build vector of compile jobs to execute in parallel.
     vector<CompileJob> compileJobs;
 
     // Compile function is executed by MaterialShaderLibrary::update for any shaders that need

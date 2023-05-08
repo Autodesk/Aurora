@@ -117,12 +117,6 @@ HdAuroraRenderDelegate::HdAuroraRenderDelegate(HdRenderSettingsMap const& settin
         _auroraScene = _auroraRenderer->createScene();
         _pImageCache = std::make_unique<HdAuroraImageCache>(_auroraScene);
 
-        // Set default directional light off
-        float color[3]       = { 0.0f, 0.0f, 0.0f };
-        float dir[3]         = { 0.0f, 0.0f, 1.0f };
-        float lightIntensity = 0.0f;
-        _auroraScene->setLight(lightIntensity, color, dir);
-
         // Create a ground plane object, which is assigned to the scene.
         _pGroundPlane = make_unique<GroundPlane>(_auroraRenderer.get(), _auroraScene.get());
 

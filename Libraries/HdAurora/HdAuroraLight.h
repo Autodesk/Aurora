@@ -47,4 +47,5 @@ public:
 
 private:
     HdAuroraRenderDelegate* _owner;
+    Aurora::ILightPtr _pDistantLight;
 };

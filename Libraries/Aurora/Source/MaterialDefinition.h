@@ -78,8 +78,10 @@ public:
 private:
     // The source code (and unique shader ID) for this material.
     MaterialShaderSource _source;
+    
     // The default values for the material.
     MaterialDefaultValues _defaults;
+
     // The update function, called when material is changed.
     function<void(MaterialBase&)> _updateFunc;
 
