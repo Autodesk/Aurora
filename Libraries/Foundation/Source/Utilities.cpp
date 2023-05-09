@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <limits.h>
 #include <stdio.h>
+#include <cstdint>
 #endif
 
 namespace Aurora
