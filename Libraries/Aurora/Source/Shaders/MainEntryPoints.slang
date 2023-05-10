@@ -18,8 +18,9 @@
 // -___Material___ with the unique material shader name for this shader.
 
 #include "Definitions.slang"
-#include "InitializeMaterial.slang"
 #include "Options.slang"
+
+#include "InitializeMaterial.slang"
 #include "PathTracingCommon.slang"
 #include "ShadeFunctions.slang"
 

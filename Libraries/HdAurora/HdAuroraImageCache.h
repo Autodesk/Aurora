@@ -32,12 +32,16 @@ public:
     HdAuroraImageCache(Aurora::IScenePtr pAuroraScene) : _pAuroraScene(pAuroraScene) {}
     ~HdAuroraImageCache() {}
 
+    // Set the flag to indicate the Y axis should be flipped on loaded images.
+    void setIsYFlipped(bool val);
+
     // Acquire an image from the cache, loading if necessary.
-    // Returns the Aurora path for the image (will be different for environment ismages.)
+    // Returns the Aurora path for the image (will be different for environment images.)
     Aurora::Path acquireImage(
         const string& sFilePath, bool isEnvironmentImage = false, bool linearize = false);
 
 private:
     map<string, HdAuroraImageCacheEntry> _cache;
     Aurora::IScenePtr _pAuroraScene;
+    bool _isYFlipped = true;
 };

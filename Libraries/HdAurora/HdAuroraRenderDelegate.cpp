@@ -83,140 +83,142 @@ HdAuroraRenderDelegate::HdAuroraRenderDelegate(HdRenderSettingsMap const& settin
     _sampleCounter(33, 250, 50),
     _hgi(nullptr)
 {
-    if (_auroraRenderer)
-    {
-        // TODO: For long-term, we need an API to set material unit information from client
-        // side.
-        // Background: "1 ASM unit = 1 cm" in Inventor! Unit section of ASM tutorial mentions
-        // the words we want confirm: "ASM is unit-less so it's up to the calling application to
-        // decide what one unit of ASM represents. Inventor has chosen: 1 ASM unit = 1 cm.
-        // Inventor allows the user to select mm or inches but all Inventor/ASM transaction is
-        // done in cm." That is, for Inventor Alpha release, it seems easier to use centimeter
-        // for Aurora for now.
-        _auroraRenderer->options().setString("units", "centimeter");
-
-        // Turn gamma correction off.  Leave tonemapping and color space correction to Hydra or
-        // the application.
-        _auroraRenderer->options().setBoolean("isGammaCorrectionEnabled", false);
-
-        // These render settings are the same as the default values.
-        // Convenient to have them here to understand the capabilities and options of the
-        // renderer.
-        float intensity[3] = { 1.0f, 1.0f, 1.0f };
-        _auroraRenderer->options().setFloat3("brightness", intensity);
-        _auroraRenderer->options().setBoolean("isToneMappingEnabled", false);
-        _auroraRenderer->options().setFloat("maxLuminance", 1000.0f);
-        _auroraRenderer->options().setBoolean("isDiffuseOnlyEnabled", false);
-        _auroraRenderer->options().setInt("traceDepth", 5);
-        _auroraRenderer->options().setBoolean("isDenoisingEnabled", false);
-        _auroraRenderer->options().setBoolean("alphaEnabled", false);
-        _sampleCounter.setMaxSamples(1000);
-        _sampleCounter.reset();
-
-        // create a new scene for this renderer.
-        _auroraScene = _auroraRenderer->createScene();
-        _pImageCache = std::make_unique<HdAuroraImageCache>(_auroraScene);
-
-        // Create a ground plane object, which is assigned to the scene.
-        _pGroundPlane = make_unique<GroundPlane>(_auroraRenderer.get(), _auroraScene.get());
-
-        // add the scene to the renderer.
-        _auroraRenderer->setScene(_auroraScene);
-
-        // Create an aurora path based on Hydra id.
-        _auroraEnvironmentPath = "HdAuroraEnvironment";
-
-        // Create an environment for path by setting empty properties.s
-        _auroraScene->setEnvironmentProperties(_auroraEnvironmentPath, {});
-
-        // Set the scene's environment.
-        _auroraScene->setEnvironment(_auroraEnvironmentPath);
-
-        // Set up the setting functions, that are called when render settings change.
-        _settingFunctions[HdAuroraTokens::kTraceDepth] = [this](VtValue const& value) {
-            _auroraRenderer->options().setInt("traceDepth", value.Get<int>());
-            return true;
-        };
-        _settingFunctions[HdAuroraTokens::kMaxSamples] = [this](VtValue const& value) {
-            int currentSamples = static_cast<int>(_sampleCounter.currentSamples());
-            // Newly max sample value is smaller than current sample, stop render and keep the
-            // current number, otherwise set to the new value.
-            _sampleCounter.setMaxSamples(std::max(currentSamples, value.Get<int>()));
-            return false;
-        };
-        _settingFunctions[HdAuroraTokens::kIsDenoisingEnabled] = [this](VtValue const& value) {
-            _auroraRenderer->options().setBoolean("isDenoisingEnabled", value.Get<bool>());
-            return true;
-        };
-        _settingFunctions[HdAuroraTokens::kIsAlphaEnabled] = [this](VtValue const& value) {
-            _auroraRenderer->options().setBoolean("alphaEnabled", value.Get<bool>());
-            _bEnvironmentIsDirty = true;
-            return false;
-        };
-        _settingFunctions[HdAuroraTokens::kUseEnvironmentImageAsBackground] =
-            [this](VtValue const& value) {
-                _useEnvironmentLightAsBackground = value.Get<bool>();
-                _bEnvironmentIsDirty             = true;
-                return false;
-            };
-        _settingFunctions[HdAuroraTokens::kBackgroundImage] = [this](VtValue const& value) {
-            _backgroundImageFilePath = value.Get<SdfAssetPath>().GetAssetPath();
-            _bEnvironmentIsDirty     = true;
-            return false;
-        };
-        _settingFunctions[HdAuroraTokens::kBackgroundColors] = [this](VtValue const& value) {
-            const auto& colors = value.Get<VtVec3fArray>();
-            if (colors.size() == 2 &&
-                (_backgroundTopColor != colors[0] || _backgroundBottomColor != colors[1]))
-            {
-                _backgroundTopColor    = colors[0];
-                _backgroundBottomColor = colors[1];
-                _bEnvironmentIsDirty   = true;
-            }
-            return false;
-        };
-        _settingFunctions[HdAuroraTokens::kGroundPlaneSettings] = [this](VtValue const& value) {
-            // Update the ground plane object, which return true if the data has changed.
-            return _pGroundPlane->update(value.Get<GroundPlane::ValueType>());
-        };
-        _settingFunctions[HdAuroraTokens::kIsSharedHandleEnabled] = [this](VtValue const& value) {
-            // Aurora provides shared DX or GL texture handles
-            if (value.Get<bool>())
-            {
-                _renderBufferSharingType = RenderBufferSharingType::DIRECTX_TEXTURE_HANDLE;
-            }
-            else
-                _renderBufferSharingType = RenderBufferSharingType::NONE;
-
-            // Set render settings that can be queried by the scene delegate
-            switch (_renderBufferSharingType)
-            {
-            case RenderBufferSharingType::NONE:
-                HdRenderDelegate::SetRenderSetting(
-                    HdAuroraTokens::kIsSharedHandleDirectX, VtValue(false));
-                HdRenderDelegate::SetRenderSetting(
-                    HdAuroraTokens::kIsSharedHandleOpenGL, VtValue(false));
-                break;
-            case RenderBufferSharingType::DIRECTX_TEXTURE_HANDLE:
-                HdRenderDelegate::SetRenderSetting(
-                    HdAuroraTokens::kIsSharedHandleDirectX, VtValue(true));
-                HdRenderDelegate::SetRenderSetting(
-                    HdAuroraTokens::kIsSharedHandleOpenGL, VtValue(false));
-                break;
-            case RenderBufferSharingType::OPENGL_TEXTURE_ID:
-                HdRenderDelegate::SetRenderSetting(
-                    HdAuroraTokens::kIsSharedHandleDirectX, VtValue(false));
-                HdRenderDelegate::SetRenderSetting(
-                    HdAuroraTokens::kIsSharedHandleOpenGL, VtValue(true));
-                break;
-            }
-            return true;
-        };
-    }
-    else
+    if (!_auroraRenderer)
     {
         TF_FATAL_ERROR("HdAurora fails to create renderer!");
     }
+    // TODO: For long-term, we need an API to set material unit information from client
+    // side.
+    // Background: "1 ASM unit = 1 cm" in Inventor! Unit section of ASM tutorial mentions
+    // the words we want confirm: "ASM is unit-less so it's up to the calling application to
+    // decide what one unit of ASM represents. Inventor has chosen: 1 ASM unit = 1 cm.
+    // Inventor allows the user to select mm or inches but all Inventor/ASM transaction is
+    // done in cm." That is, for Inventor Alpha release, it seems easier to use centimeter
+    // for Aurora for now.
+    _auroraRenderer->options().setString("units", "centimeter");
+
+    // Turn gamma correction off.  Leave tonemapping and color space correction to Hydra or
+    // the application.
+    _auroraRenderer->options().setBoolean("isGammaCorrectionEnabled", false);
+
+    // These render settings are the same as the default values.
+    // Convenient to have them here to understand the capabilities and options of the
+    // renderer.
+    float intensity[3] = { 1.0f, 1.0f, 1.0f };
+    _auroraRenderer->options().setFloat3("brightness", intensity);
+    _auroraRenderer->options().setBoolean("isToneMappingEnabled", false);
+    _auroraRenderer->options().setFloat("maxLuminance", 1000.0f);
+    _auroraRenderer->options().setBoolean("isDiffuseOnlyEnabled", false);
+    _auroraRenderer->options().setInt("traceDepth", 5);
+    _auroraRenderer->options().setBoolean("isDenoisingEnabled", false);
+    _auroraRenderer->options().setBoolean("alphaEnabled", false);
+    _sampleCounter.setMaxSamples(1000);
+    _sampleCounter.reset();
+
+    // create a new scene for this renderer.
+    _auroraScene = _auroraRenderer->createScene();
+    _pImageCache = std::make_unique<HdAuroraImageCache>(_auroraScene);
+
+    // Create a ground plane object, which is assigned to the scene.
+    _pGroundPlane = make_unique<GroundPlane>(_auroraRenderer.get(), _auroraScene.get());
+
+    // add the scene to the renderer.
+    _auroraRenderer->setScene(_auroraScene);
+
+    // Create an aurora path based on Hydra id.
+    _auroraEnvironmentPath = "HdAuroraEnvironment";
+
+    // Create an environment for path by setting empty properties.s
+    _auroraScene->setEnvironmentProperties(_auroraEnvironmentPath, {});
+
+    // Set the scene's environment.
+    _auroraScene->setEnvironment(_auroraEnvironmentPath);
+
+    // Set up the setting functions, that are called when render settings change.
+    _settingFunctions[HdAuroraTokens::kTraceDepth] = [this](VtValue const& value) {
+        _auroraRenderer->options().setInt("traceDepth", value.Get<int>());
+        return true;
+    };
+    _settingFunctions[HdAuroraTokens::kMaxSamples] = [this](VtValue const& value) {
+        int currentSamples = static_cast<int>(_sampleCounter.currentSamples());
+        // Newly max sample value is smaller than current sample, stop render and keep the
+        // current number, otherwise set to the new value.
+        _sampleCounter.setMaxSamples(std::max(currentSamples, value.Get<int>()));
+        return false;
+    };
+    _settingFunctions[HdAuroraTokens::kIsDenoisingEnabled] = [this](VtValue const& value) {
+        _auroraRenderer->options().setBoolean("isDenoisingEnabled", value.Get<bool>());
+        return true;
+    };
+    _settingFunctions[HdAuroraTokens::kIsAlphaEnabled] = [this](VtValue const& value) {
+        _auroraRenderer->options().setBoolean("alphaEnabled", value.Get<bool>());
+        _bEnvironmentIsDirty = true;
+        return false;
+    };
+    _settingFunctions[HdAuroraTokens::kUseEnvironmentImageAsBackground] =
+        [this](VtValue const& value) {
+            _useEnvironmentLightAsBackground = value.Get<bool>();
+            _bEnvironmentIsDirty             = true;
+            return false;
+        };
+    _settingFunctions[HdAuroraTokens::kBackgroundImage] = [this](VtValue const& value) {
+        _backgroundImageFilePath = value.Get<SdfAssetPath>().GetAssetPath();
+        _bEnvironmentIsDirty     = true;
+        return false;
+    };
+    _settingFunctions[HdAuroraTokens::kFlipLoadedImageY] = [this](VtValue const& value) {
+        bool flipY = value.Get<bool>();
+        _pImageCache->setIsYFlipped(flipY);
+        return false;
+    };
+    _settingFunctions[HdAuroraTokens::kBackgroundColors] = [this](VtValue const& value) {
+        const auto& colors = value.Get<VtVec3fArray>();
+        if (colors.size() == 2 &&
+            (_backgroundTopColor != colors[0] || _backgroundBottomColor != colors[1]))
+        {
+            _backgroundTopColor    = colors[0];
+            _backgroundBottomColor = colors[1];
+            _bEnvironmentIsDirty   = true;
+        }
+        return false;
+    };
+    _settingFunctions[HdAuroraTokens::kGroundPlaneSettings] = [this](VtValue const& value) {
+        // Update the ground plane object, which return true if the data has changed.
+        return _pGroundPlane->update(value.Get<GroundPlane::ValueType>());
+    };
+    _settingFunctions[HdAuroraTokens::kIsSharedHandleEnabled] = [this](VtValue const& value) {
+        // Aurora provides shared DX or GL texture handles
+        if (value.Get<bool>())
+        {
+            _renderBufferSharingType = RenderBufferSharingType::DIRECTX_TEXTURE_HANDLE;
+        }
+        else
+            _renderBufferSharingType = RenderBufferSharingType::NONE;
+
+        // Set render settings that can be queried by the scene delegate
+        switch (_renderBufferSharingType)
+        {
+        case RenderBufferSharingType::NONE:
+            HdRenderDelegate::SetRenderSetting(
+                HdAuroraTokens::kIsSharedHandleDirectX, VtValue(false));
+            HdRenderDelegate::SetRenderSetting(
+                HdAuroraTokens::kIsSharedHandleOpenGL, VtValue(false));
+            break;
+        case RenderBufferSharingType::DIRECTX_TEXTURE_HANDLE:
+            HdRenderDelegate::SetRenderSetting(
+                HdAuroraTokens::kIsSharedHandleDirectX, VtValue(true));
+            HdRenderDelegate::SetRenderSetting(
+                HdAuroraTokens::kIsSharedHandleOpenGL, VtValue(false));
+            break;
+        case RenderBufferSharingType::OPENGL_TEXTURE_ID:
+            HdRenderDelegate::SetRenderSetting(
+                HdAuroraTokens::kIsSharedHandleDirectX, VtValue(false));
+            HdRenderDelegate::SetRenderSetting(
+                HdAuroraTokens::kIsSharedHandleOpenGL, VtValue(true));
+            break;
+        }
+        return true;
+    };
 }
 
 void HdAuroraRenderDelegate::SetDrivers(HdDriverVector const& drivers)

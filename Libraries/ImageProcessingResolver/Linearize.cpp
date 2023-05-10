@@ -15,7 +15,6 @@
 
 #include "Linearize.h"
 
-
 float reverseSpectrumToneMappingLow(float x)
 {
     const float a  = 0.244925773f;
@@ -111,8 +110,8 @@ void canonInverse(
     // Copy the temp buffer to the output buffer, if used.
     if (isConversionRequired)
     {
-        imageBuf = newPixels;
-        imageData.data = imageBuf.data();
+        imageBuf         = newPixels;
+        imageData.data   = imageBuf.data();
         imageData.format = pxr::HioFormatFloat32Vec3;
     }
 }
@@ -125,7 +124,7 @@ bool linearize(const AssetCacheEntry& cacheEntry, pxr::HioImageSharedPtr const /
     if (imageData.format != pxr::HioFormatFloat32Vec3 &&
         imageData.format != pxr::HioFormatUNorm8Vec3srgb)
     {
-        AU_WARN("Unsupported format for linearizatoin");
+        AU_WARN("Unsupported format for linearization");
         return false;
     }
 

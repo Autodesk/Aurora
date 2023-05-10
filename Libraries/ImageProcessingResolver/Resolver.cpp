@@ -17,12 +17,6 @@
 #define URI_STATIC_BUILD 1
 #include "uriparser/Uri.h"
 
-#pragma warning(push)
-#pragma warning(disable : 4996)
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb_image_write.h>
-#pragma warning(pop)
-
 #define TINYEXR_USE_MINIZ 1
 #define TINYEXR_IMPLEMENTATION
 #pragma warning(push)
@@ -41,6 +35,90 @@
 #include <thread>
 
 using namespace pxr;
+
+HioFormat convertToFloat(HioFormat format)
+{
+    switch (format)
+    {
+    case HioFormatUNorm8:
+        return HioFormatFloat32;
+    case HioFormatUNorm8Vec2:
+        return HioFormatFloat32Vec2;
+    case HioFormatUNorm8Vec3:
+        return HioFormatFloat32Vec3;
+    case HioFormatUNorm8Vec4:
+        return HioFormatFloat32Vec4;
+
+    case HioFormatUNorm8srgb:
+        return HioFormatFloat32;
+    case HioFormatUNorm8Vec2srgb:
+        return HioFormatFloat32Vec2;
+    case HioFormatUNorm8Vec3srgb:
+        return HioFormatFloat32Vec3;
+    case HioFormatUNorm8Vec4srgb:
+        return HioFormatFloat32Vec4;
+
+    case HioFormatSNorm8:
+        return HioFormatFloat32;
+    case HioFormatSNorm8Vec2:
+        return HioFormatFloat32Vec2;
+    case HioFormatSNorm8Vec3:
+        return HioFormatFloat32Vec3;
+    case HioFormatSNorm8Vec4:
+        return HioFormatFloat32Vec4;
+
+    case HioFormatFloat16:
+        return HioFormatFloat32;
+    case HioFormatFloat16Vec2:
+        return HioFormatFloat32Vec2;
+    case HioFormatFloat16Vec3:
+        return HioFormatFloat32Vec3;
+    case HioFormatFloat16Vec4:
+        return HioFormatFloat32Vec4;
+
+    case HioFormatFloat32:
+        return HioFormatFloat32;
+    case HioFormatFloat32Vec2:
+        return HioFormatFloat32Vec2;
+    case HioFormatFloat32Vec3:
+        return HioFormatFloat32Vec3;
+    case HioFormatFloat32Vec4:
+        return HioFormatFloat32Vec4;
+    default:
+        AU_FAIL("Unsupported format.");
+    }
+    return HioFormatCount;
+}
+
+OIIO::TypeDesc::BASETYPE convertToOIIODataType(pxr::HioType type)
+{
+    OIIO::TypeDesc::BASETYPE oiioType = OIIO::TypeDesc::UNKNOWN;
+    switch (type)
+    {
+    case pxr::HioTypeUnsignedByte:
+        oiioType = OIIO::TypeDesc::UINT8;
+        break;
+    case pxr::HioTypeUnsignedShort:
+        oiioType = OIIO::TypeDesc::UINT16;
+        break;
+    case pxr::HioTypeUnsignedInt:
+        oiioType = OIIO::TypeDesc::UINT32;
+        break;
+    case pxr::HioTypeHalfFloat:
+        oiioType = OIIO::TypeDesc::HALF;
+        break;
+    case pxr::HioTypeFloat:
+        oiioType = OIIO::TypeDesc::FLOAT;
+        break;
+    case pxr::HioTypeDouble:
+        oiioType = OIIO::TypeDesc::DOUBLE;
+        break;
+    default:
+        oiioType = OIIO::TypeDesc::UNKNOWN;
+        break;
+    }
+    return oiioType;
+}
 
 // Asset path prefix, used once asset URI is processed.
 std::string assetPathPrefix = "@@@ImageProcessingAsset_";
@@ -78,8 +156,7 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
 
             // Create a temp buffer for the source image pixels.
             size_t sizeInBytes = image->GetWidth() * image->GetHeight() * image->GetBytesPerPixel();
-            std::vector<unsigned char> imageBuf(sizeInBytes);
-
+            std::vector<unsigned char> tempBuf(sizeInBytes);
             // Read the source image into the temp buffer.
             pxr::HioImage::StorageSpec imageData;
             imageData.width   = image->GetWidth();
@@ -87,7 +164,7 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
             imageData.depth   = 1;
             imageData.flipped = false;
             imageData.format  = image->GetFormat();
-            imageData.data    = imageBuf.data();
+            imageData.data    = tempBuf.data();
             image->Read(imageData);
 
             // The asset object (that will be cached in this resolver class.)
@@ -95,45 +172,63 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
 
             if (cacheEntry.host.compare("linearize") == 0)
             {
-                // Run the linearize function if host string indicated that function.
-                // This will overwrite the temp buffer in imageBuf with a resized vector if the
-                // input is LDR.
-                if (!linearize(cacheEntry, image, imageData, imageBuf))
+                // Run the linearize function if host string indicated that
+                // function. This will overwrite the temp buffer in tempBuf with a
+                // resized vector if the input is LDR.
+                if (!linearize(cacheEntry, image, imageData, tempBuf))
                     return nullptr;
             }
             else if (cacheEntry.host.compare("convertEnvMapLayout") == 0)
             {
-                // Run the convert environment map function if host string indicated that function.
-                // This will overwrite the temp buffer in imageBuf with a resized vector.
-                if (!convertEnvMapLayout(cacheEntry, image, imageData, imageBuf))
+                // Run the convert environment map function if host string indicated
+                // that function. This will overwrite the temp buffer in tempBuf
+                // with a resized vector.
+                if (!convertEnvMapLayout(cacheEntry, image, imageData, tempBuf))
                     return nullptr;
             }
 
-            // Currently only RGB float32 supported.
-            if (imageData.format == HioFormatFloat32Vec3)
+            // Get pointer to pixels to be written from temp buffer.
+            void* pPixels = tempBuf.data();
+
+            // If the image is in any format except float, then convert it to float.
+            pxr::HioType hioType = pxr::HioGetHioType(imageData.format);
+            int nChannels        = pxr::HioGetComponentCount(imageData.format);
+            std::vector<float> convertedBuf;
+            if (hioType != pxr::HioTypeFloat)
             {
+                OIIO::TypeDesc type = convertToOIIODataType(hioType);
+                OIIO::ImageSpec origImageSpec(imageData.width, imageData.height, nChannels, type);
+                OIIO::ImageBuf origBuf(origImageSpec, imageData.data);
+                convertedBuf.resize(imageData.width * imageData.height * nChannels * sizeof(float));
+                origBuf.get_pixels(OIIO::ROI::All(), OIIO::TypeDesc::FLOAT, convertedBuf.data());
+                imageData.data   = convertedBuf.data();
+                imageData.format = convertToFloat(imageData.format);
 
-                // Re-encode the image data as an EXR (as the rest of the USD stack expects an image
-                // file from the ArResolver.)
-                unsigned char* pBuffer;
-                const char* pErr;
-                int len = SaveEXRToMemory((const float*)imageData.data, imageData.width,
-                    imageData.height, 3, 0, (const unsigned char**)&pBuffer, &pErr);
-
-                // If successful create an ArAsset from the EXR in memory.
-                if (len)
-                {
-                    pAsset = std::make_shared<ResolverAsset>((void*)pBuffer, len);
-                }
-
-                // Free the buffer (as the ArAsset has taken a copy.)
-                free(pBuffer);
+                // Get the pixels from the converted buffer.
+                pPixels = convertedBuf.data();
             }
-            else
+
+            // Re-encode the image data as an EXR (as the rest of the USD stack expects an image
+            // file from the ArResolver.)
+            // The EXR file that is produced only works if OIIO is included in USD. Without OIIO in
+            // USD, the calling code will fail to load this.
+            // This uses TinyEXR, as a later OIIO version (approx  v2.4.5.0) is required for ioproxy
+            // support for EXR or HDR files. This is not ideal as this brings in more dependencies
+            // and tinyEXR forces compression, which we don't want.
+            //
+            unsigned char* pBuffer;
+            const char* pErr;
+            int len = SaveEXRToMemory((const float*)pPixels, imageData.width, imageData.height,
+                nChannels, 0, (const unsigned char**)&pBuffer, &pErr);
+
+            // If successful create an ArAsset from the EXR in memory.
+            if (len)
             {
-                AU_ERROR("Unsupported format:%x", imageData.format);
-                return nullptr;
+                pAsset = std::make_shared<ResolverAsset>((void*)pBuffer, len);
             }
+
+            // Free the buffer (as the ArAsset has taken a copy.)
+            free(pBuffer);
 
             // Set the cached asset.
             // TODO: Set a memory limit on size of cached assets.
@@ -152,7 +247,8 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
 ArResolvedPath ImageProcessingResolverPlugin::_Resolve(const std::string& assetPath) const
 {
 
-    // If this is a processed URI path, generated by _CreateIdentifier, just return it unaltered.
+    // If this is a processed URI path, generated by _CreateIdentifier, just return
+    // it unaltered.
     if (assetPath.find(assetPathPrefix) != std::string::npos)
     {
         return ArResolvedPath(assetPath);
@@ -197,10 +293,10 @@ std::string ImageProcessingResolverPlugin::CreateIdentifierFromURI(
                 queryList                          = queryList->next;
             }
 
-            // Set the source file name from the file query parameter (Which is common to all
-            // functions)
-            cacheEntry.sourceFilename =
-                ArDefaultResolver::_CreateIdentifier(cacheEntry.queries["file"], anchorAssetPath);
+            // Set the source file name from the file query parameter (Which is
+            // common to all functions)
+            cacheEntry.sourceFilename = ArDefaultResolver::_CreateIdentifier(
+                cacheEntry.queries["filename"], anchorAssetPath);
         }
 
         // Create a hash from original URI.
@@ -209,23 +305,13 @@ std::string ImageProcessingResolverPlugin::CreateIdentifierFromURI(
         // All images are assigned .exr extension currently.
         string ext = ".exr";
 
-// Even LDR images are converted to EXR currently.
-// TODO: Image processing algoritm should define the output extension.
-#if 0   
-        if (cacheEntry.sourceFilename.find_last_of(".png") != string::npos ||
-            cacheEntry.sourceFilename.find_last_of(".jpg") != string::npos ||
-            cacheEntry.sourceFilename.find_last_of(".bmp") != string::npos ||
-            cacheEntry.sourceFilename.find_last_of(".tif") != string::npos)
-                ext = ".png";
-#endif
-
         // Create generated asset path from hash.
         ArResolvedPath generatedAssetPath =
             ArResolvedPath(assetPathPrefix + Aurora::Foundation::sHash(assetHash) + ext);
         cacheEntry.assetPath = generatedAssetPath;
 
-        // If there is no cacheEntry for this path, or the sourceFilename has changed (due to anchor
-        // changing) then add to cache.
+        // If there is no cacheEntry for this path, or the sourceFilename has changed
+        // (due to anchor changing) then add to cache.
         auto& assetCache = const_cast<ImageProcessingResolverPlugin*>(this)->_assetCache;
         auto recordIter  = assetCache.find(generatedAssetPath);
         if (recordIter == assetCache.end() ||
@@ -241,7 +327,8 @@ std::string ImageProcessingResolverPlugin::CreateIdentifierFromURI(
 std::string ImageProcessingResolverPlugin::_CreateIdentifier(
     const std::string& assetPath, const ArResolvedPath& anchorAssetPath) const
 {
-    // If an imageProcessing URI was successfully parsed, return the processed asset path.
+    // If an imageProcessing URI was successfully parsed, return the processed asset
+    // path.
     std::string uriId = CreateIdentifierFromURI(assetPath, anchorAssetPath);
     if (!uriId.empty())
         return uriId;
@@ -253,7 +340,8 @@ std::string ImageProcessingResolverPlugin::_CreateIdentifier(
 std::string ImageProcessingResolverPlugin::_CreateIdentifierForNewAsset(
     const std::string& assetPath, const ArResolvedPath& anchorAssetPath) const
 {
-    // If an imageProcessing URI was successfully parsed, return the processed asset path.
+    // If an imageProcessing URI was successfully parsed, return the processed asset
+    // path.
     std::string uriId = CreateIdentifierFromURI(assetPath, anchorAssetPath);
     if (!uriId.empty())
         return uriId;

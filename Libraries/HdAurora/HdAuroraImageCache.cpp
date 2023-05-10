@@ -15,6 +15,12 @@
 
 #include "HdAuroraImageCache.h"
 
+// Flag to set the flip-y flag on loaded images.
+void HdAuroraImageCache::setIsYFlipped(bool val)
+{
+    _isYFlipped = val;
+}
+
 Aurora::Path HdAuroraImageCache::acquireImage(
     const string& sFilePath, bool isEnvironmentImage, bool forceLinear)
 {
@@ -40,7 +46,8 @@ Aurora::Path HdAuroraImageCache::acquireImage(
     newEntry.imageDesc.isEnvironment = isEnvironmentImage;
     newEntry.imageDesc.linearize     = !forceLinear;
 
-    pxr::HioImageSharedPtr const image = pxr::HioImage::OpenForReading(sFilePath);
+    std::string resolvedPath           = ArGetResolver().CreateIdentifier(sFilePath);
+    pxr::HioImageSharedPtr const image = pxr::HioImage::OpenForReading(resolvedPath);
     if (image)
     {
         pxr::HioImage::StorageSpec imageData;
@@ -48,7 +55,7 @@ Aurora::Path HdAuroraImageCache::acquireImage(
         imageData.width   = image->GetWidth();
         imageData.height  = image->GetHeight();
         imageData.depth   = 1;
-        imageData.flipped = true;
+        imageData.flipped = _isYFlipped;
         imageData.format  = image->GetFormat();
         bool paddingRequired =
             hioFormat == HioFormatUNorm8Vec3srgb || hioFormat == HioFormatUNorm8Vec3;

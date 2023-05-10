@@ -68,6 +68,9 @@ static const TfToken kGroundPlaneSettings("aurora:ground_plane_settings");
 /// Whether to flip the output image.
 static const TfToken kFlipYOutput("aurora:flip_y_output");
 
+/// Whether to flip the output image.
+static const TfToken kFlipLoadedImageY("aurora:flip_loaded_image_y");
+
 //**************************************************************************/
 // Material Tokens
 //**************************************************************************/
