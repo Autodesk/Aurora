@@ -310,7 +310,9 @@ void PTScene::update()
     SceneBase::update();
 
     // Update the environment.
-    if (_environments.active().modified())
+    // This is called if *any* active environment objects have changed, as that will almost always
+    // be the only active one.
+    if (_environments.changedThisFrame())
     {
         _pEnvironment = static_pointer_cast<PTEnvironment>(_pEnvironmentResource->resource());
         _pEnvironment->update();
@@ -380,10 +382,11 @@ void PTScene::update()
     // If any active geometry resources have been modified, flush the vertex buffer pool in case
     // there are any pending vertex buffers that are required to update the geometry, and then
     // update the geometry (and update BLAS for "complete" geometry that has position data).
-    if (_geometry.changed())
+    if (_geometry.changedThisFrame())
     {
         _pRenderer->flushVertexBufferPool();
-        for (PTGeometry& geom : _geometry.active().resources<PTGeometry>())
+        // Iterate through the modified geometry (which will include the newly active ones.)
+        for (PTGeometry& geom : _geometry.modified().resources<PTGeometry>())
         {
             geom.update();
             if (!geom.isIncomplete())
@@ -393,10 +396,11 @@ void PTScene::update()
 
     // If any active material resources have been modified update them and build a list of unique
     // samplers for all the active materials.
-    if (_materials.changed())
+    if (_materials.changedThisFrame())
     {
         map<size_t, uint32_t> materialSamplerIndicesMap;
         _samplerLookup.clear();
+        // Iterate through the all the active materials, even ones that have not changed.
         for (PTMaterial& mtl : _materials.active().resources<PTMaterial>())
         {
             mtl.update();
@@ -411,8 +415,8 @@ void PTScene::update()
         clearDesciptorHeap();
     }
 
-    // If any active instances have been modified, update all the active instances.
-    if (_instances.changed())
+    // If any active instances have been modified or activated, update all the active instances.
+    if (_instances.changedThisFrame())
     {
         for (PTInstance& instance : _instances.active().resources<PTInstance>())
         {
@@ -421,7 +425,7 @@ void PTScene::update()
     }
 
     // Update the acceleration structure if any geometry or instances have been modified.
-    if (_instances.active().modified() || _geometry.active().modified())
+    if (_instances.changedThisFrame() || _geometry.changedThisFrame())
     {
 
         // Ensure the acceleration structure is no longer being accessed.
@@ -433,7 +437,7 @@ void PTScene::update()
     }
 
     // Update the scene resources: the acceleration structure, the descriptor heap, and the shader
-    // tables.  Will only doanything if the relevant pointers have been cleared.
+    // tables.  Will only do anything if the relevant pointers have been cleared.
     updateAccelerationStructure();
     updateDescriptorHeap();
     updateShaderTables();

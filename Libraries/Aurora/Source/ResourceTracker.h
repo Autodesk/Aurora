@@ -57,7 +57,7 @@ public:
     bool empty() const { return _resourceData.empty(); }
 
     // Have changes been made to any resources this frame?
-    bool modified() const { return _modified; }
+    bool changedThisFrame() const { return _changedThisFrame; }
 
     // Get the index for the provided resource implentation within active list.
     // Will return -1 if resource not currently active.
@@ -81,17 +81,17 @@ public:
     // Get number of currently active resources.
     size_t count() const { return _resourceData.size(); }
 
-    void clearModifiedFlag() { _modified = false; }
+    void clearChangedThisFrameFlag() { _changedThisFrame = false; }
     void clear()
     {
         _resourceData.clear();
         _indexLookup.clear();
-        _modified = true;
+        _changedThisFrame = true;
     }
 
     void add(ImplementationClass* pDataPtr)
     {
-        _modified = true;
+        _changedThisFrame = true;
         // Add resource implementation to data list, and add index to lookup.
         _indexLookup[pDataPtr] = _resourceData.size();
         _resourceData.push_back(PointerWrapper(pDataPtr));
@@ -100,7 +100,7 @@ public:
 private:
     vector<PointerWrapper<ImplementationClass>> _resourceData;
     map<ImplementationClass*, size_t> _indexLookup;
-    bool _modified = false;
+    bool _changedThisFrame = false;
 };
 
 /// Typed tracker that will maintain list of active resource stubs of a given type.
@@ -147,13 +147,17 @@ public:
     // resource list) if no changes recorded in the tracker for this frame.
     bool update()
     {
+        // Clear the modified notifier (whether anything changed or not.)
         _modifiedNotifier.clear();
+
+        // Clear the active notifier changed flag (whether anything changed or not.)
+        _activeNotifier.clearChangedThisFrameFlag();
 
         // If tracker not changed, do nothing.
         // This keeps active resource list from previous frame but clears the modified flag.
-        if (!changed())
+        if (_activatedResources.empty() && _deactivatedResources.empty() &&
+            _modifiedResources.empty())
         {
-            _activeNotifier.clearModifiedFlag();
             return false;
         }
 
@@ -169,20 +173,24 @@ public:
             }
         }
 
-        // Set the modified flag and clear lists of resources.
-        _activeNotifier.clear();
-
-        // Iterate through all the active resources in tracker.
-        for (auto iter = _currentlyActiveResources.begin(); iter != _currentlyActiveResources.end();
-             iter++)
+        // If any resources have been activated or deactivated, update the active notifier.
+        if (!_activatedResources.empty() || !_deactivatedResources.empty())
         {
-            // Get the GPU implementation for the resource stub (sometimes will be null if error in
-            // activation)
-            const ResourceClass* pRes     = iter->second;
-            ImplementationClass* pDataPtr = pRes->resource().get();
-            if (pDataPtr)
+            // Set the modified flag and clear lists of resources.
+            _activeNotifier.clear();
+
+            // Iterate through all the active resources in tracker.
+            for (auto iter = _currentlyActiveResources.begin();
+                 iter != _currentlyActiveResources.end(); iter++)
             {
-                _activeNotifier.add(pDataPtr);
+                // Get the GPU implementation for the resource stub (sometimes will be null if error
+                // in activation)
+                const ResourceClass* pRes     = iter->second;
+                ImplementationClass* pDataPtr = pRes->resource().get();
+                if (pDataPtr)
+                {
+                    _activeNotifier.add(pDataPtr);
+                }
             }
         }
 
@@ -209,7 +217,12 @@ public:
     }
 
     // Have any changes (modifications, activations or deactivations) been made this frame?
-    bool changed() const { return _modifiedNotifier.modified() || _activeNotifier.modified(); }
+    bool changedThisFrame() const
+    {
+        // Is the modified list empty or has the active list changed (due to activation or
+        // deactivation) ?
+        return !_modifiedNotifier.empty() || _activeNotifier.changedThisFrame();
+    }
 
     // Get the currently active set of resource implementations, for this frame.
     ResourceNotifier<ImplementationClass>& active() { return _activeNotifier; }
@@ -219,6 +232,7 @@ public:
     ResourceNotifier<ImplementationClass>& modified() { return _modifiedNotifier; }
     const ResourceNotifier<ImplementationClass>& modified() const { return _modifiedNotifier; }
 
+    // How many resources are active?
     size_t activeCount() { return _currentlyActiveResources.size(); }
 
 private:
