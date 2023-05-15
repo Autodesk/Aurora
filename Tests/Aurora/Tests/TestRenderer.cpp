@@ -1092,8 +1092,7 @@ TEST_P(RendererTest, TestLocales)
         pRenderer->render();
 
         // Ensure no warnings or errors.
-        // TODO: Fix the space input which generates these two warnings in path tracing (See OGSMOD-1255)
-        ASSERT_EQ(errorAndWarningCount(), (i+1));
+        ASSERT_EQ(errorAndWarningCount(), 0);
     }
 }
 
@@ -1198,6 +1197,74 @@ TEST_P(RendererTest, TestRendererBackFaceLighting)
     // Create teapot behind opaque plane, with normal facing away from cameras.
     EXPECT_TRUE(pScene->addInstance(nextPath(), teapotPath, { { Names::InstanceProperties::kMaterial, kMaterialPath } }));
     EXPECT_TRUE(pScene->addInstance(nextPath(), planePath, { { Names::InstanceProperties::kMaterial, kMaterialPath }, { Names::InstanceProperties::kTransform, glm::translate(glm::vec3(0, 0, -0.75)) * glm::rotate(static_cast<float>(M_PI), glm::vec3(0, 1, 0))}, }));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES(currentTestName());
+}
+
+
+// Normal map image test.
+TEST_P(RendererTest, TestDebugNormals)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    if(!pRenderer)
+        return;
+
+    Aurora::IValues& options = pRenderer->options();
+
+    setDefaultRendererSampleCount(1);
+    
+    //Set debug mode to normals (kDebugModeNormal==3)
+    options.setInt("debugMode", 3);
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0.0f, -0.25f, +1.0f)));
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
+
+    // Load pixels for test image file.
+    const std::string txtName = dataPath() + "/Textures/Verde_Guatemala_Slatted_Marble_normal.png";
+    // Load image
+    TestHelpers::ImageData imageData;
+    loadImage(txtName, &imageData);
+
+    // Create the image.
+    const Path kImagePath          = "NormalImage";
+    imageData.descriptor.linearize = false;
+    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+
+    // Create geometry.
+    Path planePath  = createPlaneGeometry(*pScene, vec2(0.5f,0.5f));
+    Path teapotPath = createTeapotGeometry(*pScene);
+
+    // Create matrix and material for first instance (which is linearized).
+    const Path kMaterialPath = "NormalMaterial";
+    pScene->setMaterialProperties(kMaterialPath, { { "normal_image", kImagePath },{ "normal_image_scale", vec2(5.f, 5.f)} });
+    const Path kBasicMaterialPath = "BasicMaterial";
+    pScene->setMaterialProperties(kBasicMaterialPath, { { "base_color", vec3(0,1,0) } });
+    
+    mat4 scaleMtx = scale(vec3(2, 2, 2));
+
+    // Create geometry with the material.
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial]  = kMaterialPath;
+    instProps[Names::InstanceProperties::kTransform] = scaleMtx;
+    EXPECT_TRUE(pScene->addInstance(nextPath(), planePath, instProps));
+
+    instProps[Names::InstanceProperties::kMaterial]  = kMaterialPath;
+    instProps[Names::InstanceProperties::kTransform] = mat4();
+    EXPECT_TRUE(pScene->addInstance(nextPath(), teapotPath, instProps));
+
+    instProps[Names::InstanceProperties::kMaterial]  = kBasicMaterialPath;
+    instProps[Names::InstanceProperties::kTransform] = translate(vec3(0,-1.5,0));
+    EXPECT_TRUE(pScene->addInstance(nextPath(), teapotPath, instProps));
 
     // Render the scene and check baseline image.
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName());

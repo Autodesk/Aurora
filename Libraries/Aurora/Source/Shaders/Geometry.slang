@@ -91,7 +91,7 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
     shading.geomPosition = float3(0.0f, 0.0f, 0.0f);
     shading.normal       = float3(0.0f, 0.0f, 0.0f);
     shading.texCoord     = float2(0.0f, 0.0f);
-    shading.tangent      = float3(1.0f, 0.0f, 0.0f);
+    shading.tangent      = float3(0.0f, 0.0f, 0.0f);
 
     // Load the indices for the vertices of the triangle with the specified index.
     uint3 indices = geometry.getIndices(triangleIndex);
@@ -122,7 +122,7 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
         // Accumulate the optional normals, weighted by the barycentric coordinates.
         if (geometry.hasTangents())
         {
-            normals[i] = (geometry.getTangent(indices[i]));
+            tangents[i] = (geometry.getTangent(indices[i]));
             shading.tangent += tangents[i] * barycentrics[i];
         }
 
@@ -159,7 +159,7 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
         abs(shading.normal.y) < 0.999f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
 
     // Compute arbritary shading tangent from up vector, or use provided one transformed in world space.
-    shading.tangent = normalize(geometry.hasTangents() ? mul(objToWorld, float4(shading.tangent, 1.0f))
+    shading.tangent = normalize(geometry.hasTangents() ? normalize(mul((float3x3)objToWorld, shading.tangent))
                                             : cross(shading.normal, up));
 
     // Generate bitangent from normal and tangent.

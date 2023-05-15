@@ -26,6 +26,7 @@ class MaterialBase;
 struct MaterialDefaultValues;
 struct CompileJob;
 
+// The DX data for a compiled.
 struct CompiledShader
 {
     ComPtr<IDxcBlob> binary = nullptr;
@@ -33,11 +34,13 @@ struct CompiledShader
     string id;
     map<string, string> entryPoints;
     void destroyBinary() { binary = nullptr; }
+    // Reset the struct (as indices are re-used.)
     void reset()
     {
         destroyBinary();
         entryPoints.clear();
         exportName.clear();
+        id.clear();
     }
 };
 

@@ -106,12 +106,12 @@ GeometryBase::GeometryBase(const std::string& name, const GeometryDescriptor& de
         _texCoords, vertexBuffers[Names::VertexAttributes::kTexCoord0], _vertexCount, 2);
     copyVertexChannelData(_indices, vertexBuffers[Names::VertexAttributes::kIndices], _indexCount);
 
-    // Run the optional attributeUpdateComplete functoin to free any buffers being held by the
+    // Run the optional attributeUpdateComplete function to free any buffers being held by the
     // client.
     if (descriptor.attributeUpdateComplete)
         descriptor.attributeUpdateComplete(vertexBuffers, 0, _vertexCount, 0, _indexCount);
 
-    // TODO: We need a better UV generator, esspecially if we need tangents generated from them.
+    // TODO: We need a better UV generator, especially if we need tangents generated from them.
     if (_texCoords.size() == 0)
     {
         _texCoords.resize(_vertexCount * 2);

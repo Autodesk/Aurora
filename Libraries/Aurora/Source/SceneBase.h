@@ -92,6 +92,8 @@ public:
     /*** Functions ***/
 
     void update();
+    void preUpdate();
+
     shared_ptr<EnvironmentResource> defaultEnvironment();
 
     const Foundation::BoundingBox& bounds() const { return _bounds; }

@@ -167,7 +167,7 @@ void calculateTangents(size_t vertexCount, const float* vertex, const float* nor
             float sign = (n[2] < 0.0f) ? -1.0f : 1.0f;
             float a    = -1.0f / (sign + n[2]);
             float b    = n[0] * n[1] * a;
-            t          = vec3(1.0f + sign * n[0] * n[0] * a, sign * b, -sign * n[0]);
+            t          = normalize(vec3(1.0f + sign * n[0] * n[0] * a, sign * b, -sign * n[0]));
         }
     }
 }

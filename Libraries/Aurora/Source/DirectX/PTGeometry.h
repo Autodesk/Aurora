@@ -61,6 +61,7 @@ public:
         buffers.IndexBuffer    = _indexBuffer.address();
         buffers.PositionBuffer = _positionBuffer.address();
         buffers.NormalBuffer   = _normalBuffer.address();
+        buffers.TangentBuffer  = _tangentBuffer.address();
         buffers.TexCoordBuffer = _texCoordBuffer.address();
         return buffers;
     }

@@ -389,8 +389,9 @@ void SceneBase::setInstanceProperties(const Paths& paths, const Properties& inst
     }
 }
 
-void SceneBase::update()
+void SceneBase::preUpdate()
 {
+    // Create a default instance so the scene is not completely empty.
     if (_instances.activeCount() == 0)
     {
         if (!_pDefaultInstanceResource->isActive())
@@ -401,7 +402,10 @@ void SceneBase::update()
         if (_pDefaultInstanceResource->isActive())
             _pDefaultInstanceResource->decrementPermanentRefCount();
     }
+}
 
+void SceneBase::update()
+{
     // Update all the active resources, this will build the ResourceNotifier that stores the set of
     // active resources for this frame.
     _instances.update();

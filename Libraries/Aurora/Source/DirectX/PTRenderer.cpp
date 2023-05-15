@@ -45,7 +45,7 @@
 
 // Development flag to turn of exception catching during the render loop.
 // NOTE: This should never be 0 in committed code; it is only for local development.
-#define AU_DEV_CATCH_EXCEPTIONS_DURING_RENDERING 0
+#define AU_DEV_CATCH_EXCEPTIONS_DURING_RENDERING 1
 
 BEGIN_AURORA
 
@@ -780,6 +780,9 @@ void PTRenderer::renderInternal(uint32_t sampleStart, uint32_t sampleCount)
 
     // Retain certain option state for the frame.
     bool isResetHistoryEnabled = _values.asBoolean(kLabelIsResetHistoryEnabled);
+
+    // Call preUpdate function (will create any resources before the scene and shaders are rebuilt).
+    dxScene()->preUpdate();
 
     // Have any options changed?
     if (_bIsDirty)

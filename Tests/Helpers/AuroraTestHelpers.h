@@ -59,6 +59,9 @@ public:
     // Gets a pointer to normals for teapot test model
     static const float* uvs();
 
+    // Gets a pointer to tangents for teapot test model
+    static const float* tangents();
+
     // Gets the number of floats in teapot vertices
     static uint32_t verticesCount();
 
