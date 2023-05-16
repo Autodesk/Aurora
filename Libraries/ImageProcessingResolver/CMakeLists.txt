@@ -37,6 +37,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     PDB_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
+    # Follow the USD convention of lower-case initial on libraries.
+    OUTPUT_NAME "imageProcessingResolver"
 )
 
 # Add dependencies.
@@ -70,10 +72,10 @@ if(WIN32)
     set(IMAGEPROCESSINGRESOLVER_PLUGIN_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> $<$<CONFIG:Debug>:$<TARGET_PDB_FILE:${PROJECT_NAME}>> ${RUNTIME_OUTPUT_DIR}/usd
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${IMAGEPROCESSINGRESOLVER_PLUGIN_RESOURCES_DIR} ${RUNTIME_OUTPUT_DIR}/usd/ImageProcessingResolver/resources
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${IMAGEPROCESSINGRESOLVER_PLUGIN_RESOURCES_DIR} ${RUNTIME_OUTPUT_DIR}/usd/imageProcessingResolver/resources
     )
 endif()
 
 # Install the binaries.
 install(TARGETS ${PROJECT_NAME}  DESTINATION ${INSTALL_BIN}/usd)
-install(FILES "resources/plugInfo.json" DESTINATION ${INSTALL_BIN}/usd/ImageProcessingResolver/resources)
+install(FILES "resources/plugInfo.json" DESTINATION ${INSTALL_BIN}/usd/imageProcessingResolver/resources)

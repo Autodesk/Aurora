@@ -8,7 +8,7 @@
           }
         }
       },
-      "LibraryPath": "../ImageProcessingResolver.dll",
+      "LibraryPath": "../imageProcessingResolver.dll",
       "Name": "ImageProcessingResolver",
       "ResourcePath": "resources",
       "Root": "..",

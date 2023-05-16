@@ -50,6 +50,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     PDB_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
+
+    # Follow the USD convention of lower-case initial on libraries.
+    OUTPUT_NAME "hdAurora"
 )
 
 # Add dependencies.
