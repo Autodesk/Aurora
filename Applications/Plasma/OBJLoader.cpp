@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "pch.h"
 
+#include "Aurora/Foundation/Geometry.h"
 #include "Loaders.h"
 #include "SceneContents.h"
 
@@ -178,13 +179,16 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         }
         hasMesh = true;
 
-        Aurora::Path sceneInstancePath = filePath + ":OBJFileInstance-" + to_string(objectCount);
-        Aurora::Path geomPath          = filePath + ":OBJFileGeom-" + to_string(objectCount);
+        Aurora::Path sceneInstancePath =
+            filePath + "-" + shape.name + ":OBJFileInstance-" + to_string(objectCount);
+        Aurora::Path geomPath =
+            filePath + "-" + shape.name + ":OBJFileGeom-" + to_string(objectCount);
         objectCount++;
 
         SceneGeometryData& geometryData = sceneContents.addGeometry(geomPath);
         auto& positions                 = geometryData.positions;
         auto& normals                   = geometryData.normals;
+        auto& tangents                  = geometryData.tangents;
         auto& tex_coords                = geometryData.texCoords;
         auto& indices                   = geometryData.indices;
         indices.reserve(indexCount);
@@ -247,6 +251,29 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
             }
         }
 
+        // Calculate the vertex count.
+        uint32_t vertexCount = static_cast<uint32_t>(positions.size()) / 3;
+
+        // Do we have tangents ? Default to false.
+        bool bHasTangents = false;
+
+        // Create normals if they are not available.
+        if (!bHasNormals)
+        {
+            normals.resize(positions.size());
+            Foundation::calculateNormals(
+                vertexCount, positions.data(), indexCount / 3, indices.data(), normals.data());
+        }
+
+        // Create tangents if texture coordinates are available.
+        if (bHasTexCoords)
+        {
+            tangents.resize(normals.size());
+            Foundation::calculateTangents(vertexCount, positions.data(), normals.data(),
+                tex_coords.data(), indexCount / 3, indices.data(), tangents.data());
+            bHasTangents = true;
+        }
+
         Aurora::GeometryDescriptor& geomDesc = geometryData.descriptor;
         geomDesc.type                        = Aurora::PrimitiveType::Triangles;
         geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kPosition] =
@@ -255,11 +282,15 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
             Aurora::AttributeFormat::Float3;
         geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTexCoord0] =
             Aurora::AttributeFormat::Float2;
-        geomDesc.vertexDesc.count = static_cast<uint32_t>(positions.size()) / 3;
+        if (bHasTangents)
+            geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTangent] =
+                Aurora::AttributeFormat::Float3;
+        geomDesc.vertexDesc.count = vertexCount;
         geomDesc.indexCount       = indexCount;
-        geomDesc.getAttributeData = [geomPath, &sceneContents](Aurora::AttributeDataMap& buffers,
-                                        size_t /* firstVertex*/, size_t /* vertexCount*/,
-                                        size_t /* firstIndex*/, size_t /* indexCount*/) {
+        geomDesc.getAttributeData = [geomPath, bHasTangents, &sceneContents](
+                                        Aurora::AttributeDataMap& buffers, size_t /* firstVertex*/,
+                                        size_t /* vertexCount*/, size_t /* firstIndex*/,
+                                        size_t /* indexCount*/) {
             SceneGeometryData& geometryData = sceneContents.geometry[geomPath];
 
             buffers[Aurora::Names::VertexAttributes::kPosition].address =
@@ -276,6 +307,17 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
             buffers[Aurora::Names::VertexAttributes::kTexCoord0].size =
                 geometryData.texCoords.size() * sizeof(float);
             buffers[Aurora::Names::VertexAttributes::kTexCoord0].stride = sizeof(vec2);
+
+            // Fill in the tangent data, if we have them.
+            if (bHasTangents)
+            {
+                buffers[Aurora::Names::VertexAttributes::kTangent].address =
+                    geometryData.tangents.data();
+                buffers[Aurora::Names::VertexAttributes::kTangent].size =
+                    geometryData.tangents.size() * sizeof(float);
+                buffers[Aurora::Names::VertexAttributes::kTangent].stride = sizeof(vec3);
+            }
+
             buffers[Aurora::Names::VertexAttributes::kIndices].address =
                 geometryData.indices.data();
             buffers[Aurora::Names::VertexAttributes::kIndices].size =
