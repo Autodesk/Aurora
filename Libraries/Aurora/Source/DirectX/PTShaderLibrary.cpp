@@ -604,6 +604,8 @@ void PTShaderLibrary::setupCompileJobForShader(const MaterialShader& shader, Com
         to_string(shader.hasEntryPoint(EntryPointTypes::kLayerMiss)) + "\n\n";
     jobOut.code += "#define SHADOW_ANYHIT " +
         to_string(shader.hasEntryPoint(EntryPointTypes::kShadowAnyHit)) + "\n\n";
+    jobOut.code += "#define SHADOW_ANYHIT_ALWAYS_OPAQUE " +
+        to_string(shader.definition().isAlwaysOpaque) + "\n\n";
 
     // Create the shader entry points, by replacing template tags with the shader name.
     string entryPointSource =

@@ -437,6 +437,43 @@ TEST_P(RendererTest, TestRendererEmptySceneBounds)
     ASSERT_NO_FATAL_FAILURE(pRenderer->render());
 }
 
+// Test ground plane.
+TEST_P(RendererTest, TestRendererGroundPlane)
+{
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    Aurora::IGroundPlanePtr pGroundPlane = defaultRenderer()->createGroundPlanePointer();
+    pGroundPlane->values().setBoolean("enabled", true);
+    pGroundPlane->values().setFloat3("position", value_ptr(vec3(0, 0, 0)));
+    pGroundPlane->values().setFloat3("normal", value_ptr(vec3(0, 1, 0)));
+    pGroundPlane->values().setFloat("shadow_opacity", 1.0f);
+    pGroundPlane->values().setFloat("reflection_opacity", 1.0f);
+    pScene->setGroundPlanePointer(pGroundPlane);
+
+    setDefaultRendererCamera(vec3(0, 1, -5), vec3(0, 0, 0));
+
+    // Set arbritary bounds.
+    vec3 boundsMin(-1, -1, -1);
+    vec3 boundsMax(+1, +1, +1);
+    pScene->setBounds(boundsMin, boundsMax);
+
+    Path kMaterialPath = "MaterialPath";
+    pScene->setMaterialProperties(kMaterialPath, { { "base_color", vec3(1, 0, 0) } });
+
+    // Create a teapot instance with a default material.
+    Path geometry      = createTeapotGeometry(*pScene);
+    EXPECT_TRUE(pScene->addInstance(
+        "TeapotInstance", geometry, { { Names::InstanceProperties::kMaterial, kMaterialPath } }));
+
+    // Ensure result is correct by comparing to the baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES(currentTestName());
+}
+
 // Test null environment.
 TEST_P(RendererTest, TestRendererSetNullEnvironment)
 {

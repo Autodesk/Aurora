@@ -61,6 +61,7 @@ public:
         defOut.source              = _source;
         defOut.textureNames        = defaults().textureNames;
         defOut.propertyDefinitions = defaults().propertyDefinitions;
+        defOut.isAlwaysOpaque      = _isAlwaysOpaque;
     }
 
     // Gets the default values.

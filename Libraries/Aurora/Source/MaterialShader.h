@@ -81,6 +81,8 @@ struct MaterialShaderDefinition
     UniformBufferDefinition propertyDefinitions;
     // Names of the textures defined by this shader.
     vector<string> textureNames;
+    // Is this shader always opaque regardless of properties.
+    bool isAlwaysOpaque;
 
     bool compare(const MaterialShaderDefinition& other) const
     {
@@ -89,6 +91,8 @@ struct MaterialShaderDefinition
         if (textureNames.size() != other.textureNames.size())
             return false;
         if (propertyDefinitions.size() != other.propertyDefinitions.size())
+            return false;
+        if (isAlwaysOpaque != other.isAlwaysOpaque)
             return false;
         return true;
         // TODO also compare contents of arrays.

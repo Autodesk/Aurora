@@ -141,11 +141,13 @@
     rayPayload.radianceRay.metalness = material.metalness;
     rayPayload.radianceRay.indirect.clear();
 
-    // Shade with a randomly selected global distant light. Skip this if there are no distant lights.
+    // Shade with a randomly selected global distant light. Skip this if there are no distant
+    // lights.
     if (gFrameData.lights.distantLightCount > 0)
     {
 
-        // Choose a random distant light for this sample, by computing an index in range the 0 to (distantLightCount-1).
+        // Choose a random distant light for this sample, by computing an index in range the 0 to
+        // (distantLightCount-1).
         int lightIdx = int(
             random2D(rayPayload.radianceRay.rng).x * float(gFrameData.lights.distantLightCount));
 
@@ -219,6 +221,13 @@
     [shader("anyhit")] void ___Material___ShadowAnyHitShader(
         inout ShadowRayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit)
 {
+// If the materials for this shader are always opaque, keep this shader to a minimum to save
+// compile and runtime performance.
+#if SHADOW_ANYHIT_ALWAYS_OPAQUE
+    rayPayload.visibility = BLACK;
+    AcceptHitAndEndSearch();
+#else
+
     // If the material is opaque, set the visibility to zero, accept the hit, and stop searching for
     // hits, as the shadow ray is completely blocked. Doing this here is a performance optimization,
     // as it avoids calling the full material initialization below, which can be expensive.
@@ -268,6 +277,8 @@
     // NOTE: The default behavior of accepting the hit while continuing to search for hits is not
     // useful for shadow rays. It does not happen here, because of the intrinsic function calls
     // above.
+
+#endif
 }
 #endif
 
@@ -341,11 +352,13 @@
     rayPayload.radianceRay.metalness = material.metalness;
     rayPayload.radianceRay.indirect.clear();
 
-    // Shade with a randomly selected global distant light. Skip this if there are no distant lights.
+    // Shade with a randomly selected global distant light. Skip this if there are no distant
+    // lights.
     if (gFrameData.lights.distantLightCount > 0)
     {
 
-        // Choose a random distant light for this sample, by computing an index in range the 0 to (distantLightCount-1).
+        // Choose a random distant light for this sample, by computing an index in range the 0 to
+        // (distantLightCount-1).
         int lightIdx = int(
             random2D(rayPayload.radianceRay.rng).x * float(gFrameData.lights.distantLightCount));
 

@@ -1275,6 +1275,81 @@ TEST_P(MaterialTest, TestMaterialTransparency)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Opacity", "Materials");
 }
 
+TEST_P(MaterialTest, TestMaterialShadowTransparency)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0, -.5f, 1)));
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1,1,1)));
+    defaultDistantLight()->values().setFloat(Aurora::Names::LightProperties::kIntensity, 2.0f);
+    defaultDistantLight()->values().setFloat(
+        Aurora::Names::LightProperties::kAngularDiameter, 0.04f);
+
+
+    // Load pixels for test image file.
+    const std::string txtName = dataPath() + "/Textures/Triangle.png";
+
+    // Load image
+    TestHelpers::ImageData imageData;
+    loadImage(txtName, &imageData);
+
+    // Create the image.
+    const Path kImagePath = "OpacityImage";
+    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+
+
+    // Constant colors.
+    vec3 color0(0.5f, 1.0f, 0.3f);
+    vec3 opacity0(0.5f, 0.5f, 0.3f);
+
+    // Create geometry for teapot and plane geometry.
+    Path planeGeom  = createPlaneGeometry(*pScene);
+    Path teapotGeom = createTeapotGeometry(*pScene);
+
+    // Create materials.
+    Path transpMtl("TransparentMaterial");
+    pScene->setMaterialProperties(transpMtl, {});
+    Path opaqueMtl("OpaqueMaterial");
+    pScene->setMaterialProperties(opaqueMtl, { { "base_color", vec3(1,1,1) } });
+
+    // Create opaque plane instance behind a transparent teapot instance.
+    mat4 xform = translate(vec3(0, 0.5f, +2)) *scale(vec3(5,5,5));
+    Path planeInst("PlaneInstance");
+    Properties planeInstProps;
+    planeInstProps[Names::InstanceProperties::kMaterial]  = opaqueMtl;
+    planeInstProps[Names::InstanceProperties::kTransform] = xform;
+    EXPECT_TRUE(pScene->addInstance(planeInst, planeGeom, planeInstProps));
+
+    Path teapotInst("TeapotInstance");
+    Properties teapotInstProps;
+    teapotInstProps[Names::InstanceProperties::kMaterial] = transpMtl;
+    EXPECT_TRUE(pScene->addInstance(teapotInst, teapotGeom, teapotInstProps));
+
+    // Render baseline image with transmission.
+    pScene->setMaterialProperties(
+        transpMtl, { { "transmission", 0.5f }, { "thin_walled", false } });
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Transmission", "Materials");
+
+    // Render baseline image with transmission and thin_walled flag set.
+    pScene->setMaterialProperties(transpMtl, { { "opacity_image", kImagePath } });
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "OpacityImage", "Materials");
+
+    // Render baseline image with opacity, no transmission and thin_walled flag not set.
+    pScene->setMaterialProperties(transpMtl,
+        { { "transmission", 0.0f }, { "opacity_image", "" } , { "opacity", opacity0 },
+            { "thin_walled", false } });
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Opacity", "Materials");
+}
+
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMtlXSamplers)
 {

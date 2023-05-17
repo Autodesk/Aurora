@@ -121,6 +121,7 @@ public:
     static void updateBuiltInMaterial(MaterialBase& mtl);
 
     shared_ptr<MaterialDefinition> definition() { return _pDef; }
+    const shared_ptr<MaterialDefinition> definition() const { return _pDef; }
 
 protected:
     bool _isOpaque = true;

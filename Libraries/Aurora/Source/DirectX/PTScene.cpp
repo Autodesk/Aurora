@@ -143,9 +143,8 @@ PTInstance::~PTInstance()
     if (_pMaterial)
     {
         _pMaterial->shader()->decrementRefCount(EntryPointTypes::kRadianceHit);
-        // Decrement the shadow anyhit ref count, if the material is not always opaque.
-        if (!_pMaterial->definition()->isAlwaysOpaque())
-            _pMaterial->shader()->decrementRefCount(EntryPointTypes::kShadowAnyHit);
+        // The shadow anyhit is always attached.
+        _pMaterial->shader()->decrementRefCount(EntryPointTypes::kShadowAnyHit);
     }
 
     for (size_t i = 0; i < _layers.size(); i++)
@@ -166,9 +165,10 @@ void PTInstance::setMaterial(const IMaterialPtr& pMaterial)
         : dynamic_pointer_cast<PTMaterial>(_pScene->defaultMaterialResource()->resource());
 
     _pMaterial->shader()->incrementRefCount(EntryPointTypes::kRadianceHit);
-    // Increment the shadow anyhit ref count, if the material is not always opaque.
-    if (!_pMaterial->definition()->isAlwaysOpaque())
-        _pMaterial->shader()->incrementRefCount(EntryPointTypes::kShadowAnyHit);
+    // The shadow anyhit is always attached. This is needed as the ordering is arbitrary for anyhit
+    // shader invocations, so we cannot mix shaders with and without anyhit shadow shaders in the
+    // same scene.
+    _pMaterial->shader()->incrementRefCount(EntryPointTypes::kShadowAnyHit);
 
     // Set the instance as dirty.
     _bIsDirty = true;
