@@ -37,6 +37,15 @@ void HdAuroraRenderPass::_Execute(
     int viewportHeight               = framing.IsValid() ? framing.dataWindow.GetHeight()
                                                          : static_cast<int>(renderPassState->GetViewport()[3]);
 
+    // If the scene bounds are not valid set the bounds to a minimal bounding box, as it is not
+    // permitted to render an Aurora scene with empty bounds.
+    if (!_owner->BoundsValid())
+    {
+        float boundsEpsilon = 0.0001f;
+        _owner->UpdateBounds(pxr::GfVec3f(-boundsEpsilon, -boundsEpsilon, -boundsEpsilon),
+            pxr::GfVec3f(+boundsEpsilon, +boundsEpsilon, +boundsEpsilon));
+    }
+
     HdFormat format = _owner->GetDefaultAovDescriptor(HdAovTokens->color).format;
 
     if (_viewportSize.first != viewportWidth || _viewportSize.second != viewportHeight)
