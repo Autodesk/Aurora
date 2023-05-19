@@ -78,11 +78,8 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
     // TODO: Should be per-scene not per-renderer.
     _pShaderLibrary = make_unique<PTShaderLibrary>(_pDXDevice);
 
-    // Enable layer shaders on all platforms except AMD GPUs.
-    // TODO: There is a driver bug that causes a failure on AMD, when attempting to trace a ray with
-    // a null acceleration structure. This capability is needed for material layers. Once this
-    // driver bug is fixed, this can either be removed, or check for a specific driver version.
-    _pShaderLibrary->setOption("ENABLE_LAYERS", _pDevice->vendor() != PTDevice::Vendor::kAMD);
+    // Enable layer shaders.
+    _pShaderLibrary->setOption("ENABLE_LAYERS", true);
 
 #if ENABLE_MATERIALX
     // Get the materialX folder relative to the module path.
