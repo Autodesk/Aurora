@@ -31,6 +31,15 @@
 
 #pragma warning(disable : 4506) // inline function warning (from USD but appears in this file)
 
+// Computes the perceived luminance of a color.
+
+static float luminance(const pxr::GfVec3f& value)
+{
+    static constexpr pxr::GfVec3f kLuminanceFactors = pxr::GfVec3f(0.2125f, 0.7154f, 0.0721f);
+
+    return pxr::GfDot(value, kLuminanceFactors);
+}
+
 // Processed Hydra material network.
 // TODO: These should be cached to avoid recalculating each time.
 struct ProcessedMaterialNetwork
@@ -280,7 +289,8 @@ string HdAuroraMaterial::SeparateHDMaterialXDocument(
     }
     return MaterialX::writeToXmlString(hdMaterialXDoc);
 }
-bool HdAuroraMaterial::SetupAuroraMaterial(const string& materialType, const string& materialDocument)
+bool HdAuroraMaterial::SetupAuroraMaterial(
+    const string& materialType, const string& materialDocument)
 {
     // Calculate hash of document.
     std::size_t docHash = std::hash<std::string> {}(materialDocument);
@@ -494,9 +504,10 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         if (vtVal.IsHolding<GfVec3f>())
         {
             // Add the input binding for input to the dynamically built materialX document.
-            // Note: Values are applied seperately and not built into the document, so value is all zeros here.
-            parameterBindingStr +=
-                Aurora::Foundation::sFormat(paramBindingTemplate, auroraName.c_str(), "color3", "0.0,0.0,0.0");
+            // Note: Values are applied seperately and not built into the document, so value is all
+            // zeros here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "color3", "0.0,0.0,0.0");
         }
     };
 
@@ -506,7 +517,28 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         if (vtVal.IsHolding<float>())
         {
             // Add the input binding for input to the dynamically built materialX document.
-            // Note: Values are applied seperately and not built into the document, so value is zero here.
+            // Note: Values are applied separately and not built into the document, so value is zero
+            // here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "float", "0.0");
+        }
+    };
+
+    // Float setter function to convert Hydra float values to Aurora values
+    static auto setOpacityValue = [](string& parameterBindingStr, const VtValue& vtVal,
+                                      const std::string& auroraName) {
+        if (vtVal.IsHolding<float>())
+        {
+            // Add the input binding for input to the dynamically built materialX document.
+            // Note: Values are applied separately and not built into the document, so value is zero
+            // here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "float", "0.0");
+        }
+        else if (vtVal.IsHolding<GfVec3f>())
+        {
+            // The opacity value can also be passed as a GfVec3f, which must be converted to float.
+            // all zeros here.
             parameterBindingStr += Aurora::Foundation::sFormat(
                 paramBindingTemplate, auroraName.c_str(), "float", "0.0");
         }
@@ -604,6 +636,19 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         }
     };
 
+    // Get setting for mapping opacity to transmission (default to true if not set.)
+    VtValue mapOpacityToTransmissionVal =
+        _owner->GetRenderSetting(HdAuroraTokens::kMapMaterialOpacityToTransmission);
+    bool mapOpacityToTransmission = mapOpacityToTransmissionVal.IsHolding<bool>()
+        ? mapOpacityToTransmissionVal.Get<bool>()
+        : true;
+
+    // Setup the opacity parameter to map UsdPreviewSurface opacity to Standard Surface
+    // transmission, as required by kMapMaterialOpacityToTransmission setting.
+    ParameterInfo opacityParameterInfo = { TfToken("opacity"), "transmission", setOpacityValue };
+    if (!mapOpacityToTransmission)
+        opacityParameterInfo = { TfToken("opacity"), "opacity", setF3Value };
+
     // Specify the named pair of parameters to translate from Hydra to Aurora
     // and the translation function to use for the parameter.
     // { Hydra token, Aurora name (standard_surface), translation function }
@@ -615,12 +660,12 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         { TfToken("roughness"),             "specular_roughness", setF1Value },
         { TfToken("ior"),                   "specular_IOR",       setF1Value },
         { TfToken("emissiveColor"),         "emission_color",     setF3Value },
-        { TfToken("opacity"),               "transmission",       setF1Value },// Map UsdPreviewSurface opacity to Standard Surface transmission.
+        opacityParameterInfo,
         { TfToken("clearcoat"),             "coat",               setF1Value },
         { TfToken("clearcoatColor"),        "coat_color",         setF3Value },
         { TfToken("clearcoatRoughness"),    "coat_roughness",     setF1Value },
         { TfToken("metallic"),              "metalness",          setF1Value },
-        { TfToken("normal"),                "normal",             nullptr } // No converter funciton, can only be a texture.
+        { TfToken("normal"),                "normal",             nullptr } // No converter function, can only be a texture.
     };
     // clang-format on
 
@@ -658,13 +703,20 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         }
     };
 
-    // Setter to apply UsdPreviewSurface opacity to statndard surface transmission.
+    // Setter to apply UsdPreviewSurface opacity to standard surface transmission.
     auto setTransmissionFromOpacity = [](Aurora::Properties& materialProperties,
                                           const VtValue& vtVal, const std::string& auroraName) {
         if (vtVal.IsHolding<float>())
         {
             float val                      = vtVal.UncheckedGet<float>();
             materialProperties[auroraName] = 1.0f - val; // Transmission is one minux opacity.
+        }
+        else if (vtVal.IsHolding<GfVec3f>())
+        {
+            // Opacity can be passed as GfVec3f, in which case it should be converted to float.
+            GfVec3f val                    = vtVal.UncheckedGet<GfVec3f>();
+            float floatVal                 = luminance(val);
+            materialProperties[auroraName] = 1.0f - floatVal; // Transmission is one minus opacity.
         }
     };
 
@@ -754,6 +806,20 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         }
     };
 
+    // Get setting for mapping opacity to transmission (default to true if not set.)
+    VtValue mapOpacityToTransmissionVal =
+        _owner->GetRenderSetting(HdAuroraTokens::kMapMaterialOpacityToTransmission);
+    bool mapOpacityToTransmission = mapOpacityToTransmissionVal.IsHolding<bool>()
+        ? mapOpacityToTransmissionVal.Get<bool>()
+        : true;
+
+    // Setup the opacity parameter to map UsdPreviewSurface opacity to Standard Surface
+    // transmission, as required by kMapMaterialOpacityToTransmission setting.
+    ParameterInfo opacityParameterInfo = { TfToken("opacity"), "transmission",
+        setTransmissionFromOpacity };
+    if (!mapOpacityToTransmission)
+        opacityParameterInfo = { TfToken("opacity"), "opacity", setF3Value };
+
     // Specify the named pair of parameters to translate from Hydra to Aurora
     // and the translation function to use for the parameter.
     // { Hydra token, Aurora name (standard_surface), translation function }
@@ -765,7 +831,7 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         { TfToken("roughness"),             "specular_roughness", setF1Value },
         { TfToken("ior"),                   "specular_IOR",       setF1Value },
         { TfToken("emissiveColor"),         "emission_color",     setF3Value },
-        { TfToken("opacity"),               "transmission",       setTransmissionFromOpacity },// Map UsdPreviewSurface opacity to Standard Surface transmission.
+        opacityParameterInfo,
         { TfToken("clearcoat"),             "coat",               setF1Value },
         { TfToken("clearcoatColor"),        "coat_color",         setF3Value },
         { TfToken("clearcoatRoughness"),    "coat_roughness",     setF1Value },

@@ -319,7 +319,6 @@ VtValue HdAuroraRenderDelegate::GetRenderSetting(TfToken const& key) const
     {
         return VtValue(_alphaEnabled);
     }
-
     return HdRenderDelegate::GetRenderSetting(key);
 }
 
