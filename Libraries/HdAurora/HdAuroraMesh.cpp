@@ -25,6 +25,10 @@
 // If true extra validation done on the HDMesh geometry upon loading.
 #define VALIDATE_HDMESH 1
 
+// The tangents are causing issues at grazing angles in the BSDF, so disable for now.
+// TODO: Fix the issue with grazing angles and re-enable.
+#define HDAURORA_HAS_TANGENTS 0
+
 // Vertex data for mesh, passed to Aurora getVertexData callback.  Deleted once vertex update is
 // complete.
 struct HdAuroraMeshVertexData
@@ -108,8 +112,9 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
     _pVertexData->tangents = delegate->Get(id, pxr::TfToken("tangents")).Get<VtVec3fArray>();
     _pVertexData->uvs      = delegate->Get(id, pxr::TfToken("map1")).Get<VtVec2fArray>();
 
-    // Attempt to get UVs using "st" token if "map1" fails.  Both can be used in different circumstances.
-    if (_pVertexData->uvs.size()==0)
+    // Attempt to get UVs using "st" token if "map1" fails.  Both can be used in different
+    // circumstances.
+    if (_pVertexData->uvs.size() == 0)
         _pVertexData->uvs = delegate->Get(id, pxr::TfToken("st")).Get<VtVec2fArray>();
 
     // Sample code for extracting extra uv set
@@ -170,6 +175,7 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
 
     int minAttrCount = static_cast<int>(_pVertexData->points.size());
     int maxAttrCount = minAttrCount;
+    bool hasTangents = _pVertexData->tangents.size() == _pVertexData->normals.size();
 
     // If there are valid normals but normal and position attribute arrays are not the same
     // clamp indices to smallest value
@@ -285,8 +291,8 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
                 _pVertexData->flattenedTangents[j * 3 + 2] = _pVertexData->tangents[t2];
             }
         }
-
-        if (_pVertexData->tangents.size() == _pVertexData->normals.size())
+#if HDAURORA_HAS_TANGENTS
+        if (!hasTangents && _pVertexData->st->size())
         {
             // If there are no client provided tangents, create tangent vectors based on the texture
             // coordinates, using a utility function.
@@ -296,7 +302,9 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
                 reinterpret_cast<const float*>(_pVertexData->st->data()),
                 _pVertexData->triangulatedIndices.size(), nullptr,
                 reinterpret_cast<float*>(_pVertexData->flattenedTangents.data()));
+            hasTangents = true;
         }
+#endif
     }
     else
     {
@@ -316,9 +324,8 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
                 " for " + GetId().GetString());
             return;
         }
-
-        if (_pVertexData->tangents.size() != _pVertexData->normals.size() &&
-            _pVertexData->uvs.size())
+#if HDAURORA_ENABLE_TANGENTS
+        if (!hasTangents && _pVertexData->uvs.size())
         {
             _pVertexData->tangents.resize(_pVertexData->points.size());
             Aurora::Foundation::calculateTangents(_pVertexData->points.size(),
@@ -328,7 +335,9 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
                 _pVertexData->triangulatedIndices.size(),
                 reinterpret_cast<const unsigned int*>(_pVertexData->triangulatedIndices.data()),
                 reinterpret_cast<float*>(_pVertexData->tangents.data()));
+            hasTangents = true;
         }
+#endif
     }
 
     // Create a geometry descriptor for mesh's geometry.
@@ -342,8 +351,9 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
     // Set normals and tangent attibute type.
     geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kNormal] =
         Aurora::AttributeFormat::Float3;
-    geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTangent] =
-        Aurora::AttributeFormat::Float3;
+    if (hasTangents)
+        geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTangent] =
+            Aurora::AttributeFormat::Float3;
 
     // Set texcoord attibute type, if the mesh has them.
     if (_pVertexData->hasTexCoords)
@@ -359,7 +369,7 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
 
     // Setup vertex attribute callback to read vertex and index data.
     // This will be called when the geometry is added to scene via instance.
-    geomDesc.getAttributeData = [this, hasFaceVaryings, hasFaceVaryingSTs](
+    geomDesc.getAttributeData = [this, hasFaceVaryings, hasFaceVaryingSTs, hasTangents](
                                     Aurora::AttributeDataMap& dataOut, size_t firstVertex,
                                     size_t vertexCount, size_t firstIndex, size_t indexCount) {
         // Sanity check, ensure we are not doing a partial update (not actually implemented yet)
@@ -384,9 +394,12 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
             dataOut[Aurora::Names::VertexAttributes::kNormal].address =
                 &_pVertexData->flattenedNormals[0];
             dataOut[Aurora::Names::VertexAttributes::kNormal].stride = sizeof(GfVec3f);
-            dataOut[Aurora::Names::VertexAttributes::kTangent].address =
-                &_pVertexData->flattenedTangents[0];
-            dataOut[Aurora::Names::VertexAttributes::kTangent].stride = sizeof(GfVec3f);
+            if (hasTangents)
+            {
+                dataOut[Aurora::Names::VertexAttributes::kTangent].address =
+                    &_pVertexData->flattenedTangents[0];
+                dataOut[Aurora::Names::VertexAttributes::kTangent].stride = sizeof(GfVec3f);
+            }
 
             // Use the STs.
             if (hasFaceVaryingSTs)
@@ -414,7 +427,7 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
             dataOut[Aurora::Names::VertexAttributes::kPosition].stride  = sizeof(GfVec3f);
             dataOut[Aurora::Names::VertexAttributes::kNormal].address   = &_pVertexData->normals[0];
             dataOut[Aurora::Names::VertexAttributes::kNormal].stride    = sizeof(GfVec3f);
-            if (_pVertexData->tangents.size() == _pVertexData->points.size())
+            if (hasTangents)
             {
                 dataOut[Aurora::Names::VertexAttributes::kTangent].address =
                     &_pVertexData->tangents[0];

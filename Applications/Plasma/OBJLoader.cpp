@@ -19,6 +19,8 @@
 
 uint32_t ImageCache::whitePixels[1] = { 0xFFFFFFFF };
 
+#define PLASMA_HAS_TANGENTS 0
+
 // A simple structure describing an OBJ index, which has sub-indices for vertex channels: position,
 // normal, and texture coordinates.
 struct OBJIndex
@@ -188,7 +190,6 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         SceneGeometryData& geometryData = sceneContents.addGeometry(geomPath);
         auto& positions                 = geometryData.positions;
         auto& normals                   = geometryData.normals;
-        auto& tangents                  = geometryData.tangents;
         auto& tex_coords                = geometryData.texCoords;
         auto& indices                   = geometryData.indices;
         indices.reserve(indexCount);
@@ -266,6 +267,8 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         }
 
         // Create tangents if texture coordinates are available.
+#if PLASMA_HAS_TANGENTS
+        auto& tangents = geometryData.tangents;
         if (bHasTexCoords)
         {
             tangents.resize(normals.size());
@@ -273,6 +276,7 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
                 tex_coords.data(), indexCount / 3, indices.data(), tangents.data());
             bHasTangents = true;
         }
+#endif
 
         Aurora::GeometryDescriptor& geomDesc = geometryData.descriptor;
         geomDesc.type                        = Aurora::PrimitiveType::Triangles;
