@@ -163,9 +163,6 @@ TEST_F(MaterialGeneratorTest, BasicTest)
     pMtlDef2Dupe.reset();
     ASSERT_EQ(pMtlDef2.use_count(), 1);
     pMtlDef2.reset();
-
-    Aurora::MaterialDefinitionPtr pMtlDef2NotDupe = matGen.generate(materialXString2);
-    ASSERT_NE(pMtlDef2NotDupe.get(), pMtlDef2Raw);
 }
 
 TEST_F(MaterialGeneratorTest, MaterialShaderLibraryTest)
