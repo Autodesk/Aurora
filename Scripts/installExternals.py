@@ -488,7 +488,7 @@ OIIO_PACKAGE_NAME = "OpenImageIO"
 
 def InstallOpenImageIO(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(OIIO_URL, context, force)):
-        ApplyGitPatch("OpenImageIO.patch")
+        ApplyGitPatch(context, "OpenImageIO.patch")
 
         extraArgs = ['-DOIIO_BUILD_TOOLS=OFF',
                      '-DOIIO_BUILD_TESTS=OFF',
@@ -612,7 +612,7 @@ def InstallUSD(context, force, buildArgs):
 #     with CurrentWorkingDirectory(GitClone(USD_URL, USD_TAG, USD_FOLDER, context)):
 
         # We need to apply patch to make USD build with our externals configuration
-        ApplyGitPatch("USD.patch")
+        ApplyGitPatch(context, "USD.patch")
 
         extraArgs = []
 
@@ -677,6 +677,8 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DPXR_LIB_PREFIX=')
 
         extraArgs += buildArgs
+
+        # extraArgs.append('-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=TRUE')
 
         tbbConfigs = {
             "Debug": '-DTBB_USE_DEBUG_BUILD=ON',

@@ -1,5 +1,6 @@
 # Ignore build directories.
 Build/
+Build.*/
 _build/
 Externals/
 _externals/

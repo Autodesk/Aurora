@@ -212,7 +212,7 @@ def CheckVersion(context, packageName, versionString):
 
     versionTxt = pathlib.Path(versionTextFilename).read_text()
     return versionTxt==fullVersionString
-    
+
 # Update generated .version.txt file for a package.
 def UpdateVersion(context, packageName, versionString):
     if(CheckVersion(context, packageName, versionString)):
@@ -439,11 +439,12 @@ def PatchFile(filename, patches, multiLineMatches=False):
         shutil.copy(filename, filename + ".old")
         open(filename, 'w').writelines(newLines)
 
-def ApplyGitPatch(patchfile):
+def ApplyGitPatch(context, patchfile):
     try:
         patch = os.path.normpath(os.path.join(context.auroraSrcDir, "Scripts", "Patches", patchfile))
-        PrintStatus(f"Applying {patchfile} ...")
+        PrintStatus(f"    Applying {patchfile} ...")
         Run(f'git apply "{patch}"')
+        PrintStatus(f"    Done")
     except Exception as e:
         PrintWarning(f"Failed to apply {patchfile}. Skipped\n")
 
