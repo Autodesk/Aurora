@@ -62,7 +62,7 @@ def windowsBuild() {
     call set PATH=C:\\VulkanSDK\\1.3.231.1\\bin;%PATH%
     call set VK_SDK_PATH=C:\\VulkanSDK\\1.3.231.1
     call set VULKAN_SDK=C:\\VulkanSDK\\1.3.231.1
- 
+
     :: Set up Visual Studio 2019 Environment
     call C:\\"Program Files (x86)"\\"Microsoft Visual Studio"\\2019\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
 
@@ -72,9 +72,8 @@ def windowsBuild() {
     :: build Aurora
     echo Configure CMake project
     if exist Build\\CMakeCache.txt del /f Build\\CMakeCache.txt
-    :: Windows SDK version 10.0.22000.194 or later is required in https://git.autodesk.com/GFX/Aurora#windows.
-    :: We'd disable DX BACKEND as installing the windows sdk maybe have some bad effects on other jobs.
-    cmake -S . -B Build -D CMAKE_BUILD_TYPE=Release -D EXTERNALS_DIR=${EXTERNALS_DIR} -DENABLE_DIRECTX_BACKEND=OFF
+
+    cmake -S . -B Build -D CMAKE_BUILD_TYPE=Release -D EXTERNALS_DIR=${EXTERNALS_DIR}
     cmake --build Build --config Release
     if not errorlevel 0 (
         echo ERROR: Failed to build the project for Release binaries, see console output for details

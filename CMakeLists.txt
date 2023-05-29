@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.24)
 
 # Forbid the in-source build
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
-    message(FATAL_ERROR “In-source build is not allowed!”)
+    message(FATAL_ERROR "In-source build is not allowed!")
 endif()
 
 # Set the project name and project variables
@@ -107,6 +107,13 @@ else()
     set(ENABLE_DIRECTX_BACKEND OFF)
     # Always enable HGI backend on non-Windows platforms
     set(ENABLE_HGI_BACKEND ON)
+endif()
+
+# Set up Windows 10 SDK path and version
+if(WIN32)
+    get_filename_component(winSDK_path "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots;KitsRoot10]" ABSOLUTE CACHE)
+    set(ENV{WINDOWS_SDK_PATH} ${winSDK_path})
+    set(ENV{WINDOWS_SDK_VERSION} "10.0.22000.0")
 endif()
 
 add_subdirectory(Libraries)
