@@ -160,17 +160,16 @@ bool PTMaterial::update()
     // Run the type-specific update function on this material.
     definition()->updateFunction()(*this);
 
-    // Create a constant buffer for the data if it doesn't already exist.
-    if (!_pConstantBuffer)
+    // Create a transfer buffer for the material data if it doesn't already exist.
+    if (!_constantBuffer.size)
     {
-        _pConstantBuffer = _pRenderer->createBuffer(uniformBuffer().size());
+        _constantBuffer = _pRenderer->createTransferBuffer(uniformBuffer().size());
     }
 
-    // Copy the data to the constant buffer.
-    void* pMappedData = nullptr;
-    checkHR(_pConstantBuffer->Map(0, nullptr, &pMappedData));
+    // Copy the data to the transfer buffer.
+    void* pMappedData = _constantBuffer.map(uniformBuffer().size());
     ::memcpy_s(pMappedData, uniformBuffer().size(), uniformBuffer().data(), uniformBuffer().size());
-    _pConstantBuffer->Unmap(0, nullptr); // no HRESULT
+    _constantBuffer.unmap();
 
     _bIsDirty = false;
 

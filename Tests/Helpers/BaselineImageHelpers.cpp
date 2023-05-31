@@ -18,6 +18,8 @@
 #include <sstream>
 #include <string>
 
+#include <Aurora/Foundation/Utilities.h>
+
 using namespace std;
 
 #if __clang__
@@ -137,7 +139,7 @@ Result compare(const uint8_t* renderedPixels, size_t width, size_t height,
     string fileName = name + ".png";
 
     // replace non-file chars with underscore
-    sanitizeFileName(fileName);
+    Aurora::Foundation::sanitizeFileName(fileName);
 
     // Output and baseline file named identically in baseline and output folder
     string outputFile   = combinePaths(ouputImageFolder, fileName);

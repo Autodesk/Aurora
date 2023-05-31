@@ -168,6 +168,7 @@ if(ENABLE_DIRECTX_BACKEND)
 
     # DirectX backend source.
     set(DIRECTX_SOURCE
+        "Source/DirectX/MemoryPool.cpp"
         "Source/DirectX/MemoryPool.h"
         "Source/DirectX/PTDevice.cpp"
         "Source/DirectX/PTDevice.h"

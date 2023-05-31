@@ -158,16 +158,6 @@ std::string combinePaths(const std::string& path0, const std::string& path1)
     return path0 + "/" + path1;
 }
 
-void sanitizeFileName(std::string& fileName)
-{
-    // Replace non-file chars with underscore
-    // TODO: More exhaustive set of chars
-    std::replace(fileName.begin(), fileName.end(), '/', '_');
-    std::replace(fileName.begin(), fileName.end(), '\\', '_');
-    std::replace(fileName.begin(), fileName.end(), '?', '_');
-    std::replace(fileName.begin(), fileName.end(), '*', '_');
-}
-
 bool createDirectory(const std::string& path)
 {
     // If already exists return true

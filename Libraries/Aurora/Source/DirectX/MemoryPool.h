@@ -51,10 +51,10 @@ public:
         // add it the list of buffers for the current task.
         if (size > kBufferSize)
         {
-            ID3D12ResourcePtr pLargeBuffer = _funcCreateScratchBuffer(size);
-            _taskBuffers[_taskIndex].push_back(pLargeBuffer);
+            ID3D12ResourcePtr pTransferBuffer = _funcCreateScratchBuffer(size);
+            _taskBuffers[_taskIndex].push_back(pTransferBuffer);
 
-            return pLargeBuffer->GetGPUVirtualAddress();
+            return pTransferBuffer->GetGPUVirtualAddress();
         }
 
         // If the current buffer doesn't have enough space for the requested scratch buffer, add it
@@ -103,53 +103,82 @@ private:
     size_t _bufferOffset = 0;
 };
 
+class PTRenderer;
+
+// A transfer buffer should be used whenever a buffer needs to be transferred to the GPU to be read
+// from a ray tracing shader.
+// NOTE: Failing to do so, and using an upload buffer (which is stored in CPU memory not VRAM)
+// directly will result in a PCI copy every time a shader reads from the buffer.
+struct TransferBuffer
+{
+    // The upload buffer is created on the UPLOAD heap, which is stored in CPU memory.  This is
+    // mapped and filled with data on CPU.
+    ID3D12ResourcePtr pUploadBuffer;
+    // The GPU buffer is created on the DEFAULT heap, which is stored in VRAM.  The renderer will
+    // copy the upload buffer to this buffer on the GPU.
+    // The calling code can optionally retain only this buffer and release the upload buffer safely (which will be deleted by the renderer once the upload is complete.)
+    ID3D12ResourcePtr pGPUBuffer;
+    // The currently mapped range in the buffer.
+    CD3DX12_RANGE mappedRange = { SIZE_MAX, SIZE_MAX };
+    // The total size of the buffer in bytes.
+    size_t size = 0;
+    // The renderer pointer (which will upload the GPU buffers after unmap is called)
+    PTRenderer* pRenderer = nullptr;
+
+    // Is the buffer valid?
+    bool valid() { return pGPUBuffer != nullptr; }
+    // Reset and release the buffers.
+    void reset()
+    {
+        pUploadBuffer.Reset();
+        pGPUBuffer.Reset();
+        mappedRange = { SIZE_MAX, SIZE_MAX };
+        size        = 0;
+        pRenderer   = nullptr;
+    }
+    // Map the upload buffer in CPU memory.
+    uint8_t* map(size_t size = 0, size_t offset = 0);
+    // Unmap the upload buffer in CPU memory.  This will trigger an upload to the GPU buffer, in the
+    // renderer.
+    void unmap();
+};
+
 // A pool used to supply vertex buffers, e.g. index, position, normal, and tex coords. This improves
 // performance by collecting many small virtual allocations into fewer physical allocations of GPU
 // memory.
 class VertexBufferPool
 {
 public:
-    using FuncCreateVertexBuffer = function<ID3D12ResourcePtr(size_t)>;
+    using FuncCreateVertexBuffer = function<TransferBuffer(size_t)>;
 
-    // Constructor. This accepts to create a single GPU vertex buffer.
-    VertexBufferPool(FuncCreateVertexBuffer funcCreateVertexBuffer)
+    // Constructor. This accepts to create a single transfer buffer for vertices.
+    VertexBufferPool(FuncCreateVertexBuffer funcCreateTransferBuffer) :
+        _funcCreateTransferBuffer(funcCreateTransferBuffer)
     {
-        assert(funcCreateVertexBuffer);
-
         // Create the initial buffer, mapped for writing.
-        // NOTE: We deliberately do not specify a read range here, i.e. second parameter for Map().
-        // Testing has shown that specifying the read range (zero start and end, to indicate that no
-        // reading will be performed), actually results in *slower* upload in practice.
-        _funcCreateVertexBuffer = funcCreateVertexBuffer;
-        _pBuffer                = _funcCreateVertexBuffer(kBufferSize);
-        checkHR(_pBuffer->Map(0, nullptr, reinterpret_cast<void**>(&_pMappedData)));
+        allocateNewBuffer();
     }
 
     // Gets a vertex buffer with the size specified in the provided vertex buffer description, and
     // fills it with the provided data. The resource pointer and buffer offset of the vertex buffer
     // description will be populated.
-    void get(VertexBuffer& vertexBuffer, void* pData)
+    void get(VertexBuffer& vertexBuffer, void* pData, size_t size)
     {
-        AU_ASSERT(vertexBuffer.size > 0 && pData, "Invalid vertex buffer");
-
         // If the requested size exceeds the total buffer size, just create a dedicated buffer and
         // and use it directly.
-        size_t size = vertexBuffer.size;
         if (size > kBufferSize)
         {
             // Create the (large) buffer.
-            ID3D12ResourcePtr pLargeBuffer = _funcCreateVertexBuffer(size);
+            TransferBuffer transferBuffer = _funcCreateTransferBuffer(size);
 
             // Map it for reading and copy the provided data.
-            CD3DX12_RANGE writeRange(0, size);
-            uint8_t* pMappedData = nullptr;
-            checkHR(pLargeBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData)));
+            uint8_t* pMappedData = transferBuffer.map();
             ::memcpy_s(pMappedData, size, pData, size);
-            pLargeBuffer->Unmap(0, &writeRange); // no HRESULT
+            transferBuffer.unmap();
 
-            // Update the provided vertex buffer structure.
-            vertexBuffer.pBuffer = pLargeBuffer;
-            vertexBuffer.offset  = 0;
+            // Update the provided vertex buffer structure.  We only use the GPU buffer, the
+            // upload buffer will be released once upload complete.
+            vertexBuffer = VertexBuffer(transferBuffer.pGPUBuffer, size);
 
             return;
         }
@@ -164,11 +193,11 @@ public:
         // Copy the provided data to the mapped buffer.
         ::memcpy_s(_pMappedData + _bufferOffset, size, pData, size);
 
-        // Update the provided vertex buffer structure. By assigning the buffer resource pointer to
-        // the vertex buffer, the owner of the vertex buffer takes on shared ownership of the
-        // resource, so that it can safely be released by the pool later.
-        vertexBuffer.pBuffer = _pBuffer;
-        vertexBuffer.offset  = _bufferOffset;
+        // Update the provided vertex buffer structure. By assigning the GPU buffer resource
+        // pointer to the vertex buffer, the owner of the vertex buffer takes on shared ownership of
+        // the resource, so that it can safely be released by the pool later.  The upload buffer
+        // will be release by the renderer once it is uploaded.
+        vertexBuffer = VertexBuffer(_currentTransferBuffer.pGPUBuffer, size, _bufferOffset);
 
         // Increment the buffer offset, while taking the acceleration structure byte alignment (256)
         // into account.
@@ -185,24 +214,32 @@ public:
             return;
         }
 
-        // Unmap the (open) buffer, and release the buffer.
-        CD3DX12_RANGE writeRange(0, _bufferOffset - 1);
-        _pBuffer->Unmap(0, &writeRange); // no HRESULT
-        _pBuffer.Reset();
+        // Unmap the (open) buffer.
+        _currentTransferBuffer.unmap();
         _pMappedData = nullptr;
 
         // Create a new buffer, mapped for writing.
-        _pBuffer      = _funcCreateVertexBuffer(kBufferSize);
-        _bufferOffset = 0;
-        checkHR(_pBuffer->Map(0, nullptr, reinterpret_cast<void**>(&_pMappedData)));
+        allocateNewBuffer();
     }
 
 private:
+    void allocateNewBuffer()
+    {
+        // Allocate a new transfer buffer.
+        _currentTransferBuffer = _funcCreateTransferBuffer(kBufferSize);
+
+        // Reset offset to zero.
+        _bufferOffset = 0;
+
+        // Map entirety the current buffer.
+        _pMappedData = _currentTransferBuffer.map();
+    }
+
     // The buffer size is selected to support dozens of average vertex buffers.
     const size_t kBufferSize = 4 * 1024 * 1024;
 
-    FuncCreateVertexBuffer _funcCreateVertexBuffer;
-    ID3D12ResourcePtr _pBuffer;
+    FuncCreateVertexBuffer _funcCreateTransferBuffer;
+    TransferBuffer _currentTransferBuffer;
     uint8_t* _pMappedData = nullptr;
     size_t _bufferOffset  = 0;
 };

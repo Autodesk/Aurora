@@ -14,6 +14,7 @@
 #pragma once
 
 #include "MaterialBase.h"
+#include "MemoryPool.h"
 
 BEGIN_AURORA
 
@@ -65,7 +66,7 @@ public:
     }
 
     // Gets the constant buffer for this material.
-    ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
+    ID3D12Resource* buffer() const { return _constantBuffer.pGPUBuffer.Get(); }
 
     bool update();
     void createDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT increment) const;
@@ -82,7 +83,7 @@ private:
     /*** Private Variables ***/
 
     PTRenderer* _pRenderer = nullptr;
-    ID3D12ResourcePtr _pConstantBuffer;
+    TransferBuffer _constantBuffer;
 };
 MAKE_AURORA_PTR(PTMaterial);
 

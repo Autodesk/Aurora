@@ -150,8 +150,7 @@ bool PTGeometry::updateBLAS()
 
 void PTGeometry::createVertexBuffer(VertexBuffer& vertexBuffer, void* pData, size_t dataSize) const
 {
-    vertexBuffer.size = dataSize;
-    _pRenderer->getVertexBuffer(vertexBuffer, pData);
+    _pRenderer->getVertexBuffer(vertexBuffer, pData, dataSize);
 }
 
 ID3D12ResourcePtr PTGeometry::buildBLAS()
@@ -168,7 +167,7 @@ ID3D12ResourcePtr PTGeometry::buildBLAS()
     // Specify the vertex data.
     triangles.VertexCount                = _vertexCount;
     triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
-    triangles.VertexBuffer.StartAddress  = _positionBuffer.address();
+    triangles.VertexBuffer.StartAddress  = _positionBuffer.gpuAddress();
     triangles.VertexBuffer.StrideInBytes = sizeof(float) * 3;
 
     // Specify the index data, if any.
@@ -176,7 +175,7 @@ ID3D12ResourcePtr PTGeometry::buildBLAS()
     {
         triangles.IndexCount  = _indexCount;
         triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-        triangles.IndexBuffer = _indexBuffer.address();
+        triangles.IndexBuffer = _indexBuffer.gpuAddress();
     }
 
     // Describe the BLAS.

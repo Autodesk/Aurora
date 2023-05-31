@@ -51,7 +51,7 @@ bool PTEnvironment::update()
     // Update the constant buffer with environment data, creating the buffer if needed. The lambda
     // here translates values to the data object for the constant buffer (GPU).
     _pRenderer->updateBuffer<EnvironmentData>(
-        _pConstantBuffer, [this](EnvironmentData& data) { updateGPUStruct(data); });
+        _constantBuffer, [this](EnvironmentData& data) { updateGPUStruct(data); });
 
     _bIsDirty = false;
 

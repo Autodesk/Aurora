@@ -24,10 +24,10 @@
 #include "PTGeometry.h"
 #include "PTGroundPlane.h"
 #include "PTImage.h"
+#include "PTLight.h"
 #include "PTMaterial.h"
 #include "PTScene.h"
 #include "PTShaderLibrary.h"
-#include "PTLight.h"
 
 #if ENABLE_MATERIALX
 #include "MaterialX/MaterialGenerator.h"
@@ -111,8 +111,8 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
         return createBuffer(size, "Scratch Buffer Pool", D3D12_HEAP_TYPE_DEFAULT,
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     });
-    _pVertexBufferPool   = make_unique<VertexBufferPool>(
-        [&](size_t size) { return createBuffer(size, "Vertex Buffer Pool"); });
+    _pVertexBufferPool =
+        make_unique<VertexBufferPool>([&](size_t size) { return createTransferBuffer(size); });
 }
 
 PTRenderer::~PTRenderer()
@@ -200,12 +200,12 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         // If flag is set dump the document to disk for development purposes.
         if (AU_DEV_DUMP_MATERIALX_DOCUMENTS)
         {
-            string mltxPath = Foundation::getModulePath() + name + "Dumped.mtlx";
-            AU_INFO("Dumping MTLX document to:%s", mltxPath.c_str());
-            ofstream outputFile;
-            outputFile.open(mltxPath);
-            outputFile << document;
-            outputFile.close();
+            string mltxPath = name + "Dumped.mtlx";
+            Foundation::sanitizeFileName(mltxPath);
+            if (Foundation::writeStringToFile(document, mltxPath))
+                AU_INFO("Dumping MTLX document to:%s", mltxPath.c_str());
+            else
+                AU_WARN("Failed to dump MTLX document to:%s", mltxPath.c_str());
         }
     }
     else if (materialType.compare(Names::MaterialTypes::kMaterialXPath) == 0)
@@ -223,7 +223,8 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         }
         else
         {
-            // If Material XML document loaded, use it to generate the material shader and definition.
+            // If Material XML document loaded, use it to generate the material shader and
+            // definition.
             pShader = generateMaterialX(*pMtlxDocument, &pDef);
         }
     }
@@ -467,6 +468,20 @@ ID3D12ResourcePtr PTRenderer::createBuffer(size_t size, const string& name,
     return pResource;
 }
 
+TransferBuffer PTRenderer::createTransferBuffer(size_t sz, const string& name)
+{
+    TransferBuffer buffer;
+    // Create the upload buffer in the UPLOAD heap (which will mean it is in CPU memory not VRAM).
+    buffer.pUploadBuffer = createBuffer(sz, name + ":Upload");
+    // Create the GPU buffer in the DEFAULT heap.
+    buffer.pGPUBuffer = createBuffer(sz, name + ":GPU", D3D12_HEAP_TYPE_DEFAULT);
+    // Set the size.
+    buffer.size = sz;
+    // Set the renderer to this (will call transferBufferUpdated from unmap.)
+    buffer.pRenderer = this;
+    return buffer;
+}
+
 ID3D12ResourcePtr PTRenderer::createTexture(uvec2 dimensions, DXGI_FORMAT format,
     const string& name, bool isUnorderedAccess, bool shareable)
 {
@@ -507,14 +522,74 @@ D3D12_GPU_VIRTUAL_ADDRESS PTRenderer::getScratchBuffer(size_t size)
     return _pScratchBufferCache->get(size);
 }
 
-void PTRenderer::getVertexBuffer(VertexBuffer& vertexBuffer, void* pData)
+void PTRenderer::transferBufferUpdated(const TransferBuffer& buffer)
 {
-    _pVertexBufferPool->get(vertexBuffer, pData);
+    // Get the mapped range for buffer (set the end to buffer size, in the case where end==0.)
+    size_t beginMap = buffer.mappedRange.Begin;
+    size_t endMap   = buffer.mappedRange.End == 0 ? buffer.size : buffer.mappedRange.End;
+
+    // See if this buffer already exists in pending list.
+    auto iter = _pendingTransferBuffers.find(buffer.pGPUBuffer.Get());
+    if (iter != _pendingTransferBuffers.end())
+    {
+        // Just update the mapped range in the existing pending buffer.
+        iter->second.mappedRange.Begin = std::min(iter->second.mappedRange.Begin, beginMap);
+        iter->second.mappedRange.End   = std::max(iter->second.mappedRange.End, endMap);
+        return;
+    }
+
+    // Add the buffer in the pending list, updating the end range if needed.
+    _pendingTransferBuffers[buffer.pGPUBuffer.Get()]                 = buffer;
+    _pendingTransferBuffers[buffer.pGPUBuffer.Get()].mappedRange.End = endMap;
+}
+
+void PTRenderer::getVertexBuffer(VertexBuffer& vertexBuffer, void* pData, size_t size)
+{
+    _pVertexBufferPool->get(vertexBuffer, pData, size);
 }
 
 void PTRenderer::flushVertexBufferPool()
 {
     _pVertexBufferPool->flush();
+}
+
+void PTRenderer::uploadTransferBuffers()
+{
+    // If there are no transfer buffers pending, just clear the deletion list (to ensure any buffers
+    // from last frame are deleted) and return.
+    if (_pendingTransferBuffers.empty())
+    {
+        _transferBuffersToDelete.clear();
+        return;
+    }
+
+    // Begin a command list.
+    ID3D12GraphicsCommandList4Ptr pCommandList = beginCommandList();
+
+    // Iterate through all pending buffers.
+    for (auto iter = _pendingTransferBuffers.begin(); iter != _pendingTransferBuffers.end(); iter++)
+    {
+        // Get pending buffer.
+        auto& buffer = iter->second;
+
+        // Calculate the byte count from the mapped range (which will be the maximum range mapped
+        // this frame.)
+        size_t bytesToCopy = buffer.mappedRange.End - buffer.mappedRange.Begin;
+
+        // Submit buffer copy command for mapped range from the upload buffer to the GPU buffer.
+        pCommandList->CopyBufferRegion(buffer.pGPUBuffer.Get(), buffer.mappedRange.Begin,
+            buffer.pUploadBuffer.Get(), buffer.mappedRange.Begin, bytesToCopy);
+    }
+
+    // Submit the command list.
+    submitCommandList();
+
+    // Copy the pending buffer list to the deletion list (this will also release all the buffers on
+    // deletion list.)
+    _transferBuffersToDelete = _pendingTransferBuffers;
+
+    // Clear the pending list.
+    _pendingTransferBuffers.clear();
 }
 
 ID3D12CommandAllocator* PTRenderer::getCommandAllocator()
@@ -701,7 +776,7 @@ void PTRenderer::initFrameData()
     // Create a buffer to store frame data for each buffer. A single buffer can be used for this,
     // as long as each section of the buffer is not written to while it is being used by the GPU.
     size_t frameDataBufferSize = _FRAME_DATA_SIZE * _taskCount;
-    _pFrameDataBuffer          = createBuffer(frameDataBufferSize, "FrameData");
+    _frameDataBuffer           = createTransferBuffer(frameDataBufferSize, "FrameData");
 }
 
 void PTRenderer::initRayGenShaderTable()
@@ -713,23 +788,21 @@ void PTRenderer::initRayGenShaderTable()
     rayGenShaderRecordStride = ALIGNED_SIZE(rayGenShaderRecordStride, SHADER_RECORD_ALIGNMENT);
     _rayGenShaderTableSize   = rayGenShaderRecordStride; // just one shader record
 
-    // Create a buffer for the shader table and map it for writing.
-    _pRayGenShaderTable = createBuffer(_rayGenShaderTableSize);
+    // Create a transfer buffer for the shader table.
+    _rayGenShaderTable = createTransferBuffer(_rayGenShaderTableSize);
 }
 
 void PTRenderer::updateRayGenShaderTable()
 {
-    uint8_t* pShaderTableMappedData = nullptr;
-    checkHR(
-        _pRayGenShaderTable->Map(0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+    // Map the ray gen shader table.
+    uint8_t* pShaderTableMappedData = _rayGenShaderTable.map();
 
     // Write the shader identifier for the ray gen shader.
     ::memcpy_s(pShaderTableMappedData, _rayGenShaderTableSize,
-        _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kRayGen),
-        SHADER_ID_SIZE);
+        _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kRayGen), SHADER_ID_SIZE);
 
-    // Close the shader table buffer.
-    _pRayGenShaderTable->Unmap(0, nullptr); // no HRESULT
+    // Unmap the shader table buffer.
+    _rayGenShaderTable.unmap();
 }
 
 void PTRenderer::initAccumulation()
@@ -932,12 +1005,12 @@ void PTRenderer::updateFrameData()
     uint8_t* pFrameDataBufferMappedData = nullptr;
     size_t start                        = _FRAME_DATA_SIZE * _taskIndex;
     size_t end                          = start + _FRAME_DATA_SIZE;
-    D3D12_RANGE range                   = { start, end };
-    checkHR(
-        _pFrameDataBuffer->Map(0, &range, reinterpret_cast<void**>(&pFrameDataBufferMappedData)));
+    pFrameDataBufferMappedData          = _frameDataBuffer.map(end, start);
     ::memcpy_s(
         pFrameDataBufferMappedData + start, _FRAME_DATA_SIZE, &_frameData, sizeof(_frameData));
-    _pFrameDataBuffer->Unmap(0, nullptr); // no HRESULT
+    _frameDataBuffer.unmap();
+
+    uploadTransferBuffers();
 }
 
 void PTRenderer::updateSceneResources()
@@ -951,14 +1024,12 @@ void PTRenderer::updateSceneResources()
 
     // Set the descriptor heap on the ray gen shader table, for descriptors needed from the heap for
     // the ray gen shader. The ray gen shader expects the first entry to be the direct texture.
-    uint8_t* pShaderTableMappedData = nullptr;
-    checkHR(
-        _pRayGenShaderTable->Map(0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+    uint8_t* pShaderTableMappedData = _rayGenShaderTable.map();
     CD3DX12_GPU_DESCRIPTOR_HANDLE handle(_pDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
         kDirectDescriptorOffset, _handleIncrementSize);
     ::memcpy_s(pShaderTableMappedData + SHADER_ID_SIZE, _rayGenShaderTableSize, &handle,
         SHADER_RECORD_DESCRIPTOR_SIZE);
-    _pRayGenShaderTable->Unmap(0, nullptr); // no HRESULT
+    _rayGenShaderTable.unmap();
 }
 
 void PTRenderer::updateOutputResources()
@@ -1177,7 +1248,7 @@ void PTRenderer::prepareRayDispatch(D3D12_DISPATCH_RAYS_DESC& dispatchRaysDesc)
     dispatchRaysDesc.Depth  = 1;
 
     // ... the shader table for the ray generation shader...
-    D3D12_GPU_VIRTUAL_ADDRESS address = _pRayGenShaderTable->GetGPUVirtualAddress();
+    D3D12_GPU_VIRTUAL_ADDRESS address = _rayGenShaderTable.pGPUBuffer->GetGPUVirtualAddress();
     dispatchRaysDesc.RayGenerationShaderRecord.StartAddress = address;
     dispatchRaysDesc.RayGenerationShaderRecord.SizeInBytes  = _rayGenShaderTableSize;
 
@@ -1231,7 +1302,7 @@ void PTRenderer::submitRayDispatch(
 
         // 2) The frame data constant buffer, for the current task index.
         D3D12_GPU_VIRTUAL_ADDRESS frameDataBufferAddress =
-            _pFrameDataBuffer->GetGPUVirtualAddress() + _FRAME_DATA_SIZE * _taskIndex;
+            _frameDataBuffer.pGPUBuffer->GetGPUVirtualAddress() + _FRAME_DATA_SIZE * _taskIndex;
         pCommandList->SetComputeRootConstantBufferView(2, frameDataBufferAddress);
 
         // 3) The environment data constant buffer.

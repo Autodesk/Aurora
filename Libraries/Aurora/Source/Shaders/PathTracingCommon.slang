@@ -152,8 +152,8 @@ struct Geometry : IGeometry
 {
     uint3 getIndices(int triangleIndex) { return getIndicesForTriangle(triangleIndex); }
     float3 getPosition(int vertexIndex) { return getPositionForVertex(vertexIndex); }
-    float3 getNormal(int vertexIndex) { return normalize(getNormalForVertex(vertexIndex)); }
-    float3 getTangent(int vertexIndex) { return normalize(getTangentForVertex(vertexIndex)); }
+    float3 getNormal(int vertexIndex) { return getNormalForVertex(vertexIndex); }
+    float3 getTangent(int vertexIndex) { return getTangentForVertex(vertexIndex); }
     float2 getTexCoord(int vertexIndex) { return getTexCoordForVertex(vertexIndex); }
     bool hasTexCoords() { return instanceHasTexCoords(); }
     bool hasNormals() { return instanceHasNormals(); }

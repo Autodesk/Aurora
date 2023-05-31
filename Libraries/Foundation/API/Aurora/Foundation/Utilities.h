@@ -30,6 +30,13 @@ namespace Aurora
 namespace Foundation
 {
 
+/// Remove illegal chars from a filename.
+void sanitizeFileName(std::string& fileName);
+
+/// Write string to file, returns false if write fails.
+bool writeStringToFile(
+    const std::string& str, const std::string& filename, const std::string& folder = "");
+
 /// Combine a hash with a seed value.
 void hashCombine(size_t& seed, size_t otherHash);
 

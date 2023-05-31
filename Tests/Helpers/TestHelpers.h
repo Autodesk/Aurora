@@ -153,9 +153,6 @@ float createFloat32(uint32_t mantisa, uint32_t exponent, uint32_t sign);
 /// \brief Create half from integer mantisa, exponent, and sign components
 uint16_t createFloat16(uint16_t mantisa, uint16_t exponent, uint16_t sign);
 
-/// \brief Sanitize file name, by replacing any non-file name chars with underscore
-void sanitizeFileName(std::string& fileName);
-
 /// \brief Get the named environment variable.
 //  \return The contents of the variable, or empty string if none.
 std::string getEnvironmentVariable(const std::string& name);

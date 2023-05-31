@@ -232,6 +232,55 @@ struct PropertyValue
         _strings.clear();
     }
 
+    /// Compare property value for inequality, based on type.
+    bool operator!=(const PropertyValue& in) const { return !(*this == in); }
+
+    /// Compare property value for equality, based on type.
+    bool operator==(const PropertyValue& in) const
+    {
+        // If types don't match never equal.
+        if (type != in.type)
+            return false;
+
+        // Compare based on type value.
+        switch (type)
+        {
+        case Type::Bool:
+            return _bool == in._bool;
+        case Type::Int:
+            return _int == in._int;
+        case Type::Float:
+            return _float == in._float;
+        case Type::Float2:
+            return _float2 == in._float2;
+        case Type::Float3:
+            return _float3 == in._float3;
+        case Type::Float4:
+            return _float4 == in._float4;
+        case Type::Matrix4:
+            return _matrix4 == in._matrix4;
+        case Type::String:
+            return _string == in._string;
+        case Type::Strings:
+            // If string array lengths do not match, equality is false.
+            if (_strings.size() != in._strings.size())
+                return false;
+
+            // If any string does not match equality is false.
+            for (size_t i = 0; i < _strings.size(); i++)
+            {
+                if (_strings[i] != in._strings[i])
+                    return false;
+            }
+
+            // Return true if all strings match.
+            return true;
+        default:
+            // Invalid values are always non-equal.
+            return false;
+        }
+    }
+
     union
     {
         bool _bool;

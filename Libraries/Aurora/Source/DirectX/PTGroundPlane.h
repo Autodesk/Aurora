@@ -14,6 +14,7 @@
 #pragma once
 
 #include "Properties.h"
+#include "MemoryPool.h"
 
 BEGIN_AURORA
 
@@ -34,7 +35,7 @@ public:
 
     /*** Functions ***/
 
-    ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
+    ID3D12Resource* buffer() const { return _constantBuffer.pGPUBuffer.Get(); }
     void update();
 
 private:
@@ -59,7 +60,7 @@ private:
     /*** Private Variables ***/
 
     PTRenderer* _pRenderer;
-    ID3D12ResourcePtr _pConstantBuffer;
+    TransferBuffer _constantBuffer;
 };
 MAKE_AURORA_PTR(PTGroundPlane);
 

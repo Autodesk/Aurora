@@ -109,13 +109,6 @@ else()
     set(ENABLE_HGI_BACKEND ON)
 endif()
 
-# Set up Windows 10 SDK path and version
-if(WIN32)
-    get_filename_component(winSDK_path "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots;KitsRoot10]" ABSOLUTE CACHE)
-    set(ENV{WINDOWS_SDK_PATH} ${winSDK_path})
-    set(ENV{WINDOWS_SDK_VERSION} "10.0.22000.0")
-endif()
-
 add_subdirectory(Libraries)
 
 # Unit tests

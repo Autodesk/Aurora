@@ -50,6 +50,10 @@ struct CompileJob
 // NOTE: This should never be enabled in committed code; it is only for local development.
 #define AU_DEV_DUMP_SHADER_CODE 0
 
+// Development flag to transpiled HLSL library to disk.
+// NOTE: This should never be enabled in committed code; it is only for local development.
+#define AU_DEV_DUMP_TRANSPILED_CODE 0
+
 // Pack four bytes into a single unsigned int.
 // Based on version in DirectX toolkit.
 #define MAKEFOURCC(ch0, ch1, ch2, ch3)                                                             \
@@ -616,7 +620,7 @@ void PTShaderLibrary::setupCompileJobForShader(const MaterialShader& shader, Com
     auto& compiledShader = _compiledShaders[shader.libraryIndex()];
 
     // Set the library name to the shader name.
-    jobOut.libName = shader.id();
+    jobOut.libName = compiledShader.hlslFilename;
 
     // Set the includes from the shader's source code and the options source.
     jobOut.includes = {
@@ -689,7 +693,9 @@ void PTShaderLibrary::rebuild()
                 "Group";
 
             // Set the ID from the shader ID.
-            _compiledShaders[shader.libraryIndex()].id = shader.id();
+            _compiledShaders[shader.libraryIndex()].id           = shader.id();
+            _compiledShaders[shader.libraryIndex()].hlslFilename = shader.id() + ".hlsl";
+            Foundation::sanitizeFileName(_compiledShaders[shader.libraryIndex()].hlslFilename);
         }
 
         // Destroy any existing compiled binary.
@@ -774,12 +780,10 @@ void PTShaderLibrary::rebuild()
         // If development flag set dump HLSL library to a file.
         if (AU_DEV_DUMP_SHADER_CODE)
         {
-            string entryPointPath = Foundation::getModulePath() + job.libName + ".txt";
-            AU_INFO("Dumping shader code to:%s", entryPointPath.c_str());
-            ofstream outputFile;
-            outputFile.open(entryPointPath);
-            outputFile << job.code;
-            outputFile.close();
+            if (Foundation::writeStringToFile(job.code, job.libName))
+                AU_INFO("Dumping shader code to:%s", job.libName);
+            else
+                AU_WARN("Failed to write shader code to:%s", job.libName);
         }
 
         // Set the shader source as source code available as via #include in the compiler.
@@ -813,13 +817,22 @@ void PTShaderLibrary::rebuild()
                 transpiledHLSL, regex("\n" + entryPointCode), "\n" + entryPointCodeWithTag);
         }
 
+        // If development flag set dump transpiled library to a file.
+        if (AU_DEV_DUMP_TRANSPILED_CODE)
+        {
+            if (Foundation::writeStringToFile(transpiledHLSL, job.libName))
+                AU_INFO("Dumping transpiled code to:%s", job.libName);
+            else
+                AU_WARN("Failed to write transpiled code to:%s", job.libName);
+        }
+
         // Compile the HLSL source for this shader.
         ComPtr<IDxcBlob> compiledShader;
         vector<pair<wstring, string>> defines = { { L"DIRECTX", "1" } };
         string errorMessage;
         if (!compileLibrary(_pDXCLibrary,
                 transpiledHLSL.c_str(), // Source code string.
-                "AuroraShaderLibrary",  // Arbitrary shader name
+                job.libName,            // Arbitrary shader name
                 "lib_6_3",              // Used DXIL 6.3 shader target
                 "",                     // DXIL has empty entry point.
                 defines,                // Defines (currently empty vector).
@@ -864,7 +877,9 @@ void PTShaderLibrary::rebuild()
         if (compiledShader.binary)
         {
             compiledShaders.push_back(compiledShader.binary);
-            compiledShaderNames.push_back(compiledShader.id);
+            string libName = compiledShader.id + ".hlsl";
+            Foundation::sanitizeFileName(libName);
+            compiledShaderNames.push_back(libName);
         }
     }
 

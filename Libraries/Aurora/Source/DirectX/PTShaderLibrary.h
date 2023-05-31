@@ -31,7 +31,9 @@ struct CompiledShader
 {
     ComPtr<IDxcBlob> binary = nullptr;
     string exportName;
+
     string id;
+    string hlslFilename;
     map<string, string> entryPoints;
     void destroyBinary() { binary = nullptr; }
     // Reset the struct (as indices are re-used.)

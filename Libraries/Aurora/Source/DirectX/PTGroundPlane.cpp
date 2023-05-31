@@ -69,7 +69,7 @@ void PTGroundPlane::update()
 
     // Update the constant buffer with ground plane data, creating the buffer if needed. The lambda
     // here translates values to the data object for the constant buffer (GPU).
-    _pRenderer->updateBuffer<GroundPlaneData>(_pConstantBuffer, [this](GroundPlaneData& data) {
+    _pRenderer->updateBuffer<GroundPlaneData>(_constantBuffer, [this](GroundPlaneData& data) {
         data.enabled             = _values.asBoolean("enabled") ? 1 : 0;
         data.position            = _values.asFloat3("position");
         data.normal              = _values.asFloat3("normal");

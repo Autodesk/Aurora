@@ -381,17 +381,18 @@ void PTScene::update()
 
     // If any active geometry resources have been modified, flush the vertex buffer pool in case
     // there are any pending vertex buffers that are required to update the geometry, and then
-    // update the geometry (and update BLAS for "complete" geometry that has position data).
+    // update the geometry.
     if (_geometry.changedThisFrame())
     {
-        _pRenderer->flushVertexBufferPool();
         // Iterate through the modified geometry (which will include the newly active ones.)
         for (PTGeometry& geom : _geometry.modified().resources<PTGeometry>())
         {
             geom.update();
-            if (!geom.isIncomplete())
-                geom.updateBLAS();
         }
+
+        // Flush the vertex buffer pool.
+        _pRenderer->flushVertexBufferPool();
+
     }
 
     // If any active material resources have been modified update them and build a list of unique
@@ -413,6 +414,20 @@ void PTScene::update()
         // TODO: Only do this if any texture parameters have changed.
         _pRenderer->waitForTask();
         clearDesciptorHeap();
+    }
+
+    // Upload any transfer buffers that have been updated this frame.
+    _pRenderer->uploadTransferBuffers();
+
+    // Update the geometry BLAS (after any transfer buffers have been uploaded.)
+    if (_geometry.changedThisFrame())
+    {
+        for (PTGeometry& geom : _geometry.modified().resources<PTGeometry>())
+        {
+            if (!geom.isIncomplete())
+                geom.updateBLAS();
+        }
+
     }
 
     // If any active instances have been modified or activated, update all the active instances.
@@ -703,12 +718,13 @@ void PTScene::updateShaderTables()
 
         size_t recordStride = HitGroupShaderRecord::stride();
 
-        // Create a buffer for the shader table, and map it for writing.
+        // Create a transfer buffer for the shader table, and map it for writing.
         size_t shaderTableSize          = recordStride * instanceCount;
-        _pHitGroupShaderTable           = _pRenderer->createBuffer(shaderTableSize);
-        uint8_t* pShaderTableMappedData = nullptr;
-        checkHR(_pHitGroupShaderTable->Map(
-            0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+        TransferBuffer hitGroupTransferBuffer = _pRenderer->createTransferBuffer(shaderTableSize, "HitGroupShaderTable");
+        uint8_t* pShaderTableMappedData = hitGroupTransferBuffer.map();
+
+        // Retain the GPU buffer from the transfer buffer, the upload buffer will be deleted by the renderer once upload complete.
+        _pHitGroupShaderTable = hitGroupTransferBuffer.pGPUBuffer;
 
         // Iterate the instance data objects, creating a hit group shader record for each one, and
         // copying the shader record data to the shader table.
@@ -742,7 +758,7 @@ void PTScene::updateShaderTables()
         }
 
         // Close the shader table buffer.
-        _pHitGroupShaderTable->Unmap(0, nullptr); // no HRESULT
+        hitGroupTransferBuffer.unmap();
     }
     // Create and populate the miss shader table if necessary.
     if (!_pMissShaderTable)
@@ -754,10 +770,12 @@ void PTScene::updateShaderTables()
         // shaders.
         // NOTE: There are no arguments (and indeed no local root signatures) for these shaders.
         size_t shaderTableSize          = _missShaderRecordStride * _missShaderRecordCount;
-        _pMissShaderTable               = _pRenderer->createBuffer(shaderTableSize);
-        uint8_t* pShaderTableMappedData = nullptr;
-        checkHR(
-            _pMissShaderTable->Map(0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+
+        TransferBuffer missShaderTableTransferBuffer =
+            _pRenderer->createTransferBuffer(shaderTableSize, "MissShaderTable");
+        _pMissShaderTable = missShaderTableTransferBuffer.pGPUBuffer;
+
+        uint8_t* pShaderTableMappedData = missShaderTableTransferBuffer.map();
         uint8_t* pEndOfShaderTableMappedData = pShaderTableMappedData + shaderTableSize;
 
         // Get the shader identifiers from the shader library, which will change if the library is
@@ -850,7 +868,7 @@ void PTScene::updateShaderTables()
         AU_ASSERT(pShaderTableMappedData == pEndOfShaderTableMappedData, "Shader table overrun");
 
         // Unmap the table.
-        _pMissShaderTable->Unmap(0, nullptr); // no HRESULT
+        missShaderTableTransferBuffer.unmap(); // no HRESULT
     }
 }
 
