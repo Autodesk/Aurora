@@ -172,6 +172,86 @@ TEST_P(LightTest, TestLightEnvTexture)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Light");
 }
 
+TEST_P(LightTest, TestChangeLightEnvTexture)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // Disable the directional light.
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0, 0, 1)));
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(0, 0, 0)));
+
+    // Create procedural image data.
+    std::vector<unsigned char> buffer;
+    array<glm::vec3, 6> colors = {
+        glm::vec3(1.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 1.0f, 0.0f),
+        glm::vec3(0.0f, 0.75f, 1.0f),
+        glm::vec3(0.75f, 0.0f, 1.0f),
+        glm::vec3(0.8f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.8f, 0.0f),
+    };
+    const Path kBackgroundEnvironmentImagePath = "BackgroundEnvironmentImage";
+    createTestEnv(pScene, kBackgroundEnvironmentImagePath, 512, colors, glm::vec3(), glm::vec3(), 0,
+        0, &buffer, false);
+
+    // Create environment and set background and light image.
+    const Path kBackgroundEnvironmentPath = "BackgroundEnvironment";
+    pScene->setEnvironmentProperties(kBackgroundEnvironmentPath,
+        {
+            { Names::EnvironmentProperties::kLightImage, kBackgroundEnvironmentImagePath },
+            { Names::EnvironmentProperties::kBackgroundImage, kBackgroundEnvironmentImagePath },
+        });
+
+    // Set the environment.
+    pScene->setEnvironment(kBackgroundEnvironmentPath);
+
+    // Create a material.
+    const Path kMaterialPath = "DefaultMaterial";
+    pScene->setMaterialType(kMaterialPath);
+
+    // Create teapot instance.
+    Path GeomPath = createTeapotGeometry(*pScene);
+
+    // Create instance with material.
+    EXPECT_TRUE(pScene->addInstance(
+        nextPath(), GeomPath, { { Names::InstanceProperties::kMaterial, kMaterialPath } }));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "0", "Light");
+
+    // Create procedural image data.
+    std::vector<unsigned char> buffer1;
+    array<glm::vec3, 6> colors1 = {
+        glm::vec3(1.0f, 1.0f, 0.0f),
+        glm::vec3(0.0f, 0.1f, 0.0f),
+        glm::vec3(1.0f, 0.75f, 1.0f),
+        glm::vec3(0.75f, 0.0f, 1.0f),
+        glm::vec3(0.8f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.8f, 0.4f),
+    };
+    const Path kSecondBackgroundEnvironmentImagePath = "SecondBackgroundEnvironmentImage";
+    createTestEnv(pScene, kSecondBackgroundEnvironmentImagePath, 512, colors1, glm::vec3(),
+        glm::vec3(), 0,
+        0, &buffer1, false);
+    pScene->setEnvironmentProperties(kBackgroundEnvironmentPath,
+        {
+            { Names::EnvironmentProperties::kLightImage, kSecondBackgroundEnvironmentImagePath },
+            { Names::EnvironmentProperties::kBackgroundImage,
+                kSecondBackgroundEnvironmentImagePath },
+        });
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "1", "Light");
+}
+
 // Basic environment map image test.
 TEST_P(LightTest, TestLightEnvTextureMIS)
 {
