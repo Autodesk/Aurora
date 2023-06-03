@@ -309,6 +309,9 @@ void PTScene::update()
     // Update base class.
     SceneBase::update();
 
+    // Delete the transfer buffers that were uploaded last frame.
+    _pRenderer->deleteUploadedTransferBuffers();
+
     // Update the environment.
     // This is called if *any* active environment objects have changed, as that will almost always
     // be the only active one.
@@ -392,7 +395,6 @@ void PTScene::update()
 
         // Flush the vertex buffer pool.
         _pRenderer->flushVertexBufferPool();
-
     }
 
     // If any active material resources have been modified update them and build a list of unique
@@ -427,7 +429,6 @@ void PTScene::update()
             if (!geom.isIncomplete())
                 geom.updateBLAS();
         }
-
     }
 
     // If any active instances have been modified or activated, update all the active instances.
@@ -719,11 +720,13 @@ void PTScene::updateShaderTables()
         size_t recordStride = HitGroupShaderRecord::stride();
 
         // Create a transfer buffer for the shader table, and map it for writing.
-        size_t shaderTableSize          = recordStride * instanceCount;
-        TransferBuffer hitGroupTransferBuffer = _pRenderer->createTransferBuffer(shaderTableSize, "HitGroupShaderTable");
-        uint8_t* pShaderTableMappedData = hitGroupTransferBuffer.map();
+        size_t shaderTableSize                = recordStride * instanceCount;
+        TransferBuffer hitGroupTransferBuffer = _pRenderer->createTransferBuffer(shaderTableSize,
+            "HitGroupShaderTable");
+        uint8_t* pShaderTableMappedData       = hitGroupTransferBuffer.map();
 
-        // Retain the GPU buffer from the transfer buffer, the upload buffer will be deleted by the renderer once upload complete.
+        // Retain the GPU buffer from the transfer buffer, the upload buffer will be deleted by the
+        // renderer once upload complete.
         _pHitGroupShaderTable = hitGroupTransferBuffer.pGPUBuffer;
 
         // Iterate the instance data objects, creating a hit group shader record for each one, and
@@ -769,13 +772,15 @@ void PTScene::updateShaderTables()
         // Create a buffer for the shader table and write the shader identifiers for the miss
         // shaders.
         // NOTE: There are no arguments (and indeed no local root signatures) for these shaders.
-        size_t shaderTableSize          = _missShaderRecordStride * _missShaderRecordCount;
+        size_t shaderTableSize = _missShaderRecordStride * _missShaderRecordCount;
 
+        // Create the transfer buffer.
         TransferBuffer missShaderTableTransferBuffer =
             _pRenderer->createTransferBuffer(shaderTableSize, "MissShaderTable");
         _pMissShaderTable = missShaderTableTransferBuffer.pGPUBuffer;
 
-        uint8_t* pShaderTableMappedData = missShaderTableTransferBuffer.map();
+        // Map the shader table buffer.
+        uint8_t* pShaderTableMappedData      = missShaderTableTransferBuffer.map();
         uint8_t* pEndOfShaderTableMappedData = pShaderTableMappedData + shaderTableSize;
 
         // Get the shader identifiers from the shader library, which will change if the library is

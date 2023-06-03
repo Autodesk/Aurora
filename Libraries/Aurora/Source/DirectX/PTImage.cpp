@@ -39,23 +39,10 @@ PTImage::PTImage(PTRenderer* pRenderer, const IImage::InitData& initData)
     // sampling of that environment image.
     if (initData.isEnvironment)
     {
-        // There is an issue with using transfer buffers for the alias map, that causes a directX
-        // error saying the resources state flags are incorrect.  So we use an upload buffer
-        // directly here, and take the performance hit.
-        // TODO: Work out what is the issue and fix it, so we can use the transfer buffer.
-#if 1
-        // Create a GPU buffer containing the alias map data.
-        size_t bufferSize            = _dimensions.x * _dimensions.y * sizeof(AliasMap::Entry);
-        _pAliasMapBuffer             = _pRenderer->createBuffer(bufferSize);
-        AliasMap::Entry* pMappedData = nullptr;
-        checkHR(_pAliasMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData)));
-        AliasMap::build(static_cast<const float*>(initData.pImageData), _dimensions, pMappedData,
-            bufferSize, _luminanceIntegral);
-        _pAliasMapBuffer->Unmap(0, nullptr); // no HRESULT
-#else
         // Create a transfer buffer for the alias map data.
         size_t bufferSize             = _dimensions.x * _dimensions.y * sizeof(AliasMap::Entry);
-        TransferBuffer transferBuffer = _pRenderer->createTransferBuffer(bufferSize);
+        TransferBuffer transferBuffer = _pRenderer->createTransferBuffer(
+            bufferSize, _name + "AliasMap");
 
         // Build the alias map directly in the mapped buffer.
         AliasMap::Entry* pMappedData = reinterpret_cast<AliasMap::Entry*>(transferBuffer.map());
@@ -66,7 +53,6 @@ PTImage::PTImage(PTRenderer* pRenderer, const IImage::InitData& initData)
         // Retain the GPU buffer pointer from the transfer buffer (upload buffer will be deleted
         // after upload complete.)
         _pAliasMapBuffer = transferBuffer.pGPUBuffer;
-#endif
     }
 }
 

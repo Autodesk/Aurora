@@ -111,8 +111,8 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
         return createBuffer(size, "Scratch Buffer Pool", D3D12_HEAP_TYPE_DEFAULT,
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     });
-    _pVertexBufferPool =
-        make_unique<VertexBufferPool>([&](size_t size) { return createTransferBuffer(size); });
+    _pVertexBufferPool   = make_unique<VertexBufferPool>(
+        [&](size_t size) { return createTransferBuffer(size, "VertexBufferPool"); });
 }
 
 PTRenderer::~PTRenderer()
@@ -468,17 +468,23 @@ ID3D12ResourcePtr PTRenderer::createBuffer(size_t size, const string& name,
     return pResource;
 }
 
-TransferBuffer PTRenderer::createTransferBuffer(size_t sz, const string& name)
+TransferBuffer PTRenderer::createTransferBuffer(size_t sz, const string& name,
+    D3D12_RESOURCE_FLAGS gpuBufferFlags, D3D12_RESOURCE_STATES gpuBufferState,
+    D3D12_RESOURCE_STATES gpuBufferFinalState)
 {
     TransferBuffer buffer;
     // Create the upload buffer in the UPLOAD heap (which will mean it is in CPU memory not VRAM).
     buffer.pUploadBuffer = createBuffer(sz, name + ":Upload");
-    // Create the GPU buffer in the DEFAULT heap.
-    buffer.pGPUBuffer = createBuffer(sz, name + ":GPU", D3D12_HEAP_TYPE_DEFAULT);
+    // Create the GPU buffer in the DEFAULT heap, with the flags and state provided (these will
+    // default to D3D12_RESOURCE_FLAG_NONE and D3D12_RESOURCE_STATE_COPY_DEST).
+    buffer.pGPUBuffer =
+        createBuffer(sz, name + ":GPU", D3D12_HEAP_TYPE_DEFAULT, gpuBufferFlags, gpuBufferState);
     // Set the size.
     buffer.size = sz;
     // Set the renderer to this (will call transferBufferUpdated from unmap.)
     buffer.pRenderer = this;
+    // Set the final state for the buffer, which it will transition to after uploading.
+    buffer.finalState = gpuBufferFinalState;
     return buffer;
 }
 
@@ -553,15 +559,21 @@ void PTRenderer::flushVertexBufferPool()
     _pVertexBufferPool->flush();
 }
 
+void PTRenderer::deleteUploadedTransferBuffers()
+{
+    // Do nothing if no buffers to delete.
+    if (_transferBuffersToDelete.empty())
+        return;
+
+    // Clear the list, so any upload or GPU buffer without a reference to it will be deleted.
+    _transferBuffersToDelete.clear();
+}
+
 void PTRenderer::uploadTransferBuffers()
 {
-    // If there are no transfer buffers pending, just clear the deletion list (to ensure any buffers
-    // from last frame are deleted) and return.
+    // If there are no transfer buffers pending, do nothing.
     if (_pendingTransferBuffers.empty())
-    {
-        _transferBuffersToDelete.clear();
         return;
-    }
 
     // Begin a command list.
     ID3D12GraphicsCommandList4Ptr pCommandList = beginCommandList();
@@ -576,17 +588,32 @@ void PTRenderer::uploadTransferBuffers()
         // this frame.)
         size_t bytesToCopy = buffer.mappedRange.End - buffer.mappedRange.Begin;
 
+        // If this buffer was previously uploaded we need transition back to
+        // D3D12_RESOURCE_STATE_COPY_DEST before copying.
+        if (buffer.wasUploaded)
+            addTransitionBarrier(
+                buffer.pGPUBuffer.Get(), buffer.finalState, D3D12_RESOURCE_STATE_COPY_DEST);
+
         // Submit buffer copy command for mapped range from the upload buffer to the GPU buffer.
         pCommandList->CopyBufferRegion(buffer.pGPUBuffer.Get(), buffer.mappedRange.Begin,
             buffer.pUploadBuffer.Get(), buffer.mappedRange.Begin, bytesToCopy);
+
+        // Transition the buffer to its final state.
+        // Note in practice the Nvidia driver seems to do this implicitly without any problems,
+        // though the spec says this explicit transition is required.
+        addTransitionBarrier(
+            buffer.pGPUBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, buffer.finalState);
+
+        // Set the uploaded flag.
+        buffer.wasUploaded = true;
+
+        // Add the buffer to the list to be deleted (if nothing has kept a reference to it) next
+        // frame.
+        _transferBuffersToDelete[iter->first] = iter->second;
     }
 
     // Submit the command list.
     submitCommandList();
-
-    // Copy the pending buffer list to the deletion list (this will also release all the buffers on
-    // deletion list.)
-    _transferBuffersToDelete = _pendingTransferBuffers;
 
     // Clear the pending list.
     _pendingTransferBuffers.clear();
@@ -789,7 +816,7 @@ void PTRenderer::initRayGenShaderTable()
     _rayGenShaderTableSize   = rayGenShaderRecordStride; // just one shader record
 
     // Create a transfer buffer for the shader table.
-    _rayGenShaderTable = createTransferBuffer(_rayGenShaderTableSize);
+    _rayGenShaderTable = createTransferBuffer(_rayGenShaderTableSize, "RayGenShaderTable");
 }
 
 void PTRenderer::updateRayGenShaderTable()
@@ -860,7 +887,7 @@ void PTRenderer::renderInternal(uint32_t sampleStart, uint32_t sampleCount)
 #if ENABLE_MATERIALX
         // Get the units option.
         string unit = _values.asString(kLabelUnits);
-        // Lookup the unit in in the code generator, and ensure it is valid.
+        // Lookup the unit in the code generator, and ensure it is valid.
         auto unitIter = _pMaterialXGenerator->codeGenerator().units().indices.find(unit);
         if (unitIter == _pMaterialXGenerator->codeGenerator().units().indices.end())
         {
@@ -1010,6 +1037,8 @@ void PTRenderer::updateFrameData()
         pFrameDataBufferMappedData + start, _FRAME_DATA_SIZE, &_frameData, sizeof(_frameData));
     _frameDataBuffer.unmap();
 
+    // Upload the transfer buffers after changing the frame data, so the new frame data is available
+    // on the GPU while rendering frame.
     uploadTransferBuffers();
 }
 

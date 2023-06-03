@@ -124,6 +124,10 @@ struct TransferBuffer
     size_t size = 0;
     // The renderer pointer (which will upload the GPU buffers after unmap is called)
     PTRenderer* pRenderer = nullptr;
+    // The final state the transition buffer will transition to after upload.
+    D3D12_RESOURCE_STATES finalState = D3D12_RESOURCE_STATE_GENERIC_READ;
+    // Has this buffer been uploaded ?
+    bool wasUploaded                    = false;
 
     // Is the buffer valid?
     bool valid() { return pGPUBuffer != nullptr; }

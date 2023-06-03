@@ -163,7 +163,8 @@ bool PTMaterial::update()
     // Create a transfer buffer for the material data if it doesn't already exist.
     if (!_constantBuffer.size)
     {
-        _constantBuffer = _pRenderer->createTransferBuffer(uniformBuffer().size());
+        _constantBuffer = _pRenderer->createTransferBuffer(uniformBuffer().size(),
+            std::to_string(uint64_t(this)) + "MaterialBuffer");
     }
 
     // Copy the data to the transfer buffer.

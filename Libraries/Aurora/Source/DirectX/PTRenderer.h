@@ -86,9 +86,14 @@ public:
     ID3D12Device5* dxDevice() const { return _pDXDevice.Get(); }
     IDXGIFactory4* dxFactory() const { return _pDXFactory.Get(); }
     ID3D12CommandQueue* commandQueue() const { return _pCommandQueue.Get(); }
-    TransferBuffer createTransferBuffer(size_t sz, const string& name = "");
-    ID3D12ResourcePtr createBuffer(
-        size_t size, const string& name = "",
+    // Create a transfer buffer.  GPU buffer state defaults to D3D12_RESOURCE_STATE_COPY_DEST as it
+    // is used as a target for a resource copy command. The final GPU buffer state defaults to
+    // D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE.
+    TransferBuffer createTransferBuffer(size_t sz, const string& name = "",
+        D3D12_RESOURCE_FLAGS gpuBufferFlags       = D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATES gpuBufferState      = D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATES gpuBufferFinalState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    ID3D12ResourcePtr createBuffer(size_t size, const string& name = "",
         D3D12_HEAP_TYPE heapType    = D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_FLAGS flags  = D3D12_RESOURCE_FLAG_NONE,
         D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_GENERIC_READ);
@@ -101,6 +106,7 @@ public:
     void transferBufferUpdated(const TransferBuffer& buffer);
     void flushVertexBufferPool();
     void uploadTransferBuffers();
+    void deleteUploadedTransferBuffers();
     ID3D12CommandAllocator* getCommandAllocator();
     ID3D12GraphicsCommandList4* beginCommandList();
     void submitCommandList();
@@ -212,14 +218,14 @@ private:
 
 // Creates (if needed) and an updates a GPU constant buffer with data supplied by the caller.
 template <typename DataType>
-void PTRenderer::updateBuffer(
-    TransferBuffer& buffer, FillDataFunction<DataType> fillDataFunction)
+void PTRenderer::updateBuffer(TransferBuffer& buffer, FillDataFunction<DataType> fillDataFunction)
 {
     // Create a transfer buffer for the data if it doesn't already exist.
     static const size_t BUFFER_SIZE = sizeof(DataType);
     if (!buffer.valid())
     {
-        buffer = createTransferBuffer(BUFFER_SIZE);
+        buffer = createTransferBuffer(
+            BUFFER_SIZE, "updateBuffer:" + to_string(uint64(&fillDataFunction)));
     }
 
     // Fill the data using the callback function.
