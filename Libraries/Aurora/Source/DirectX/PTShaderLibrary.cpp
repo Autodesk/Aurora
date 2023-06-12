@@ -781,9 +781,9 @@ void PTShaderLibrary::rebuild()
         if (AU_DEV_DUMP_SHADER_CODE)
         {
             if (Foundation::writeStringToFile(job.code, job.libName))
-                AU_INFO("Dumping shader code to:%s", job.libName);
+                AU_INFO("Dumping shader code to:%s", job.libName.c_str());
             else
-                AU_WARN("Failed to write shader code to:%s", job.libName);
+                AU_WARN("Failed to write shader code to:%s", job.libName.c_str());
         }
 
         // Set the shader source as source code available as via #include in the compiler.
@@ -821,9 +821,9 @@ void PTShaderLibrary::rebuild()
         if (AU_DEV_DUMP_TRANSPILED_CODE)
         {
             if (Foundation::writeStringToFile(transpiledHLSL, job.libName))
-                AU_INFO("Dumping transpiled code to:%s", job.libName);
+                AU_INFO("Dumping transpiled code to:%s", job.libName.c_str());
             else
-                AU_WARN("Failed to write transpiled code to:%s", job.libName);
+                AU_WARN("Failed to write transpiled code to:%s", job.libName.c_str());
         }
 
         // Compile the HLSL source for this shader.

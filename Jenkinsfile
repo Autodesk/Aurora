@@ -72,9 +72,10 @@ def windowsBuild() {
     :: build Aurora
     echo Configure CMake project
     if exist Build\\CMakeCache.txt del /f Build\\CMakeCache.txt
-    :: Windows SDK version 10.0.22000.194 or later is required in https://git.autodesk.com/GFX/Aurora#windows.
-    :: We'd disable DX BACKEND as installing the windows sdk maybe have some bad effects on other jobs.
-    cmake -S . -B Build -D CMAKE_BUILD_TYPE=Release -D EXTERNALS_DIR=${EXTERNALS_DIR} -DENABLE_DIRECTX_BACKEND=OFF
+
+    :: As the build machine is Windows Server 2019 while target running machine is Windows 10,
+    :: Use CMAKE_SYSTEM_VERSION to target the build for a different version of the host operating system than is actually running on the host
+    cmake -S . -B Build -D CMAKE_BUILD_TYPE=Release -D EXTERNALS_DIR=${EXTERNALS_DIR} -DCMAKE_SYSTEM_VERSION=10.0.22000.0
     cmake --build Build --config Release
     if not errorlevel 0 (
         echo ERROR: Failed to build the project for Release binaries, see console output for details
