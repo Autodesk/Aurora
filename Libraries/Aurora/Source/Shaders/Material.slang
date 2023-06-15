@@ -162,6 +162,8 @@ struct Material
     float coatIOR;
     float coatAffectColor;
     float coatAffectRoughness;
+    float emission;
+    float3 emissionColor;
     float3 opacity;
     bool thinWalled;
     bool isOpaque;
@@ -214,7 +216,6 @@ float3 calculateNormalFromMap(float3 texelValue, int space, float scale, float3 
         return normalize(v);
     }
 }
-
 
 // Get property base from byte address buffer
 float Material_base(ByteAddressBuffer buf)
@@ -384,136 +385,148 @@ float Material_coatAffectRoughness(ByteAddressBuffer buf)
     return asfloat(buf.Load(180));
 }
 
+// Get property emission from byte address buffer
+float Material_emission(ByteAddressBuffer buf)
+{
+    return asfloat(buf.Load(184));
+}
+
+// Get property emission_color from byte address buffer
+float3 Material_emissionColor(ByteAddressBuffer buf)
+{
+    return asfloat(buf.Load3(192));
+}
+
 // Get property opacity from byte address buffer
 float3 Material_opacity(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load3(192));
+    return asfloat(buf.Load3(208));
 }
 
 // Get property thin_walled from byte address buffer
 int Material_thinWalled(ByteAddressBuffer buf)
 {
-    return buf.Load(204);
+    return buf.Load(220);
 }
 
 // Get property has_base_color_image from byte address buffer
 int Material_hasBaseColorTex(ByteAddressBuffer buf)
 {
-    return buf.Load(208);
+    return buf.Load(224);
 }
 
 // Get property base_color_image_offset from byte address buffer
 float2 Material_baseColorTexOffset(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(212));
+    return asfloat(buf.Load2(228));
 }
 
 // Get property base_color_image_scale from byte address buffer
 float2 Material_baseColorTexScale(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(224));
+    return asfloat(buf.Load2(240));
 }
 
 // Get property base_color_image_pivot from byte address buffer
 float2 Material_baseColorTexPivot(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(232));
+    return asfloat(buf.Load2(248));
 }
 
 // Get property base_color_image_rotation from byte address buffer
 float Material_baseColorTexRotation(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load(240));
+    return asfloat(buf.Load(256));
 }
 
 // Get property has_specular_roughness_image from byte address buffer
 int Material_hasSpecularRoughnessTex(ByteAddressBuffer buf)
 {
-    return buf.Load(244);
+    return buf.Load(260);
 }
 
 // Get property specular_roughness_image_offset from byte address buffer
 float2 Material_specularRoughnessTexOffset(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(248));
+    return asfloat(buf.Load2(264));
 }
 
 // Get property specular_roughness_image_scale from byte address buffer
 float2 Material_specularRoughnessTexScale(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(256));
+    return asfloat(buf.Load2(272));
 }
 
 // Get property specular_roughness_image_pivot from byte address buffer
 float2 Material_specularRoughnessTexPivot(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(264));
+    return asfloat(buf.Load2(280));
 }
 
 // Get property specular_roughness_image_rotation from byte address buffer
 float Material_specularRoughnessTexRotation(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load(272));
+    return asfloat(buf.Load(288));
 }
 
 // Get property has_opacity_image from byte address buffer
 int Material_hasOpacityTex(ByteAddressBuffer buf)
 {
-    return buf.Load(276);
+    return buf.Load(292);
 }
 
 // Get property opacity_image_offset from byte address buffer
 float2 Material_opacityTexOffset(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(280));
+    return asfloat(buf.Load2(296));
 }
 
 // Get property opacity_image_scale from byte address buffer
 float2 Material_opacityTexScale(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(288));
+    return asfloat(buf.Load2(304));
 }
 
 // Get property opacity_image_pivot from byte address buffer
 float2 Material_opacityTexPivot(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(296));
+    return asfloat(buf.Load2(312));
 }
 
 // Get property opacity_image_rotation from byte address buffer
 float Material_opacityTexRotation(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load(304));
+    return asfloat(buf.Load(320));
 }
 
 // Get property has_normal_image from byte address buffer
 int Material_hasNormalTex(ByteAddressBuffer buf)
 {
-    return buf.Load(308);
+    return buf.Load(324);
 }
 
 // Get property normal_image_offset from byte address buffer
 float2 Material_normalTexOffset(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(312));
+    return asfloat(buf.Load2(328));
 }
 
 // Get property normal_image_scale from byte address buffer
 float2 Material_normalTexScale(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(320));
+    return asfloat(buf.Load2(336));
 }
 
 // Get property normal_image_pivot from byte address buffer
 float2 Material_normalTexPivot(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(328));
+    return asfloat(buf.Load2(344));
 }
 
 // Get property normal_image_rotation from byte address buffer
 float Material_normalTexRotation(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load(336));
+    return asfloat(buf.Load(352));
 }
 
 // Initializes the full set of property values for a material, for the specified shading data.
@@ -550,6 +563,8 @@ Material initializeDefaultMaterial(
     material.coatIOR              = Material_coatIOR(gMaterialConstants);
     material.coatAffectColor      = Material_coatAffectColor(gMaterialConstants);
     material.coatAffectRoughness  = Material_coatAffectRoughness(gMaterialConstants);
+    material.emission             = Material_emission(gMaterialConstants);
+    material.emissionColor        = Material_emissionColor(gMaterialConstants);
     material.opacity              = Material_opacity(gMaterialConstants);
     material.thinWalled           = Material_thinWalled(gMaterialConstants);
 
@@ -615,34 +630,36 @@ Material defaultMaterial()
     // Copy the constant values to the material from the constant buffer.
     Material material;
     material.base                 = 0.8;
-    material.baseColor            = float3(1.0, 1.0, 1.0);
+    material.baseColor            = WHITE;
     material.diffuseRoughness     = 0.0;
     material.metalness            = 0.0;
-    material.metalColor           = float3(1.0, 1.0, 1.0);
+    material.metalColor           = WHITE;
     material.specular             = 1.0;
-    material.specularColor        = float3(1.0, 1.0, 1.0);
+    material.specularColor        = WHITE;
     material.specularRoughness    = 0.2;
     material.specularIOR          = 1.5;
     material.specularAnisotropy   = 0.0;
     material.specularRotation     = 0.0;
     material.transmission         = 0.0;
-    material.transmissionColor    = float3(1.0, 1.0, 1.0);
+    material.transmissionColor    = WHITE;
     material.subsurface           = 0.0;
-    material.subsurfaceColor      = float3(1.0, 1.0, 1.0);
-    material.subsurfaceRadius     = float3(1.0, 1.0, 1.0);
+    material.subsurfaceColor      = WHITE;
+    material.subsurfaceRadius     = WHITE;
     material.subsurfaceScale      = 1.0;
     material.subsurfaceAnisotropy = 0.0;
     material.sheen                = 0.0;
-    material.sheenColor           = float3(1.0, 1.0, 1.0);
+    material.sheenColor           = WHITE;
     material.sheenRoughness       = 0.3;
     material.coat                 = 0.0;
-    material.coatColor            = float3(1.0, 1.0, 1.0);
+    material.coatColor            = WHITE;
     material.coatRoughness        = 0.1;
     material.coatAnisotropy       = 0.0;
     material.coatRotation         = 0.0;
     material.coatIOR              = 1.5;
     material.coatAffectColor      = 0.0;
     material.coatAffectRoughness  = 0.0;
+    material.emission             = 0.0;
+    material.emissionColor        = WHITE;
     material.opacity              = 1.0;
     material.thinWalled           = 0;
 

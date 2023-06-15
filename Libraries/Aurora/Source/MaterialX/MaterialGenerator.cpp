@@ -84,6 +84,8 @@ MaterialGenerator::MaterialGenerator(const string& mtlxFolder)
         { "coat_IOR", "coatIOR" },
         { "coat_affect_color", "coatAffectColor" },
         { "coat_affect_roughness", "coatAffectRoughness" },
+        { "emission", "emission" },
+        { "emission_color", "emissionColor" },
         { "opacity", "opacity" },
         { "base_color_image_scale", "baseColorTexTransform.scale" },
         { "base_color_image_offset", "baseColorTexTransform.offset" },

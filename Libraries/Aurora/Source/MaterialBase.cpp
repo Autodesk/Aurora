@@ -109,6 +109,8 @@ UniformBufferDefinition MaterialBase::StandardSurfaceUniforms = {
         "coat_affect_color", "coatAffectColor", PropertyValue::Type::Float),
     UniformBufferPropertyDefinition(
         "coat_affect_roughness", "coatAffectRoughness", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("emission", "emission", PropertyValue::Type::Float),
+    UniformBufferPropertyDefinition("emission_color", "emissionColor", PropertyValue::Type::Float3),
     UniformBufferPropertyDefinition("opacity", "opacity", PropertyValue::Type::Float3),
     UniformBufferPropertyDefinition("thin_walled", "thinWalled", PropertyValue::Type::Bool),
     UniformBufferPropertyDefinition(
@@ -192,13 +194,15 @@ vector<PropertyValue> StandardSurfaceDefaultProperties = {
     vec3(1.0f, 1.0f, 1.0f), // sheen_color
     0.3f,                   // sheen_roughness
     0.0f,                   // coat
-    vec3(1.0f, 1.0f, 1.0f), //
-    0.1f,                   // coat_roughness coat_anisotropy
+    vec3(1.0f, 1.0f, 1.0f), // coat_color
+    0.1f,                   // coat_roughness
     0.0f,                   // coat_anisotropy
     0.0f,                   // coat_rotation
     1.5f,                   // coat_IOR
     0.0f,                   // coat_affect_roughness
     0.0f,                   // coat_affect_color
+    0.0f,                   // emission
+    vec3(1.0f, 1.0f, 1.0f), // emission_color
     vec3(1.0f, 1.0f, 1.0f), // opacity
     false,                  // thin_walled
     false,                  // has_base_color_image

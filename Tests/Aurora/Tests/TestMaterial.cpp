@@ -546,6 +546,38 @@ TEST_P(MaterialTest, TestMaterialSetTransmission)
     pRenderer->waitForTask();
 }
 
+// Test emission properties.
+TEST_P(MaterialTest, TestMaterialEmission)
+{
+    // Create the default scene and renderer.
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If the renderer is null, this renderer type is not supported, so skip the rest of the test.
+    if (!pRenderer)
+    {
+        return;
+    }
+
+    // Create a material with a non-zero emission value and a specific emission color, along with
+    // minimal diffuse / specular reflectance so that the emission is dominant.
+    Path material("EmissionMaterial");
+    pScene->setMaterialProperties(material,
+        { { "emission", 1.0f }, { "emission_color", vec3(0.0f, 1.0f, 0.0f) }, { "base", 0.1f },
+            { "specular", 0.1f } });
+
+    // Create a teapot geometry object.
+    Path geometry = createTeapotGeometry(*pScene);
+
+    // Create an instance of the geometry, using the test material.
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial] = material;
+    EXPECT_TRUE(pScene->addInstance(Path("instance0"), geometry, instProps));
+
+    // Render and compare against the baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Emission", "Materials");
+}
+
 // Test more advanced material properties using baseline image testing
 TEST_P(MaterialTest, TestMaterialAdvancedMaterialProperties)
 {
@@ -1087,9 +1119,9 @@ TEST_P(MaterialTest, TestLotsOfMaterialX)
     // Test Material
     string testMtl0 = R""""(
             <?xml version = "1.0" ?>
-            <materialx version = "1.37"> 
+            <materialx version = "1.37">
                <material name="SS_Material">
-                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
                   <bindinput name="base_color" type="color3" value="1,0,1" />
                   <bindinput name="specular_color" type="color3" value="0,1,0" />
                   <bindinput name="specular_roughness" type="float" value="0.8" />
@@ -1104,9 +1136,9 @@ TEST_P(MaterialTest, TestLotsOfMaterialX)
 
         string testMtl1 = R""""(
             <?xml version = "1.0" ?>
-            <materialx version = "1.37"> 
+            <materialx version = "1.37">
                <material name="SS_Material">
-                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
                   <bindinput name="base_color" type="color3" value="0,1,1" />
                   <bindinput name="specular_color" type="color3" value="0,1,0" />
                   <bindinput name="specular_IOR" type="float" value = "0.75" />
@@ -1120,9 +1152,9 @@ TEST_P(MaterialTest, TestLotsOfMaterialX)
 
                 string testMtl2 = R""""(
             <?xml version = "1.0" ?>
-            <materialx version = "1.37"> 
+            <materialx version = "1.37">
                <material name="SS_Material">
-                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
                   <bindinput name="base_color" type="color3" value="0,1,1" />
                   <bindinput name="specular_color" type="color3" value="1,0,0" />
                   <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
@@ -1135,9 +1167,9 @@ TEST_P(MaterialTest, TestLotsOfMaterialX)
 
     string testMtl3 = R""""(
             <?xml version = "1.0" ?>
-            <materialx version = "1.37"> 
+            <materialx version = "1.37">
                <material name="SS_Material">
-                 <shaderref name="SS_ShaderRef1" node="standard_surface"> 
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
                   <bindinput name="base_color" type="color3" value="0,1,0" />
                   <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
                   <bindinput name="coat" type="float" value = "0.75" />
@@ -1285,15 +1317,13 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
     if (!pRenderer)
         return;
 
-    
     defaultDistantLight()->values().setFloat3(
         Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0, -.5f, 1)));
     defaultDistantLight()->values().setFloat3(
-        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1,1,1)));
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
     defaultDistantLight()->values().setFloat(Aurora::Names::LightProperties::kIntensity, 2.0f);
     defaultDistantLight()->values().setFloat(
         Aurora::Names::LightProperties::kAngularDiameter, 0.04f);
-
 
     // Load pixels for test image file.
     const std::string txtName = dataPath() + "/Textures/Triangle.png";
@@ -1305,7 +1335,6 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
     // Create the image.
     const Path kImagePath = "OpacityImage";
     pScene->setImageDescriptor(kImagePath, imageData.descriptor);
-
 
     // Constant colors.
     vec3 color0(0.5f, 1.0f, 0.3f);
@@ -1319,10 +1348,10 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
     Path transpMtl("TransparentMaterial");
     pScene->setMaterialProperties(transpMtl, {});
     Path opaqueMtl("OpaqueMaterial");
-    pScene->setMaterialProperties(opaqueMtl, { { "base_color", vec3(1,1,1) } });
+    pScene->setMaterialProperties(opaqueMtl, { { "base_color", vec3(1, 1, 1) } });
 
     // Create opaque plane instance behind a transparent teapot instance.
-    mat4 xform = translate(vec3(0, 0.5f, +2)) *scale(vec3(5,5,5));
+    mat4 xform = translate(vec3(0, 0.5f, +2)) * scale(vec3(5, 5, 5));
     Path planeInst("PlaneInstance");
     Properties planeInstProps;
     planeInstProps[Names::InstanceProperties::kMaterial]  = opaqueMtl;
@@ -1345,7 +1374,7 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
 
     // Render baseline image with opacity, no transmission and thin_walled flag not set.
     pScene->setMaterialProperties(transpMtl,
-        { { "transmission", 0.0f }, { "opacity_image", "" } , { "opacity", opacity0 },
+        { { "transmission", 0.0f }, { "opacity_image", "" }, { "opacity", opacity0 },
             { "thin_walled", false } });
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Opacity", "Materials");
 }
@@ -1525,7 +1554,7 @@ TEST_P(MaterialTest, TestNormalMapMaterialX)
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
-    
+
     // If pRenderer is null this renderer type not supported, skip rest of the test.
     if (!pRenderer)
         return;
@@ -1538,13 +1567,12 @@ TEST_P(MaterialTest, TestNormalMapMaterialX)
     defaultDistantLight()->values().setFloat3(
         Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
 
-
     // Create geometry.
     Path planePath  = createPlaneGeometry(*pScene);
     Path teapotPath = createTeapotGeometry(*pScene);
 
     // Create material from mtlx document containing normal map.
-    string materialXFullPath = dataPath() + "/Materials/NormalMapExample.mtlx";
+    string materialXFullPath   = dataPath() + "/Materials/NormalMapExample.mtlx";
     string processedMtlXString = loadAndProcessMaterialXFile(materialXFullPath);
     EXPECT_FALSE(processedMtlXString.empty());
     const Path kMaterialPath = "NormalMaterial";
