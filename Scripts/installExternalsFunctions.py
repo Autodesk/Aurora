@@ -52,6 +52,11 @@ verbosity = 1
 # Script version, incrementing this will force re-installation of all packages.
 scriptVersion = "00001"
 
+# Set the global verbosity variable (integer in range 1-3, with 3 being most verbose)
+def SetVerbosity(val):
+    global verbosity
+    verbosity = val
+
 def Print(msg):
     if verbosity > 0:
         print(msg)
@@ -128,6 +133,10 @@ def IsVisualStudioVersionOrGreater(desiredVersion):
 def IsVisualStudio2019OrGreater():
     VISUAL_STUDIO_2019_VERSION = (16, 0)
     return IsVisualStudioVersionOrGreater(VISUAL_STUDIO_2019_VERSION)
+
+def IsVisualStudio2022OrGreater():
+    VISUAL_STUDIO_2022_VERSION = (17, 0)
+    return IsVisualStudioVersionOrGreater(VISUAL_STUDIO_2022_VERSION)
 
 def GetPythonInfo(context):
     """Returns a tuple containing the path to the Python executable, shared
@@ -337,7 +346,7 @@ def BuildConfigs(context):
         configs.append("RelWithDebInfo")
     return configs
 
-def RunCMake(context, force, instFolder= None, extraArgs = None,  configExtraArgs = None, install = True):
+def RunCMake(context, clean, instFolder= None, extraArgs = None,  configExtraArgs = None, install = True):
     """
     Invoke CMake to configure, build, and install a library whose
     source code is located in the current working directory.
@@ -349,6 +358,8 @@ def RunCMake(context, force, instFolder= None, extraArgs = None,  configExtraArg
 
     if generator is not None:
         generator = '-G "{gen}"'.format(gen=generator)
+    elif IsVisualStudio2022OrGreater():
+        generator = '-G "Visual Studio 17 2022" -A x64'
     elif IsVisualStudio2019OrGreater():
         generator = '-G "Visual Studio 16 2019" -A x64'
 
@@ -358,7 +369,7 @@ def RunCMake(context, force, instFolder= None, extraArgs = None,  configExtraArg
 
     for config in BuildConfigs(context):
         buildDir = os.path.join(context.buildDir, os.path.split(srcDir)[1], config)
-        if force and os.path.isdir(buildDir):
+        if clean and os.path.isdir(buildDir):
             shutil.rmtree(buildDir)
         if not os.path.isdir(buildDir):
             os.makedirs(buildDir)

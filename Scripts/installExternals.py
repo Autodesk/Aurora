@@ -94,7 +94,7 @@ ZLIB_PACKAGE_NAME = "ZLIB"
 
 def InstallZlib(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(ZLIB_URL, context, force)):
-        RunCMake(context, force, ZLIB_INSTALL_FOLDER, buildArgs)
+        RunCMake(context, True, ZLIB_INSTALL_FOLDER, buildArgs)
 
 ZLIB = Dependency(ZLIB_INSTALL_FOLDER, ZLIB_PACKAGE_NAME, InstallZlib, ZLIB_URL, "include/zlib.h")
 
@@ -102,6 +102,8 @@ ZLIB = Dependency(ZLIB_INSTALL_FOLDER, ZLIB_PACKAGE_NAME, InstallZlib, ZLIB_URL,
 # boost
 
 BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.tar.gz"
+# Use a sub-version in the version string to force reinstallation, even if 1.78.0 installed.
+BOOST_VERSION_STRING = BOOST_URL+".a"
 
 if Linux():
     BOOST_VERSION_FILE = "include/boost/version.hpp"
@@ -130,8 +132,23 @@ def InstallBoost_Helper(context, force, buildArgs):
 
     with CurrentWorkingDirectory(DownloadURL(BOOST_URL, context, force,
                                              dontExtract=dontExtract)):
+    
+        # Remove the install folder if it exists.
+        instFolder = os.path.join(context.externalsInstDir, BOOST_INSTALL_FOLDER)
+        if(os.path.isdir(instFolder)):
+            PrintInfo("Removing existing install folder:"+instFolder)
+            shutil.rmtree(instFolder)
+        
+        # Set the bootstrap toolset 
+        bsToolset = ""
+        if Windows():
+            if context.cmakeToolset == "v143" or IsVisualStudio2022OrGreater():
+                bsToolset = "vc143"
+            elif context.cmakeToolset == "v142" or IsVisualStudio2019OrGreater():
+                bsToolset = "vc142"
+
         bootstrap = "bootstrap.bat" if Windows() else "./bootstrap.sh"
-        Run(f'{bootstrap}')
+        Run(f'{bootstrap} {bsToolset}')
 
         # b2 supports at most -j64 and will error if given a higher value.
         numProc = min(64, context.numJobs)
@@ -182,10 +199,10 @@ def InstallBoost_Helper(context, force, buildArgs):
         if Windows():
             # toolset parameter for Visual Studio documented here:
             # https://github.com/boostorg/build/blob/develop/src/tools/msvc.jam
-            if context.cmakeToolset == "v142" or IsVisualStudio2019OrGreater():
-                b2Settings.append("toolset=msvc-14.2")
-            # elif IsVisualStudio2022OrGreater():
-            #     b2Settings.append("toolset=msvc-14.x")
+            if context.cmakeToolset == "v143" or IsVisualStudio2022OrGreater():
+                b2Settings.append("toolset=msvc-14.3")
+            elif context.cmakeToolset == "v142" or IsVisualStudio2019OrGreater():
+                 b2Settings.append("toolset=msvc-14.2")
             else:
                 b2Settings.append("toolset=msvc-14.2")
 
@@ -198,16 +215,16 @@ def InstallBoost_Helper(context, force, buildArgs):
         b2ExtraSettings = []
         if context.buildDebug:
             b2ExtraSettings.append('--prefix="{}" variant=debug --debug-configuration'.format(
-                os.path.join(context.externalsInstDir, BOOST_INSTALL_FOLDER)))
+                instFolder))
         if context.buildRelease:
             b2ExtraSettings.append('--prefix="{}" variant=release'.format(
-                os.path.join(context.externalsInstDir, BOOST_INSTALL_FOLDER)))
+                instFolder))
         if context.buildRelWithDebInfo:
             b2ExtraSettings.append('--prefix="{}" variant=profile'.format(
-                os.path.join(context.externalsInstDir, BOOST_INSTALL_FOLDER)))
-
+                instFolder))
         for extraSettings in b2ExtraSettings:
             b2Settings.append(extraSettings)
+            # Build and install Boost
             Run('{b2} {options} install'.format(b2=b2, options=" ".join(b2Settings)))
             b2Settings.pop()
 
@@ -226,7 +243,7 @@ def InstallBoost(context, force, buildArgs):
                 except: pass
         raise
 
-BOOST = Dependency(BOOST_INSTALL_FOLDER, BOOST_PACKAGE_NAME, InstallBoost, BOOST_URL, BOOST_VERSION_FILE)
+BOOST = Dependency(BOOST_INSTALL_FOLDER, BOOST_PACKAGE_NAME, InstallBoost, BOOST_VERSION_STRING, BOOST_VERSION_FILE)
 
 ############################################################
 # Intel TBB
@@ -289,7 +306,7 @@ JPEG_PACKAGE_NAME = "JPEG"
 
 def InstallJPEG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(JPEG_URL, context, force)):
-        RunCMake(context, force, JPEG_INSTALL_FOLDER, buildArgs)
+        RunCMake(context, True, JPEG_INSTALL_FOLDER, buildArgs)
 
 JPEG = Dependency(JPEG_INSTALL_FOLDER, JPEG_PACKAGE_NAME, InstallJPEG, JPEG_URL, "include/jpeglib.h")
 
@@ -323,7 +340,7 @@ def InstallTIFF(context, force, buildArgs):
         else:
             extraArgs = []
         extraArgs += buildArgs
-        RunCMake(context, force, TIFF_INSTALL_FOLDER, extraArgs)
+        RunCMake(context, True, TIFF_INSTALL_FOLDER, extraArgs)
 
 TIFF = Dependency(TIFF_INSTALL_FOLDER, TIFF_PACKAGE_NAME, InstallTIFF, TIFF_URL, "include/tiff.h")
 
@@ -336,7 +353,7 @@ PNG_PACKAGE_NAME = "PNG"
 
 def InstallPNG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(PNG_URL, context, force)):
-        RunCMake(context, force, PNG_INSTALL_FOLDER, buildArgs)
+        RunCMake(context, True, PNG_INSTALL_FOLDER, buildArgs)
 
 PNG = Dependency(PNG_INSTALL_FOLDER, PNG_PACKAGE_NAME, InstallPNG, PNG_URL, "include/png.h")
 
@@ -378,7 +395,7 @@ TinyGLTF_PACKAGE_NAME = "TinyGLTF"
 
 def InstallTinyGLTF(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TinyGLTF_URL, context, force)):
-        RunCMake(context, force, TinyGLTF_INSTALL_FOLDER, buildArgs)
+        RunCMake(context, True, TinyGLTF_INSTALL_FOLDER, buildArgs)
 
 TINYGLTF = Dependency(TinyGLTF_INSTALL_FOLDER, TinyGLTF_PACKAGE_NAME, InstallTinyGLTF, TinyGLTF_URL, "include/tiny_gltf.h")
 
@@ -391,7 +408,7 @@ TinyObjLoader_PACKAGE_NAME = "tinyobjloader"
 
 def InstallTinyObjLoader(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TinyObjLoader_URL, context, force)):
-        RunCMake(context, force, TinyObjLoader_INSTALL_FOLDER, buildArgs)
+        RunCMake(context, True, TinyObjLoader_INSTALL_FOLDER, buildArgs)
 
 TINYOBJLOADER = Dependency(TinyObjLoader_INSTALL_FOLDER, TinyObjLoader_PACKAGE_NAME, InstallTinyObjLoader, TinyObjLoader_URL, "include/tiny_obj_loader.h")
 
@@ -423,7 +440,7 @@ def InstallMiniZ(context, force, buildArgs):
 
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
-        RunCMake(context, force, miniz_INSTALL_FOLDER, extraArgs)
+        RunCMake(context, True, miniz_INSTALL_FOLDER, extraArgs)
 
 MINIZ = Dependency(miniz_INSTALL_FOLDER, miniz_PACKAGE_NAME, InstallMiniZ, miniz_URL, "include/miniz/miniz_export.h")
 
@@ -446,7 +463,7 @@ def InstallURIParser(context, force, buildArgs):
 
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
-        RunCMake(context, force, URIPARSER_INSTALL_FOLDER, extraArgs)
+        RunCMake(context, True, URIPARSER_INSTALL_FOLDER, extraArgs)
 
 URIPARSER = Dependency(URIPARSER_INSTALL_FOLDER, URIPARSER_PACKAGE_NAME, InstallURIParser, URIPARSER_URL, "bin/uriparse.exe")
 
@@ -475,7 +492,7 @@ def InstallOpenEXR(context, force, buildArgs):
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
 
-        RunCMake(context, force, OPENEXR_INSTALL_FOLDER, extraArgs)
+        RunCMake(context, True, OPENEXR_INSTALL_FOLDER, extraArgs)
 
 OPENEXR = Dependency(OPENEXR_INSTALL_FOLDER, OPENEXR_PACKAGE_NAME, InstallOpenEXR, OPENEXR_URL, "include/OpenEXR/ImfVersion.h")
 
@@ -520,7 +537,7 @@ def InstallOpenImageIO(context, force, buildArgs):
             "RelWithDebInfo": '-DTBB_USE_DEBUG_BUILD=OFF',
         }
 
-        RunCMake(context, force, OIIO_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
+        RunCMake(context, True, OIIO_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
 
 OPENIMAGEIO = Dependency(OIIO_INSTALL_FOLDER, OIIO_PACKAGE_NAME, InstallOpenImageIO, OIIO_URL, "include/OpenImageIO/oiioversion.h")
 
@@ -569,7 +586,7 @@ def InstallOpenSubdiv(context, force, buildArgs):
         oldNumJobs = context.numJobs
 
         try:
-            RunCMake(context, force, OPENSUBDIV_INSTALL_FOLDER, extraArgs)
+            RunCMake(context, True, OPENSUBDIV_INSTALL_FOLDER, extraArgs)
         finally:
             context.cmakeGenerator = oldGenerator
             context.numJobs = oldNumJobs
@@ -589,7 +606,7 @@ def InstallMaterialX(context, force, buildArgs):
         cmakeOptions = ['-DMATERIALX_BUILD_SHARED_LIBS=ON', '-DMATERIALX_BUILD_TESTS=OFF']
         cmakeOptions += buildArgs
 
-        RunCMake(context, force, MATERIALX_INSTALL_FOLDER, cmakeOptions)
+        RunCMake(context, True, MATERIALX_INSTALL_FOLDER, cmakeOptions)
 
 MATERIALX = Dependency(MATERIALX_INSTALL_FOLDER, MATERIALX_PACKAGE_NAME, InstallMaterialX, MATERIALX_URL, "include/MaterialXCore/Library.h")
 
@@ -685,7 +702,7 @@ def InstallUSD(context, force, buildArgs):
             "Release": '-DTBB_USE_DEBUG_BUILD=OFF',
             "RelWithDebInfo": '-DTBB_USE_DEBUG_BUILD=OFF',
         }
-        RunCMake(context, force, USD_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
+        RunCMake(context, True, USD_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
 
 USD = Dependency(USD_INSTALL_FOLDER, USD_PACKAGE_NAME, InstallUSD, USD_URL, "include/pxr/pxr.h")
 
@@ -716,7 +733,7 @@ NRD_PACKAGE_NAME = "NRD"
 def InstallNRD(context, force, buildArgs):
     NRD_FOLDER = "NRD-"+NRD_TAG
     with CurrentWorkingDirectory(GitClone(NRD_URL, NRD_TAG, NRD_FOLDER, context)):
-        RunCMake(context, force, NRD_INSTALL_FOLDER, buildArgs, install=False)
+        RunCMake(context, True, NRD_INSTALL_FOLDER, buildArgs, install=False)
 
         CopyDirectory(context, "Include", "include", NRD_INSTALL_FOLDER)
         CopyDirectory(context, "Integration", "Integration", NRD_INSTALL_FOLDER)
@@ -789,7 +806,7 @@ def InstallGLFW(context, force, buildArgs):
         cmakeOptions = ['-DGLFW_BUILD_EXAMPLES=OFF', '-DGLFW_BUILD_TESTS=OFF', '-DGLFW_BUILD_DOCS=OFF']
         cmakeOptions += buildArgs
 
-        RunCMake(context, force, GLFW_INSTALL_FOLDER, cmakeOptions)
+        RunCMake(context, True, GLFW_INSTALL_FOLDER, cmakeOptions)
 
 GLFW = Dependency(GLFW_INSTALL_FOLDER, GLFW_PACKAGE_NAME, InstallGLFW, GLFW_URL, "include/GLFW/glfw3.h")
 
@@ -802,7 +819,7 @@ CXXOPTS_PACKAGE_NAME = "cxxopts"
 
 def InstallCXXOPTS(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(CXXOPTS_URL, context, force)):
-        RunCMake(context, force, CXXOPTS_INSTALL_FOLDER, buildArgs)
+        RunCMake(context, True, CXXOPTS_INSTALL_FOLDER, buildArgs)
 
 CXXOPTS = Dependency(CXXOPTS_INSTALL_FOLDER, CXXOPTS_PACKAGE_NAME, InstallCXXOPTS, CXXOPTS_URL, "include/cxxopts.hpp")
 
@@ -816,7 +833,7 @@ GTEST_PACKAGE_NAME = "GTest"
 def InstallGTEST(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(GTEST_URL, context, force)):
         extraArgs = [*buildArgs, '-Dgtest_force_shared_crt=ON']
-        RunCMake(context, force, GTEST_INSTALL_FOLDER, extraArgs)
+        RunCMake(context, True, GTEST_INSTALL_FOLDER, extraArgs)
 
 GTEST = Dependency(GTEST_INSTALL_FOLDER, GTEST_PACKAGE_NAME, InstallGTEST, GTEST_URL, "include/gtest/gtest.h")
 
@@ -1008,7 +1025,7 @@ except Exception as e:
     PrintError(str(e))
     sys.exit(1)
 
-verbosity = args.verbosity
+SetVerbosity(args.verbosity)
 
 # Determine list of external libraries required (directly or indirectly)
 # by Aurora
@@ -1196,7 +1213,7 @@ if Windows():
     buildStepsMsg = """
 Success!
 
-To use the external libraries, please configure Aurora build in "x64 Native Tools Command Prompt for VS 2019" with:
+To use the external libraries, please configure Aurora build in "x64 Native Tools Command Prompt" with:
     cmake -S . -B Build [-D EXTERNALS_ROOT={externalsDir}]
     cmake --build Build --config {buildConfigs}
 """.format(externalsDir=context.externalsInstDir,

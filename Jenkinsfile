@@ -63,11 +63,11 @@ def windowsBuild() {
     call set VK_SDK_PATH=C:\\VulkanSDK\\1.3.231.1
     call set VULKAN_SDK=C:\\VulkanSDK\\1.3.231.1
  
-    :: Set up Visual Studio 2019 Environment
-    call C:\\"Program Files (x86)"\\"Microsoft Visual Studio"\\2019\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
+    :: Set up Visual Studio 2022 Environment
+    call C:\\"Program Files"\\"Microsoft Visual Studio"\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
 
-    :: insatll externals
-    python -u Scripts\\installExternals.py ${EXTERNALS_DIR}
+    :: install externals
+    python -u Scripts\\installExternals.py ${EXTERNALS_DIR} -v -v
 
     :: build Aurora
     echo Configure CMake project
