@@ -69,6 +69,8 @@ struct MaterialConstants
     TextureTransform baseColorTexTransform;
     bool hasSpecularRoughnessTex;
     TextureTransform specularRoughnessTexTransform;
+    bool hasEmissionColorTex;
+    TextureTransform emissionColorTexTransform;
     bool hasOpacityTex;
     TextureTransform opacityTexTransform;
     bool hasNormalTex;
@@ -85,7 +87,8 @@ struct MaterialConstants
 Texture2D<float4> gBaseColorTexture : register(t5, space1);
 Texture2D<float4> gSpecularRoughnessTexture : register(t6, space1);
 Texture2D<float4> gNormalTexture : register(t7, space1);
-Texture2D<float4> gOpacityTexture : register(t8, space1);
+Texture2D<float4> gEmissionColorTexture : register(t8, space1);
+Texture2D<float4> gOpacityTexture : register(t9, space1);
 
 // Material properties are stored in this ByteAddressBuffer, and accessed with Material_XXX()
 // functions, specific to the material type. They are stored in the register space after the vertex
@@ -93,7 +96,7 @@ Texture2D<float4> gOpacityTexture : register(t8, space1);
 // NOTE: An untyped ByteAddressBuffer is used instead of a typed constant buffer (e.g.
 // ConstantBuffer<MyMaterial123>) because it is not possible in DirectX to have constant buffers with
 // different types assigned to the same register.
-ByteAddressBuffer gMaterialConstants : register(t9, space1);
+ByteAddressBuffer gMaterialConstants : register(t10, space1);
 
 // Samplers for base color and opacity.
 // TODO: Add for other textures.
@@ -108,6 +111,11 @@ float4 sampleBaseColorTexture(float2 uv, float level)
 float4 sampleSpecularRoughnessTexture(float2 uv, float level)
 {
     return gSpecularRoughnessTexture.SampleLevel(
+        gDefaultSampler, uv, level); // Use the default sampler.
+}
+float4 sampleEmissionColorTexture(float2 uv, float level)
+{
+    return gEmissionColorTexture.SampleLevel(
         gDefaultSampler, uv, level); // Use the default sampler.
 }
 float4 sampleOpacityTexture(float2 uv, float level)
@@ -125,6 +133,7 @@ float4 sampleNormalTexture(float2 uv, float level)
 MaterialConstants getMaterial();
 float4 sampleBaseColorTexture(float2 uv, float level);
 float4 sampleSpecularRoughnessTexture(float2 uv, float level);
+float4 sampleEmissionColorTexture(float2 uv, float level);
 float4 sampleOpacityTexture(float2 uv, float level);
 float4 sampleNormalTexture(float2 uv, float level);
 #endif
@@ -469,64 +478,94 @@ float Material_specularRoughnessTexRotation(ByteAddressBuffer buf)
     return asfloat(buf.Load(288));
 }
 
+// Get property has_emission_color_image from byte address buffer
+int Material_hasEmissionColorTex(ByteAddressBuffer buf)
+{
+    return buf.Load(292);
+}
+
+// Get property emission_color_image_offset from byte address buffer
+float2 Material_emissionColorTexOffset(ByteAddressBuffer buf)
+{
+    return asfloat(buf.Load2(296));
+}
+
+// Get property emission_color_image_scale from byte address buffer
+float2 Material_emissionColorTexScale(ByteAddressBuffer buf)
+{
+    return asfloat(buf.Load2(304));
+}
+
+// Get property emission_color_image_pivot from byte address buffer
+float2 Material_emissionColorTexPivot(ByteAddressBuffer buf)
+{
+    return asfloat(buf.Load2(312));
+}
+
+// Get property emission_color_image_rotation from byte address buffer
+float Material_emissionColorTexRotation(ByteAddressBuffer buf)
+{
+    return asfloat(buf.Load(320));
+}
+
 // Get property has_opacity_image from byte address buffer
 int Material_hasOpacityTex(ByteAddressBuffer buf)
 {
-    return buf.Load(292);
+    return buf.Load(324);
 }
 
 // Get property opacity_image_offset from byte address buffer
 float2 Material_opacityTexOffset(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(296));
+    return asfloat(buf.Load2(328));
 }
 
 // Get property opacity_image_scale from byte address buffer
 float2 Material_opacityTexScale(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(304));
+    return asfloat(buf.Load2(336));
 }
 
 // Get property opacity_image_pivot from byte address buffer
 float2 Material_opacityTexPivot(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(312));
+    return asfloat(buf.Load2(344));
 }
 
 // Get property opacity_image_rotation from byte address buffer
 float Material_opacityTexRotation(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load(320));
+    return asfloat(buf.Load(352));
 }
 
 // Get property has_normal_image from byte address buffer
 int Material_hasNormalTex(ByteAddressBuffer buf)
 {
-    return buf.Load(324);
+    return buf.Load(356);
 }
 
 // Get property normal_image_offset from byte address buffer
 float2 Material_normalTexOffset(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(328));
+    return asfloat(buf.Load2(360));
 }
 
 // Get property normal_image_scale from byte address buffer
 float2 Material_normalTexScale(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(336));
+    return asfloat(buf.Load2(368));
 }
 
 // Get property normal_image_pivot from byte address buffer
 float2 Material_normalTexPivot(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load2(344));
+    return asfloat(buf.Load2(376));
 }
 
 // Get property normal_image_rotation from byte address buffer
 float Material_normalTexRotation(ByteAddressBuffer buf)
 {
-    return asfloat(buf.Load(352));
+    return asfloat(buf.Load(384));
 }
 
 // Initializes the full set of property values for a material, for the specified shading data.
@@ -590,6 +629,17 @@ Material initializeDefaultMaterial(
             Material_specularRoughnessTexOffset(gMaterialConstants));
 
         material.specularRoughness = sampleSpecularRoughnessTexture(uv, 0.0f).r;
+    }
+
+    // Sample emission color from a texture if necessary.
+    if (Material_hasEmissionColorTex(gMaterialConstants))
+    {
+        float2 uv = applyUVTransform(shading.texCoord,
+            Material_emissionColorTexPivot(gMaterialConstants),
+            Material_emissionColorTexScale(gMaterialConstants),
+            Material_emissionColorTexRotation(gMaterialConstants),
+            Material_emissionColorTexOffset(gMaterialConstants));
+        material.emissionColor = sampleEmissionColorTexture(uv, 0.0f).rgb;
     }
 
     // Sample opacity from a texture if necessary.

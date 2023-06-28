@@ -48,6 +48,11 @@ static PropertySetPtr propertySet()
     g_pPropertySet->add("coat_color_image_transform", mat4());
     g_pPropertySet->add("coat_roughness_image", IImagePtr());
     g_pPropertySet->add("coat_roughness_image_transform", mat4());
+    g_pPropertySet->add("emission_color_image", IImagePtr());
+    g_pPropertySet->add("emission_color_image_offset", vec2());
+    g_pPropertySet->add("emission_color_image_scale", vec2(1, 1));
+    g_pPropertySet->add("emission_color_image_pivot", vec2());
+    g_pPropertySet->add("emission_color_image_rotation", 0.0f);
     g_pPropertySet->add("opacity_image", IImagePtr());
     g_pPropertySet->add("opacity_image_offset", vec2());
     g_pPropertySet->add("opacity_image_scale", vec2(1, 1));
@@ -64,94 +69,71 @@ static PropertySetPtr propertySet()
     return g_pPropertySet;
 }
 
+// A shortcut macro for defining a uniform buffer property definition.
+#define PROPERTY_DEF(NAME1, NAME2, TYPE)                                                           \
+    UniformBufferPropertyDefinition(NAME1, NAME2, PropertyValue::Type::TYPE)
+
 // Material properties used by the built-in Standard Surface material type.
 // NOTE: Default values and order come from the Standard surface reference document:
 // https://github.com/Autodesk/standard-surface/blob/master/reference/standard_surface.mtlx
 UniformBufferDefinition MaterialBase::StandardSurfaceUniforms = {
-    UniformBufferPropertyDefinition("base", "base", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("base_color", "baseColor", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition(
-        "diffuse_roughness", "diffuseRoughness", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("metalness", "metalness", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("specular", "specular", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("specular_color", "specularColor", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition(
-        "specular_roughness", "specularRoughness", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("specular_IOR", "specularIOR", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "specular_anisotropy", "specularAnisotropy", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "specular_rotation", "specularRotation", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("transmission", "transmission", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "transmission_color", "transmissionColor", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition("subsurface", "subsurface", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "subsurface_color", "subsurfaceColor", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition(
-        "subsurface_radius", "subsurfaceRadius", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition(
-        "subsurface_scale", "subsurfaceScale", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "subsurface_anisotropy", "subsurfaceAnisotropy", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("sheen", "sheen", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("sheen_color", "sheenColor", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition(
-        "sheen_roughness", "sheenRoughness", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("coat", "coat", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("coat_color", "coatColor", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition("coat_roughness", "coatRoughness", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "coat_anisotropy", "coatAnisotropy", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("coat_rotation", "coatRotation", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("coat_IOR", "coatIOR", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "coat_affect_color", "coatAffectColor", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "coat_affect_roughness", "coatAffectRoughness", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("emission", "emission", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("emission_color", "emissionColor", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition("opacity", "opacity", PropertyValue::Type::Float3),
-    UniformBufferPropertyDefinition("thin_walled", "thinWalled", PropertyValue::Type::Bool),
-    UniformBufferPropertyDefinition(
-        "has_base_color_image", "hasBaseColorTex", PropertyValue::Type::Bool),
-    UniformBufferPropertyDefinition(
-        "base_color_image_offset", "baseColorTexOffset", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "base_color_image_scale", "baseColorTexScale", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "base_color_image_pivot", "baseColorTexPivot", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "base_color_image_rotation", "baseColorTexRotation", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "has_specular_roughness_image", "hasSpecularRoughnessTex", PropertyValue::Type::Bool),
-    UniformBufferPropertyDefinition("specular_roughness_image_offset", "specularRoughnessTexOffset",
-        PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "specular_roughness_image_scale", "specularRoughnessTexScale", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "specular_roughness_image_pivot", "specularRoughnessTexPivot", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition("specular_roughness_image_rotation",
-        "specularRoughnessTexRotation", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition(
-        "has_opacity_image", "hasOpacityTex", PropertyValue::Type::Bool),
-    UniformBufferPropertyDefinition(
-        "opacity_image_offset", "opacityTexOffset", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "opacity_image_scale", "opacityTexScale", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "opacity_image_pivot", "opacityTexPivot", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "opacity_image_rotation", "opacityTexRotation", PropertyValue::Type::Float),
-    UniformBufferPropertyDefinition("has_normal_image", "hasNormalTex", PropertyValue::Type::Bool),
-    UniformBufferPropertyDefinition(
-        "normal_image_offset", "normalTexOffset", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "normal_image_scale", "normalTexScale", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "normal_image_pivot", "normalTexPivot", PropertyValue::Type::Float2),
-    UniformBufferPropertyDefinition(
-        "normal_image_rotation", "normalTexRotation", PropertyValue::Type::Float)
+    PROPERTY_DEF("base", "base", Float),
+    PROPERTY_DEF("base_color", "baseColor", Float3),
+    PROPERTY_DEF("diffuse_roughness", "diffuseRoughness", Float),
+    PROPERTY_DEF("metalness", "metalness", Float),
+    PROPERTY_DEF("specular", "specular", Float),
+    PROPERTY_DEF("specular_color", "specularColor", Float3),
+    PROPERTY_DEF("specular_roughness", "specularRoughness", Float),
+    PROPERTY_DEF("specular_IOR", "specularIOR", Float),
+    PROPERTY_DEF("specular_anisotropy", "specularAnisotropy", Float),
+    PROPERTY_DEF("specular_rotation", "specularRotation", Float),
+    PROPERTY_DEF("transmission", "transmission", Float),
+    PROPERTY_DEF("transmission_color", "transmissionColor", Float3),
+    PROPERTY_DEF("subsurface", "subsurface", Float),
+    PROPERTY_DEF("subsurface_color", "subsurfaceColor", Float3),
+    PROPERTY_DEF("subsurface_radius", "subsurfaceRadius", Float3),
+    PROPERTY_DEF("subsurface_scale", "subsurfaceScale", Float),
+    PROPERTY_DEF("subsurface_anisotropy", "subsurfaceAnisotropy", Float),
+    PROPERTY_DEF("sheen", "sheen", Float),
+    PROPERTY_DEF("sheen_color", "sheenColor", Float3),
+    PROPERTY_DEF("sheen_roughness", "sheenRoughness", Float),
+    PROPERTY_DEF("coat", "coat", Float),
+    PROPERTY_DEF("coat_color", "coatColor", Float3),
+    PROPERTY_DEF("coat_roughness", "coatRoughness", Float),
+    PROPERTY_DEF("coat_anisotropy", "coatAnisotropy", Float),
+    PROPERTY_DEF("coat_rotation", "coatRotation", Float),
+    PROPERTY_DEF("coat_IOR", "coatIOR", Float),
+    PROPERTY_DEF("coat_affect_color", "coatAffectColor", Float),
+    PROPERTY_DEF("coat_affect_roughness", "coatAffectRoughness", Float),
+    PROPERTY_DEF("emission", "emission", Float),
+    PROPERTY_DEF("emission_color", "emissionColor", Float3),
+    PROPERTY_DEF("opacity", "opacity", Float3),
+    PROPERTY_DEF("thin_walled", "thinWalled", Bool),
+    PROPERTY_DEF("has_base_color_image", "hasBaseColorTex", Bool),
+    PROPERTY_DEF("base_color_image_offset", "baseColorTexOffset", Float2),
+    PROPERTY_DEF("base_color_image_scale", "baseColorTexScale", Float2),
+    PROPERTY_DEF("base_color_image_pivot", "baseColorTexPivot", Float2),
+    PROPERTY_DEF("base_color_image_rotation", "baseColorTexRotation", Float),
+    PROPERTY_DEF("has_specular_roughness_image", "hasSpecularRoughnessTex", Bool),
+    PROPERTY_DEF("specular_roughness_image_offset", "specularRoughnessTexOffset", Float2),
+    PROPERTY_DEF("specular_roughness_image_scale", "specularRoughnessTexScale", Float2),
+    PROPERTY_DEF("specular_roughness_image_pivot", "specularRoughnessTexPivot", Float2),
+    PROPERTY_DEF("specular_roughness_image_rotation", "specularRoughnessTexRotation", Float),
+    PROPERTY_DEF("has_emission_color_image", "hasEmissionColorTex", Bool),
+    PROPERTY_DEF("emission_color_image_offset", "emissionColorTexOffset", Float2),
+    PROPERTY_DEF("emission_color_image_scale", "emissionColorTexScale", Float2),
+    PROPERTY_DEF("emission_color_image_pivot", "emissionColorTexPivot", Float2),
+    PROPERTY_DEF("emission_color_image_rotation", "emissionColorTexRotation", Float),
+    PROPERTY_DEF("has_opacity_image", "hasOpacityTex", Bool),
+    PROPERTY_DEF("opacity_image_offset", "opacityTexOffset", Float2),
+    PROPERTY_DEF("opacity_image_scale", "opacityTexScale", Float2),
+    PROPERTY_DEF("opacity_image_pivot", "opacityTexPivot", Float2),
+    PROPERTY_DEF("opacity_image_rotation", "opacityTexRotation", Float),
+    PROPERTY_DEF("has_normal_image", "hasNormalTex", Bool),
+    PROPERTY_DEF("normal_image_offset", "normalTexOffset", Float2),
+    PROPERTY_DEF("normal_image_scale", "normalTexScale", Float2),
+    PROPERTY_DEF("normal_image_pivot", "normalTexPivot", Float2),
+    PROPERTY_DEF("normal_image_rotation", "normalTexRotation", Float)
 };
 
 // Textures used by the built-in Standard Surface material type.
@@ -215,6 +197,11 @@ vector<PropertyValue> StandardSurfaceDefaultProperties = {
     vec2(1.0f, 1.0f),       // specular_roughness_image_scale
     vec2(0.0f, 0.0f),       // specular_roughness_image_pivot
     0.0f,                   // specular_roughness_image_rotation
+    false,                  // has_emission_color_image
+    vec2(0.0f, 0.0f),       // emission_color_image_offset
+    vec2(1.0f, 1.0f),       // emission_color_image_scale
+    vec2(0.0f, 0.0f),       // emission_color_image_pivot
+    0.0f,                   // emission_color_image_rotation
     false,                  // has_opacity_image
     vec2(0.0f, 0.0f),       // opacity_image_offset
     vec2(1.0f, 1.0f),       // opacity_image_scale
@@ -253,6 +240,8 @@ void MaterialBase::updateBuiltInMaterial(MaterialBase& mtl)
         "has_base_color_image", mtl._values.asImage("base_color_image") ? true : false);
     mtl.uniformBuffer().set("has_specular_roughness_image",
         mtl._values.asImage("specular_roughness_image") ? true : false);
+    mtl.uniformBuffer().set(
+        "has_emission_color_image", mtl._values.asImage("emission_color_image") ? true : false);
     mtl.uniformBuffer().set(
         "has_opacity_image", mtl._values.asImage("opacity_image") ? true : false);
     mtl.uniformBuffer().set("has_normal_image", mtl._values.asImage("normal_image") ? true : false);

@@ -54,14 +54,15 @@ public:
     // The total number of texture descriptors for each material instance.
     static uint32_t descriptorCount()
     {
-        // Base color, specular roughness, normal and opacity textures.
-        return 4;
+        // Base color, specular roughness, normal, emission color, and opacity textures.
+        return 5;
     }
 
     // The total number of sampler descriptors for each material instance.
     static uint32_t samplerDescriptorCount()
     {
         // Base color + opacity only for now.
+        // TODO: Support samplers for other textures.
         return 2;
     }
 

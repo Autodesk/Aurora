@@ -207,7 +207,8 @@ static void clearAllProperties(Properties& props)
     props["specular_color_image"].clear();
     props["coat_color_image"].clear();
     props["coat_roughness_image"].clear();
-
+    props["emission_color_image"].clear();
+    props["opacity_image"].clear();
     props["normal_image"].clear();
     props["displacement_image"].clear();
 }
@@ -576,6 +577,19 @@ TEST_P(MaterialTest, TestMaterialEmission)
 
     // Render and compare against the baseline image.
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Emission", "Materials");
+
+    // Load a test image from disk as an Aurora image.
+    const std::string imageFilePath = dataPath() + "/Textures/Mr._Smiley_Face.png";
+    TestHelpers::ImageData imageData;
+    loadImage(imageFilePath, &imageData);
+    const Path kImagePath = "EmissionColorImage";
+    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+
+    // Set the image as the emission color image on the material.
+    pScene->setMaterialProperties(material, { { "emission_color_image", kImagePath } });
+
+    // Render and compare against the baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "EmissionImage", "Materials");
 }
 
 // Test more advanced material properties using baseline image testing

@@ -128,6 +128,11 @@ bool PTMaterial::validateOffsets(const PTShaderLibrary& pShaderLibrary)
     VALIDATE_OFFSET(baseColorTexRotation);
     VALIDATE_OFFSET(hasSpecularRoughnessTex);
     VALIDATE_OFFSET(specularRoughnessTexOffset);
+    VALIDATE_OFFSET(hasEmissionColorTex);
+    VALIDATE_OFFSET(emissionColorTexOffset);
+    VALIDATE_OFFSET(emissionColorTexScale);
+    VALIDATE_OFFSET(emissionColorTexPivot);
+    VALIDATE_OFFSET(emissionColorTexRotation);
     VALIDATE_OFFSET(hasOpacityTex);
     VALIDATE_OFFSET(opacityTexPivot);
     VALIDATE_OFFSET(hasNormalTex);
@@ -222,29 +227,26 @@ void PTMaterial::createDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT i
     // Create a SRV (descriptor) on the descriptor heap for the base color image, if any.
     PTImagePtr pImage = dynamic_pointer_cast<PTImage>(_values.asImage("base_color_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the base color image SRV.
     handle.Offset(increment);
 
     // Create a SRV (descriptor) on the descriptor heap for the specular roughness image, if any.
     pImage = dynamic_pointer_cast<PTImage>(_values.asImage("specular_roughness_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the specular roughness image SRV.
     handle.Offset(increment);
 
     // Create a SRV (descriptor) on the descriptor heap for the normal image, if any.
     pImage = dynamic_pointer_cast<PTImage>(_values.asImage("normal_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the normal image SRV.
     handle.Offset(increment);
 
-    // Create a SRV (descriptor) on the descriptor heap for the normal image, if any.
+    // Create a SRV (descriptor) on the descriptor heap for the emission color image, if any.
+    pImage = dynamic_pointer_cast<PTImage>(_values.asImage("emission_color_image"));
+    PTImage::createSRV(*_pRenderer, pImage.get(), handle);
+    handle.Offset(increment);
+
+    // Create a SRV (descriptor) on the descriptor heap for the opacity image, if any.
     pImage = dynamic_pointer_cast<PTImage>(_values.asImage("opacity_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the opacity image SRV.
     handle.Offset(increment);
 }
 

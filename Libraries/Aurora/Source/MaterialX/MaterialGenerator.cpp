@@ -90,6 +90,9 @@ MaterialGenerator::MaterialGenerator(const string& mtlxFolder)
         { "base_color_image_scale", "baseColorTexTransform.scale" },
         { "base_color_image_offset", "baseColorTexTransform.offset" },
         { "base_color_image_rotation", "baseColorTexTransform.rotation" },
+        { "emission_color_image_scale", "emissionColorTexTransform.scale" },
+        { "emission_color_image_offset", "emissionColorTexTransform.offset" },
+        { "emission_color_image_rotation", "emissionColorTexTransform.rotation" },
         { "opacity_image_scale", "opacityTexTransform.scale" },
         { "opacity_image_offset", "opacityTexTransform.offset" },
         { "opacity_image_rotation", "opacityTexTransform.rotation" },
@@ -237,7 +240,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
 
     if (res.textures.size() >= 3)
     {
-        // Map second texture to the normal_image and the default sampler.
+        // Map third texture to the normal_image and the default sampler.
         generatedMtlxSetupFunction +=
             "\tsampler2D normal_image = createSampler2D(gNormalTexture, "
             "gDefaultSampler);\n";
@@ -250,7 +253,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
 
     if (res.textures.size() >= 4)
     {
-        // Map second texture to the specular_roughness_image and the default sampler.
+        // Map fourth texture to the specular_roughness_image and the default sampler.
         generatedMtlxSetupFunction +=
             "\tsampler2D specular_roughness_image = createSampler2D(gSpecularRoughnessTexture, "
             "gDefaultSampler);\n";
@@ -258,6 +261,19 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
         // Add to the texture array.
         TextureDefinition txtDef = res.textureDefaults[3];
         txtDef.name              = "specular_roughness_image";
+        textureVars.push_back(txtDef);
+    }
+
+    if (res.textures.size() >= 5)
+    {
+        // Map fifth texture to the emission_color_image and the default sampler.
+        generatedMtlxSetupFunction +=
+            "\tsampler2D emission_color_image = createSampler2D(gEmissionColorTexture, "
+            "gDefaultSampler);\n";
+
+        // Add to the texture array.
+        TextureDefinition txtDef = res.textureDefaults[4];
+        txtDef.name              = "emission_color_image";
         textureVars.push_back(txtDef);
     }
 

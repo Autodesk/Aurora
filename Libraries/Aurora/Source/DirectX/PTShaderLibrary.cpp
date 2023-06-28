@@ -419,24 +419,32 @@ void PTShaderLibrary::initRootSignatures()
     _pRayGenRootSignature = createRootSignature(rayGenDesc);
     _pRayGenRootSignature->SetName(L"Ray Gen Local Root Signature");
 
-    // Specify a local root signature for the radiance hit group.
+    // Start a local root signature for the radiance hit group.
     // NOTE: All shaders in the hit group must have the same local root signature.
     array<CD3DX12_ROOT_PARAMETER, 10> radianceHitParameters = {};
-    radianceHitParameters[0].InitAsShaderResourceView(0, 1); // gIndices: indices
-    radianceHitParameters[1].InitAsShaderResourceView(1, 1); // gPositions: positions
-    radianceHitParameters[2].InitAsShaderResourceView(2, 1); // gNormals: normals
-    radianceHitParameters[3].InitAsShaderResourceView(3, 1); // gTangents: tangents
-    radianceHitParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords: texture coordinates
-    radianceHitParameters[5].InitAsConstants(
-        5, 0, 1); // gHasNormals, gHasTangents gHasTexCoords, gLayerMissShaderIndex and gIsOpaque
-    radianceHitParameters[6].InitAsShaderResourceView(
-        9, 1); // gMaterialConstants: material data (stored in register 9 after textures)
-    radianceHitParameters[7].InitAsConstantBufferView(
-        2, 1); // gMaterialLayerIDs: indices for layer material shaders
 
-    // Texture descriptors starting at register(t5, space1), after the byte address buffers for
-    // vertex data.
-    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 5, 1);
+    // Geometry buffers: indices, positions, normals, tangents, and texture coordinates.
+    const int kGeometryBufferCount = 5;
+    radianceHitParameters[0].InitAsShaderResourceView(0, 1); // gIndices
+    radianceHitParameters[1].InitAsShaderResourceView(1, 1); // gPositions
+    radianceHitParameters[2].InitAsShaderResourceView(2, 1); // gNormals
+    radianceHitParameters[3].InitAsShaderResourceView(3, 1); // gTangents
+    radianceHitParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords
+
+    // Constants: gHasNormals, gHasTangents gHasTexCoords, gLayerMissShaderIndex, and gIsOpaque.
+    radianceHitParameters[5].InitAsConstants(5, 0, 1);
+
+    // gMaterialConstants: material data (stored after geometry data and textures).
+    radianceHitParameters[6].InitAsShaderResourceView(
+        kGeometryBufferCount + PTMaterial::descriptorCount(), 1);
+
+    // gMaterialLayerIDs: indices for layer material shaders.
+    radianceHitParameters[7].InitAsConstantBufferView(2, 1);
+
+    // Texture descriptors starting at register(tX, space1), where X is the number of byte address
+    // buffers for geometry data.
+    texRange.Init(
+        D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), kGeometryBufferCount, 1);
     CD3DX12_DESCRIPTOR_RANGE radianceHitRanges[] = { texRange }; // NOLINT(modernize-avoid-c-arrays)
     radianceHitParameters[8].InitAsDescriptorTable(_countof(radianceHitRanges), radianceHitRanges);
 
@@ -454,24 +462,31 @@ void PTShaderLibrary::initRootSignatures()
     _pRadianceHitRootSignature = createRootSignature(radianceHitDesc);
     _pRadianceHitRootSignature->SetName(L"Radiance Hit Group Local Root Signature");
 
-    // Specify a local root signature for the layer miss shader.
+    // Start a local root signature for the layer miss shader.
     // NOTE: All shaders in the hit group must have the same local root signature.
     array<CD3DX12_ROOT_PARAMETER, 10> layerMissParameters = {};
+
+    // Geometry buffers.
     layerMissParameters[0].InitAsShaderResourceView(0, 1); // gIndices: indices
     layerMissParameters[1].InitAsShaderResourceView(1, 1); // gPositions: positions
     layerMissParameters[2].InitAsShaderResourceView(2, 1); // gNormals: normals
     layerMissParameters[3].InitAsShaderResourceView(3, 1); // gTangents: tangents
     layerMissParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords: texture coordinates
-    layerMissParameters[5].InitAsConstants(
-        5, 0, 1); // gHasNormals, gHasTangents, gHasTexCoords, gIsOpaque,and gLayerMissShaderIndex
-    layerMissParameters[6].InitAsShaderResourceView(
-        9, 1); // gMaterialConstants: material data (stored in register 9 after textures)
-    layerMissParameters[7].InitAsConstantBufferView(
-        2, 1); // gMaterialLayerIDs: indices for layer material shaders
 
-    // Texture descriptors starting at register(t5, space1), after the byte address buffers for
-    // vertex data.
-    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 5, 1); // Textures
+    // Constants: gHasNormals, gHasTangents gHasTexCoords, gLayerMissShaderIndex, and gIsOpaque.
+    layerMissParameters[5].InitAsConstants(5, 0, 1);
+
+    // gMaterialConstants: material data (stored after geometry data and textures).
+    layerMissParameters[6].InitAsShaderResourceView(
+        kGeometryBufferCount + PTMaterial::descriptorCount(), 1);
+
+    // gMaterialLayerIDs: indices for layer material shaders.
+    layerMissParameters[7].InitAsConstantBufferView(2, 1);
+
+    // Texture descriptors starting at register(tX, space1), where X is the number of byte address
+    // buffers for geometry data.
+    texRange.Init(
+        D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), kGeometryBufferCount, 1);
     CD3DX12_DESCRIPTOR_RANGE layerMissRanges[] = { texRange }; // NOLINT(modernize-avoid-c-arrays)
     layerMissParameters[8].InitAsDescriptorTable(_countof(layerMissRanges), layerMissRanges);
 

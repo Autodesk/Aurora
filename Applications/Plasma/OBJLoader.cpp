@@ -123,7 +123,8 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         {
             transmissionColor = vec3(1.0f);
         }
-        vec3 opacity = vec3(1.0f); // objMaterial.dissolve (see NOTE above)
+        vec3 emissionColor = ::sRGBToLinear(make_vec3(objMaterial.emission));
+        vec3 opacity       = vec3(1.0f); // objMaterial.dissolve (see NOTE above)
 
         // Load the base color image file from the "map_Kd" file path.
         // NOTE: Set the linearize flag, as these images typically use the sRGB color space.
@@ -134,6 +135,11 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         // NOTE: Don't set the linearize flag, as these images typically use the linear color space.
         Aurora::Path specularRoughnessImage =
             imageCache.getImage(objMaterial.roughness_texname, pScene, false);
+
+        // Load the emission color image file from the "map_Ke" file path.
+        // NOTE: Set the linearize flag, as these images typically use the sRGB color space.
+        Aurora::Path emissionColorImage =
+            imageCache.getImage(objMaterial.emissive_texname, pScene, true);
 
         // Load the opacity image file from the "map_d" file path.
         // NOTE: Don't set the linearize flag, as these images typically use the linear color space.
@@ -147,17 +153,33 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
                                                                       : objMaterial.normal_texname;
         Aurora::Path normalImage = imageCache.getImage(normalFilePath, pScene, false);
 
-        Aurora::Path materialPath = filePath + ":OBJFileMaterial-" + to_string(mtlCount++);
+        // Set emission (the actual light emitted) to 1.0 if there is an emission color image or the
+        // emission color has any positive components.
+        float emission = (!emissionColorImage.empty() || emissionColor.length()) ? 1.0f : 0.0f;
 
         // Create an Aurora material, assign the properties, and add the material to the list.
-        pScene->setMaterialProperties(materialPath,
-            { { "base_color", (baseColor) }, { "metalness", metalness },
-                { "specular_color", (specularColor) }, { "specular_roughness", specularRoughness },
-                { "specular_IOR", specularIOR }, { "transmission", transmission },
-                { "transmission_color", (transmissionColor) }, { "opacity", (opacity) },
-                { "base_color_image", baseColorImage },
-                { "specular_roughness_image", specularRoughnessImage },
-                { "opacity_image", opacityImage }, { "normal_image", normalImage } });
+        // clang-format off
+        Aurora::Properties properties =
+        {
+            { "base_color",               baseColor },
+            { "metalness",                metalness },
+            { "specular_color",           specularColor },
+            { "specular_roughness",       specularRoughness },
+            { "specular_IOR",             specularIOR },
+            { "transmission",             transmission },
+            { "transmission_color",       transmissionColor },
+            { "emission",                 emission },
+            { "emission_color",           emissionColor },
+            { "opacity",                  opacity },
+            { "base_color_image",         baseColorImage },
+            { "specular_roughness_image", specularRoughnessImage },
+            { "emission_color_image",     emissionColorImage },
+            { "opacity_image",            opacityImage },
+            { "normal_image",             normalImage }
+        };
+        // clang-format on
+        Aurora::Path materialPath = filePath + ":OBJFileMaterial-" + to_string(mtlCount++);
+        pScene->setMaterialProperties(materialPath, properties);
         lstMaterials.push_back(materialPath);
     };
 
