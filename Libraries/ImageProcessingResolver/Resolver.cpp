@@ -123,6 +123,36 @@ OIIO::TypeDesc::BASETYPE convertToOIIODataType(pxr::HioType type)
 // Asset path prefix, used once asset URI is processed.
 std::string assetPathPrefix = "@@@ImageProcessingAsset_";
 
+// Shink an image to the provided dimensions.
+// imageData and imageBuf will be modified to point to the new image.
+void shrinkImage(
+    pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf, int newWidth, int newHeight)
+{
+    // Create OIIO for input and output images.
+    int nChannels        = pxr::HioGetComponentCount(imageData.format);
+    pxr::HioType hioType = pxr::HioGetHioType(imageData.format);
+    OIIO::TypeDesc type  = convertToOIIODataType(hioType);
+    OIIO::ImageSpec inSpec(imageData.width, imageData.height, nChannels, type);
+    OIIO::ImageSpec outSpec(newWidth, newHeight, nChannels, type);
+
+    // Create buffer for shrunk image.
+    size_t compSize = HioGetDataSizeOfType(hioType);
+    std::vector<unsigned char> newPixels (newWidth*newHeight*compSize*nChannels);
+
+    // Create image buffers for input and output image.
+    OIIO::ImageBuf inBuf(inSpec, imageData.data);
+    OIIO::ImageBuf outBuf(outSpec, newPixels.data());
+
+    // Resize the image to new dimensions.
+    OIIO::ImageBufAlgo::resize(outBuf, inBuf);
+
+    // Copy the image data and parameters to output structs.
+    imageBuf         = newPixels;
+    imageData.width  = newWidth;
+    imageData.height = newHeight;
+    imageData.data   = imageBuf.data();
+}
+
 ImageProcessingResolverPlugin::ImageProcessingResolverPlugin() : ArDefaultResolver() {}
 
 ImageProcessingResolverPlugin::~ImageProcessingResolverPlugin() {}
@@ -166,6 +196,32 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
             imageData.format  = image->GetFormat();
             imageData.data    = tempBuf.data();
             image->Read(imageData);
+
+            // Get the maxDim query parameter, default to 16k if not specified.
+            int maxDim = 16 * 1024;
+            cacheEntry.getQuery("maxDim", &maxDim);
+
+            // If the input image's dimensions are larger than maxDim shrink it, keeping the aspect ratio the same.
+            if (imageData.width > imageData.height)
+            {
+                if (imageData.width > maxDim)
+                {
+                    int newWidth = maxDim;
+                    float sizeRatio = float(maxDim) / float(imageData.width);
+                    int newHeight   = int(imageData.height * sizeRatio);
+                    shrinkImage(imageData, tempBuf, newWidth, newHeight);
+                }
+            }
+            else
+            {
+                if (imageData.height > maxDim)
+                {
+                    int newHeight    = maxDim;
+                    float sizeRatio = float(maxDim) / float(imageData.height);
+                    int newWidth     = int(imageData.width* sizeRatio) ;
+                    shrinkImage(imageData, tempBuf, newWidth, newHeight);
+                }
+            }
 
             // The asset object (that will be cached in this resolver class.)
             std::shared_ptr<ResolverAsset> pAsset;

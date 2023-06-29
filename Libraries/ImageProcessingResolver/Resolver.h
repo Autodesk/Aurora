@@ -68,6 +68,18 @@ struct AssetCacheEntry
         return true;
     }
 
+    // Get query from dictionary as int.
+    bool getQuery(const std::string key, int* pValOut) const
+    {
+        std::string strVal;
+
+        if (!getQuery(key, &strVal))
+            return false;
+
+        *pValOut = (int)std::atoi(strVal.c_str());
+        return true;
+    }
+
     // Get query from dictionary as string.
     bool getQuery(const std::string key, std::string* pValOut) const
     {
