@@ -609,13 +609,13 @@ Path FixtureBase::createTeapotGeometry(IScene& scene)
         buffers[Names::VertexAttributes::kNormal].address  = TeapotModel::normals();
         buffers[Names::VertexAttributes::kNormal].size =
             TeapotModel::verticesCount() * sizeof(vec3);
-        buffers[Names::VertexAttributes::kNormal].stride   = sizeof(vec3);
-        
+        buffers[Names::VertexAttributes::kNormal].stride = sizeof(vec3);
+
         buffers[Names::VertexAttributes::kTangent].address = TeapotModel::tangents();
         buffers[Names::VertexAttributes::kTangent].size =
             TeapotModel::verticesCount() * sizeof(vec3);
-        buffers[Names::VertexAttributes::kTangent].stride    = sizeof(vec3);
-        
+        buffers[Names::VertexAttributes::kTangent].stride = sizeof(vec3);
+
         buffers[Names::VertexAttributes::kTexCoord0].address = TeapotModel::uvs();
         buffers[Names::VertexAttributes::kTexCoord0].size =
             TeapotModel::verticesCount() * sizeof(vec2);

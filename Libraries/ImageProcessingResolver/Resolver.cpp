@@ -125,8 +125,8 @@ std::string assetPathPrefix = "@@@ImageProcessingAsset_";
 
 // Shink an image to the provided dimensions.
 // imageData and imageBuf will be modified to point to the new image.
-void shrinkImage(
-    pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf, int newWidth, int newHeight)
+void shrinkImage(pxr::HioImage::StorageSpec& imageData, std::vector<unsigned char>& imageBuf,
+    int newWidth, int newHeight)
 {
     // Create OIIO for input and output images.
     int nChannels        = pxr::HioGetComponentCount(imageData.format);
@@ -137,7 +137,7 @@ void shrinkImage(
 
     // Create buffer for shrunk image.
     size_t compSize = HioGetDataSizeOfType(hioType);
-    std::vector<unsigned char> newPixels (newWidth*newHeight*compSize*nChannels);
+    std::vector<unsigned char> newPixels(newWidth * newHeight * compSize * nChannels);
 
     // Create image buffers for input and output image.
     OIIO::ImageBuf inBuf(inSpec, imageData.data);
@@ -201,12 +201,13 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
             int maxDim = 16 * 1024;
             cacheEntry.getQuery("maxDim", &maxDim);
 
-            // If the input image's dimensions are larger than maxDim shrink it, keeping the aspect ratio the same.
+            // If the input image's dimensions are larger than maxDim shrink it, keeping the aspect
+            // ratio the same.
             if (imageData.width > imageData.height)
             {
                 if (imageData.width > maxDim)
                 {
-                    int newWidth = maxDim;
+                    int newWidth    = maxDim;
                     float sizeRatio = float(maxDim) / float(imageData.width);
                     int newHeight   = int(imageData.height * sizeRatio);
                     shrinkImage(imageData, tempBuf, newWidth, newHeight);
@@ -216,9 +217,9 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
             {
                 if (imageData.height > maxDim)
                 {
-                    int newHeight    = maxDim;
+                    int newHeight   = maxDim;
                     float sizeRatio = float(maxDim) / float(imageData.height);
-                    int newWidth     = int(imageData.width* sizeRatio) ;
+                    int newWidth    = int(imageData.width * sizeRatio);
                     shrinkImage(imageData, tempBuf, newWidth, newHeight);
                 }
             }

@@ -45,7 +45,7 @@ bool writeStringToFile(
     const std::string& str, const std::string& filename, const std::string& folder)
 {
     // If the folder is empty, use the module path.
-    std::string pathFolder = folder.empty() ? getModulePath() : folder; 
+    std::string pathFolder = folder.empty() ? getModulePath() : folder;
 
     // Create path from folder+filename (assume slash at end of folder.)
     std::string path = pathFolder + filename;

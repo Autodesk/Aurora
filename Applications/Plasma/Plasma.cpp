@@ -64,7 +64,7 @@ Plasma::Plasma(HINSTANCE hInstance, unsigned int width, unsigned int height)
         ::SetWindowTextW(_hwnd, Foundation::s2w(report.str()).c_str());
     });
 }
-#else //! INTERACTIVE_PLASMA
+#else  //! INTERACTIVE_PLASMA
 // Application constructor.
 Plasma::Plasma(unsigned int width, unsigned int height)
 {
@@ -760,7 +760,6 @@ void Plasma::updateLighting()
         Aurora::Names::LightProperties::kColor, value_ptr(lightColor));
     _pDistantLight->values().setFloat3(
         Aurora::Names::LightProperties::kDirection, value_ptr(_lightDirection));
-
 }
 
 void Plasma::updateGroundPlane()
@@ -1654,7 +1653,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance
 
     return result ? 0 : -1;
 }
-#else //! INTERACTIVE_PLASMA
+#else  //! INTERACTIVE_PLASMA
 int main(int argc, char* argv[])
 {
     // Create an application object on the stack, and run it. The run() function returns when

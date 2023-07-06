@@ -83,7 +83,8 @@ static const TfToken kMaterialXDocument("aurora:materialx_document");
 
 /// If true the opacity UsdPreviewSurface parameter is mapped to transmission in Standard Surface.
 /// This matches the definition more closely (defaults to true.)
-static const TfToken kMapMaterialOpacityToTransmission("aurora:map_material_opacity_to_transmission");
+static const TfToken kMapMaterialOpacityToTransmission(
+    "aurora:map_material_opacity_to_transmission");
 
 //**************************************************************************/
 // Mesh Tokens

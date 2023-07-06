@@ -87,7 +87,7 @@ using UINT = unsigned int;
     {                                                                                              \
         if ((p) != nullptr)                                                                        \
         {                                                                                          \
-            delete[](p);                                                                           \
+            delete[] (p);                                                                          \
             (p) = nullptr;                                                                         \
         }                                                                                          \
     }

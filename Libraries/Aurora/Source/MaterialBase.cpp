@@ -76,6 +76,7 @@ static PropertySetPtr propertySet()
 // Material properties used by the built-in Standard Surface material type.
 // NOTE: Default values and order come from the Standard surface reference document:
 // https://github.com/Autodesk/standard-surface/blob/master/reference/standard_surface.mtlx
+// clang-format off
 UniformBufferDefinition MaterialBase::StandardSurfaceUniforms = {
     PROPERTY_DEF("base", "base", Float),
     PROPERTY_DEF("base_color", "baseColor", Float3),
@@ -135,6 +136,7 @@ UniformBufferDefinition MaterialBase::StandardSurfaceUniforms = {
     PROPERTY_DEF("normal_image_pivot", "normalTexPivot", Float2),
     PROPERTY_DEF("normal_image_rotation", "normalTexRotation", Float)
 };
+// clang-format on
 
 // Textures used by the built-in Standard Surface material type.
 vector<string> MaterialBase::StandardSurfaceTextures = {

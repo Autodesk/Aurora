@@ -13,9 +13,9 @@
 // limitations under the License.
 #pragma once
 
+#include "MaterialDefinition.h"
 #include "Properties.h"
 #include "UniformBuffer.h"
-#include "MaterialDefinition.h"
 
 BEGIN_AURORA
 
@@ -33,7 +33,7 @@ public:
     MaterialShaderPtr shader() const { return _pShader; }
 
     IValues& values() override { return *this; }
-    
+
     // Override default setter.
     void setBoolean(const string& name, bool value) override
     {

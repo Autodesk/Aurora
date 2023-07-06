@@ -96,7 +96,7 @@ bool PTDevice::initialize(PTDevice::Features features, int sampleCount)
     // D3D12GetDebugInterface return a null pointer if the Graphics Tools are not installed.
     ComPtr<ID3D12Debug> pDebugInterface;
     checkHR(::D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugInterface)));
-    if (pDebugInterface) 
+    if (pDebugInterface)
     {
         // Enable the debug layer.
         pDebugInterface->EnableDebugLayer();

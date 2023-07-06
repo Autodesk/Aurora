@@ -239,8 +239,7 @@ TEST_P(LightTest, TestChangeLightEnvTexture)
     };
     const Path kSecondBackgroundEnvironmentImagePath = "SecondBackgroundEnvironmentImage";
     createTestEnv(pScene, kSecondBackgroundEnvironmentImagePath, 512, colors1, glm::vec3(),
-        glm::vec3(), 0,
-        0, &buffer1, false);
+        glm::vec3(), 0, 0, &buffer1, false);
     pScene->setEnvironmentProperties(kBackgroundEnvironmentPath,
         {
             { Names::EnvironmentProperties::kLightImage, kSecondBackgroundEnvironmentImagePath },
@@ -330,7 +329,6 @@ TEST_P(LightTest, TestLightEnvTextureMIS)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Light");
 }
 
-
 // Test multiple distant lights.
 TEST_P(LightTest, TestMultipleLights)
 {
@@ -350,7 +348,8 @@ TEST_P(LightTest, TestMultipleLights)
     defaultDistantLight()->values().setFloat3(
         Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(0.5f, 1, 0.6f)));
     defaultDistantLight()->values().setFloat(Aurora::Names::LightProperties::kIntensity, 3.0f);
-    defaultDistantLight()->values().setFloat(Aurora::Names::LightProperties::kAngularDiameter, 0.4f);
+    defaultDistantLight()->values().setFloat(
+        Aurora::Names::LightProperties::kAngularDiameter, 0.4f);
 
     ILightPtr pSecondLight =
         defaultScene()->addLightPointer(Aurora::Names::LightTypes::kDistantLight);
@@ -389,7 +388,6 @@ TEST_P(LightTest, TestMultipleLights)
     pFifthLight->values().setFloat(Aurora::Names::LightProperties::kIntensity, 100.0f);
     pFifthLight->values().setFloat(Aurora::Names::LightProperties::kAngularDiameter, 0.8f);
 
-
     // Create black environment map.
     std::vector<unsigned char> buffer;
     array<glm::vec3, 6> colors = {
@@ -402,7 +400,7 @@ TEST_P(LightTest, TestMultipleLights)
     };
     const Path kBackgroundEnvironmentImagePath = "BackgroundEnvironmentImage";
     createTestEnv(pScene, kBackgroundEnvironmentImagePath, 1024, colors, glm::vec3(0, 0.2f, 1),
-        glm::vec3(0.9f, 0.8f, -0.8f),0.0001f, 0.0f, &buffer, false);
+        glm::vec3(0.9f, 0.8f, -0.8f), 0.0001f, 0.0f, &buffer, false);
 
     // Create environment and set background and light image.
     const Path kBackgroundEnvironmentPath = "BackgroundEnvironment";

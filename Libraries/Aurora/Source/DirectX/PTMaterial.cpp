@@ -26,7 +26,7 @@ BEGIN_AURORA
 #define VALIDATE_OFFSET(_member)                                                                   \
     if (structDescriptions[#_member].Offset != uniformBuffer.getOffsetForVariable(#_member))       \
     {                                                                                              \
-        AU_ERROR("%s offset mismatch: %d!=%d\n", #_member, structDescriptions[#_member].Offset,   \
+        AU_ERROR("%s offset mismatch: %d!=%d\n", #_member, structDescriptions[#_member].Offset,    \
             uniformBuffer.getOffsetForVariable(#_member));                                         \
         isValid = false;                                                                           \
     }
@@ -149,7 +149,8 @@ bool PTMaterial::validateOffsets(const PTShaderLibrary& pShaderLibrary)
     return isValid;
 }
 
-PTMaterial::PTMaterial(PTRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef) :
+PTMaterial::PTMaterial(
+    PTRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef) :
     MaterialBase(pShader, pDef), _pRenderer(pRenderer)
 {
 }
@@ -168,8 +169,8 @@ bool PTMaterial::update()
     // Create a transfer buffer for the material data if it doesn't already exist.
     if (!_constantBuffer.size)
     {
-        _constantBuffer = _pRenderer->createTransferBuffer(uniformBuffer().size(),
-            std::to_string(uint64_t(this)) + "MaterialBuffer");
+        _constantBuffer = _pRenderer->createTransferBuffer(
+            uniformBuffer().size(), std::to_string(uint64_t(this)) + "MaterialBuffer");
     }
 
     // Copy the data to the transfer buffer.

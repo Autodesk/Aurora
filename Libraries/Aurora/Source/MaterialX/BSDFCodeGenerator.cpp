@@ -215,7 +215,8 @@ public:
     void clearTempVariables() { _tempVariables.clear(); }
 
     // Clear the generated definitions and includes.
-    void clearGeneratedDefinitions() { 
+    void clearGeneratedDefinitions()
+    {
         _pGeneratedDefinitions->clear();
         _pGeneratedIncludes->clear();
     }
@@ -633,7 +634,7 @@ void BSDFCodeGenerator::clearDefinitions()
     // Clear the definitions, which are accumulated after each generate call.
     _definitions.clear();
     _definitionMap.clear();
-    
+
     // Clear the includes and defs in the shader generator.
     _pGenerator->clearGeneratedDefinitions();
 }
@@ -860,14 +861,14 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     for (MaterialX::ElementPtr elem : doc->traverseTree())
     {
         // Get full path to node.
-        string path                          = elem->getNamePath();
-        
+        string path = elem->getNamePath();
+
         // Initialize parameter struct to be filled in if parameter is found.
         Parameter param;
-        param.parameterIndex                 = (int)_parameters.size();
+        param.parameterIndex = (int)_parameters.size();
 
         // Have we found a parameter?
-        bool foundParam                      = false;
+        bool foundParam = false;
 
         MaterialX::ValueElementPtr valueElem = elem->asA<MaterialX::ValueElement>();
         if (valueElem && valueElem->isA<MaterialX::Input>() && valueElem->hasValue())
@@ -878,7 +879,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
             // Create a parameter object from the ValueElement's input value (adsk texture node
             // values will be represented this way).
             auto type = valueElem->getType();
-            
+
             // Fill in parameter based on type.
             if (type.compare("filename") == 0)
             {
@@ -924,13 +925,12 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
                 _materialProperties.push_back(propDef);
                 _materialPropertyDefaults.push_back(propVal);
             }
-
         }
         else
         {
 
-            // image nodes and their children are not represented by ValueElement for some reason, so
-            // get the type as attribute.
+            // image nodes and their children are not represented by ValueElement for some reason,
+            // so get the type as attribute.
             string type = elem->getAttribute("type");
             if (!type.empty())
             {
@@ -963,16 +963,12 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
                 {
                     // Found a string parameter.
                     foundParam = true;
-                    
+
                     // String parameters are hardcoded texture properties (e.g. wrap mode), must be
                     // post-processed.
                     stringValues.push_back(elem);
                 }
-
-
             }
-
-        
         }
 
         // Add to setup function parameters.
@@ -981,7 +977,6 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
             _parameterIndexLookup[path] = (int)_parameters.size();
             _parameters.push_back(param);
         }
-
     }
 
     // Process the hardcoded texture properties that will become sampler settings.

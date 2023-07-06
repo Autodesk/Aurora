@@ -13,9 +13,9 @@
 // limitations under the License.
 #pragma once
 
+#include "Aurora/Foundation/Log.h"
 #include "Properties.h"
 #include "UniformBuffer.h"
-#include "Aurora/Foundation/Log.h"
 
 BEGIN_AURORA
 

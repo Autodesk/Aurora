@@ -31,8 +31,8 @@ MaterialShader::MaterialShader(MaterialShaderLibrary* pShaderLibrary, int librar
 
 MaterialShader::~MaterialShader()
 {
-    // If this material shader is valid, when its destroyed (which will happen when no material holds
-    // a shared pointer to it) remove it source code from the library.
+    // If this material shader is valid, when its destroyed (which will happen when no material
+    // holds a shared pointer to it) remove it source code from the library.
     if (isValid())
     {
         _pShaderLibrary->destructionRequired(*this);

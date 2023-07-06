@@ -22,7 +22,10 @@ HdAuroraInstancer::HdAuroraInstancer(HdSceneDelegate* delegate, SdfPath const& i
 
 HdAuroraInstancer::~HdAuroraInstancer()
 {
-    TF_FOR_ALL(it, _primvarMap) { delete it->second; }
+    TF_FOR_ALL(it, _primvarMap)
+    {
+        delete it->second;
+    }
     _primvarMap.clear();
 }
 

@@ -13,8 +13,8 @@
 // limitations under the License.
 #pragma once
 
-#include "Properties.h"
 #include "MemoryPool.h"
+#include "Properties.h"
 
 BEGIN_AURORA
 

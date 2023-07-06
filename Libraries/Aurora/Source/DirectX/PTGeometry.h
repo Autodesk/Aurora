@@ -41,7 +41,6 @@ private:
     size_t _offset = 0;
 };
 
-
 // An internal implementation for IGeometry.
 class PTGeometry : public GeometryBase
 {
@@ -53,7 +52,7 @@ public:
         D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer    = 0;
         D3D12_GPU_VIRTUAL_ADDRESS PositionBuffer = 0;
         D3D12_GPU_VIRTUAL_ADDRESS NormalBuffer   = 0;
-        D3D12_GPU_VIRTUAL_ADDRESS TangentBuffer   = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS TangentBuffer  = 0;
         D3D12_GPU_VIRTUAL_ADDRESS TexCoordBuffer = 0;
     };
 

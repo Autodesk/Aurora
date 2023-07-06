@@ -93,14 +93,14 @@ void ResourceStub::setProperties(const Properties& props)
                         setReference(refName, "");
                 }
             }
-        
+
             // Apply the property (will apply to the resource itself if we are active.)
             applyProperty(iter->first, iter->second);
         }
-
     }
 
-    // Call the resource modified callback if the resource is active and some propreties were applied.
+    // Call the resource modified callback if the resource is active and some propreties were
+    // applied.
     if (isActive() && numApplied && _tracker.resourceModified)
         _tracker.resourceModified(*this, props);
 }

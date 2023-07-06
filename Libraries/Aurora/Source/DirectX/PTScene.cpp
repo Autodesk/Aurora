@@ -720,10 +720,10 @@ void PTScene::updateShaderTables()
         size_t recordStride = HitGroupShaderRecord::stride();
 
         // Create a transfer buffer for the shader table, and map it for writing.
-        size_t shaderTableSize                = recordStride * instanceCount;
-        TransferBuffer hitGroupTransferBuffer = _pRenderer->createTransferBuffer(shaderTableSize,
-            "HitGroupShaderTable");
-        uint8_t* pShaderTableMappedData       = hitGroupTransferBuffer.map();
+        size_t shaderTableSize = recordStride * instanceCount;
+        TransferBuffer hitGroupTransferBuffer =
+            _pRenderer->createTransferBuffer(shaderTableSize, "HitGroupShaderTable");
+        uint8_t* pShaderTableMappedData = hitGroupTransferBuffer.map();
 
         // Retain the GPU buffer from the transfer buffer, the upload buffer will be deleted by the
         // renderer once upload complete.

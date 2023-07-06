@@ -21,7 +21,7 @@
 #include <array>
 #include <glm/glm.hpp>
 
-//#define USE_SPHERICAL_BOUNDS 1
+// #define USE_SPHERICAL_BOUNDS 1
 
 namespace Aurora
 {

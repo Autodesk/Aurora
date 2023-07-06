@@ -95,7 +95,6 @@ HGIMaterial::HGIMaterial(HGIRenderer* pRenderer, shared_ptr<MaterialDefinition> 
 void HGIMaterial::updateGPUStruct(MaterialData& data)
 {
 
-
     // Update the GPU struct from the values map.
     data.base                                 = _values.asFloat("base");
     data.baseColor                            = _values.asFloat3("base_color");
@@ -151,9 +150,8 @@ void HGIMaterial::updateGPUStruct(MaterialData& data)
 
     // Record whether the material is opaque with its current values.
     data.isOpaque = false;
-    //computeIsOpaque();
+    // computeIsOpaque();
 }
-
 
 void HGIMaterial::update()
 {

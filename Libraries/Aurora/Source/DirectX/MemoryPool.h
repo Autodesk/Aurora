@@ -116,7 +116,8 @@ struct TransferBuffer
     ID3D12ResourcePtr pUploadBuffer;
     // The GPU buffer is created on the DEFAULT heap, which is stored in VRAM.  The renderer will
     // copy the upload buffer to this buffer on the GPU.
-    // The calling code can optionally retain only this buffer and release the upload buffer safely (which will be deleted by the renderer once the upload is complete.)
+    // The calling code can optionally retain only this buffer and release the upload buffer safely
+    // (which will be deleted by the renderer once the upload is complete.)
     ID3D12ResourcePtr pGPUBuffer;
     // The currently mapped range in the buffer.
     CD3DX12_RANGE mappedRange = { SIZE_MAX, SIZE_MAX };
@@ -127,7 +128,7 @@ struct TransferBuffer
     // The final state the transition buffer will transition to after upload.
     D3D12_RESOURCE_STATES finalState = D3D12_RESOURCE_STATE_GENERIC_READ;
     // Has this buffer been uploaded ?
-    bool wasUploaded                    = false;
+    bool wasUploaded = false;
 
     // Is the buffer valid?
     bool valid() { return pGPUBuffer != nullptr; }

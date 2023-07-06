@@ -81,8 +81,8 @@ using namespace std;
 #pragma warning(pop)
 
 // Aurora.
-#include <Aurora/Foundation/Timer.h>
 #include <Aurora/Foundation/Log.h>
+#include <Aurora/Foundation/Timer.h>
 #include <Aurora/Foundation/Utilities.h>
 
 PXR_NAMESPACE_USING_DIRECTIVE

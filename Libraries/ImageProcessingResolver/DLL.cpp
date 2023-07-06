@@ -28,7 +28,7 @@ BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD ul_reason_for_call, LPVOID /*lp
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        pxr::Ar_DefineResolver<ImageProcessingResolverPlugin>(); 
+        pxr::Ar_DefineResolver<ImageProcessingResolverPlugin>();
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:

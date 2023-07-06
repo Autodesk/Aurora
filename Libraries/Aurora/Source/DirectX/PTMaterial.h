@@ -45,8 +45,8 @@ public:
 
     /*** Lifetime Management ***/
 
-    PTMaterial(PTRenderer* pRenderer, MaterialShaderPtr pShader,
-        shared_ptr<MaterialDefinition> pDef);
+    PTMaterial(
+        PTRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef);
     ~PTMaterial() {};
 
     /*** Functions ***/

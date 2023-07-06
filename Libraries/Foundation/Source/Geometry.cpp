@@ -8,8 +8,8 @@
 // by any third party without the prior written consent of Autodesk, Inc.
 //
 
-#include <stddef.h>
 #include <cstring>
+#include <stddef.h>
 
 #include <Aurora/Foundation/Geometry.h>
 

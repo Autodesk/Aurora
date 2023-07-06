@@ -47,7 +47,10 @@ class MaterialDefinition
 public:
     MaterialDefinition(const MaterialShaderSource& source, const MaterialDefaultValues& defaults,
         function<void(MaterialBase&)> updateFunc, bool isAlwaysOpaque) :
-        _source(source), _defaults(defaults), _updateFunc(updateFunc), _isAlwaysOpaque(isAlwaysOpaque)
+        _source(source),
+        _defaults(defaults),
+        _updateFunc(updateFunc),
+        _isAlwaysOpaque(isAlwaysOpaque)
     {
     }
     MaterialDefinition() {}
@@ -79,7 +82,7 @@ public:
 private:
     // The source code (and unique shader ID) for this material.
     MaterialShaderSource _source;
-    
+
     // The default values for the material.
     MaterialDefaultValues _defaults;
 

@@ -28,6 +28,6 @@ public:
     bool IsSupported() const override;
 
 private:
-    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&) = delete;
+    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&)            = delete;
     HdAuroraRendererPlugin& operator=(const HdAuroraRendererPlugin&) = delete;
 };

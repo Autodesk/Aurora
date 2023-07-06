@@ -60,7 +60,7 @@ public:
     uint32_t GetTextureId() const { return _textureId; }
 
 private:
-    HgiHdAuroraTextureGL()        = delete;
+    HgiHdAuroraTextureGL()                                       = delete;
     HgiHdAuroraTextureGL& operator=(const HgiHdAuroraTextureGL&) = delete;
     HgiHdAuroraTextureGL(const HgiHdAuroraTextureGL&)            = delete;
 
@@ -211,7 +211,7 @@ public:
     uint64_t GetRawResource() const override { return reinterpret_cast<uint64_t>(_sharedDXHandle); }
 
 private:
-    HgiHdAuroraTextureDX()        = delete;
+    HgiHdAuroraTextureDX()                                       = delete;
     HgiHdAuroraTextureDX& operator=(const HgiHdAuroraTextureDX&) = delete;
     HgiHdAuroraTextureDX(const HgiHdAuroraTextureDX&)            = delete;
 

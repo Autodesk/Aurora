@@ -40,9 +40,9 @@ PTImage::PTImage(PTRenderer* pRenderer, const IImage::InitData& initData)
     if (initData.isEnvironment)
     {
         // Create a transfer buffer for the alias map data.
-        size_t bufferSize             = _dimensions.x * _dimensions.y * sizeof(AliasMap::Entry);
-        TransferBuffer transferBuffer = _pRenderer->createTransferBuffer(
-            bufferSize, _name + "AliasMap");
+        size_t bufferSize = _dimensions.x * _dimensions.y * sizeof(AliasMap::Entry);
+        TransferBuffer transferBuffer =
+            _pRenderer->createTransferBuffer(bufferSize, _name + "AliasMap");
 
         // Build the alias map directly in the mapped buffer.
         AliasMap::Entry* pMappedData = reinterpret_cast<AliasMap::Entry*>(transferBuffer.map());

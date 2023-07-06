@@ -25,7 +25,7 @@
 #pragma warning(disable : 4244) // disable simd.h warning about type conversion.
 #pragma warning(disable : 4267) // disable harmhash.h warning conversion from 'size_t' to 'uint32_t'
 #pragma warning(                                                                                   \
-    disable : 4456) // disable harmhash.h warning declaration hides previous local declaration
+        disable : 4456) // disable harmhash.h warning declaration hides previous local declaration
 #include "OpenImageIO/imagebuf.h"
 #include "OpenImageIO/imagebufalgo.h"
 #include "OpenImageIO/imageio.h"

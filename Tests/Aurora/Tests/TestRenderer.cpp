@@ -466,7 +466,7 @@ TEST_P(RendererTest, TestRendererGroundPlane)
     pScene->setMaterialProperties(kMaterialPath, { { "base_color", vec3(1, 0, 0) } });
 
     // Create a teapot instance with a default material.
-    Path geometry      = createTeapotGeometry(*pScene);
+    Path geometry = createTeapotGeometry(*pScene);
     EXPECT_TRUE(pScene->addInstance(
         "TeapotInstance", geometry, { { Names::InstanceProperties::kMaterial, kMaterialPath } }));
 
