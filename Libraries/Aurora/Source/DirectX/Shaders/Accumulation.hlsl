@@ -22,7 +22,7 @@
 
 // Source (input) and destination (output) textures.
 RWTexture2D<float4> gAccumulation : register(u0);
-RWTexture2D<float4> gDirect : register(u1);
+RWTexture2D<float4> gResult : register(u1);
 RWTexture2D<float> gDepthNDC : register(u2);
 RWTexture2D<float> gDepthView : register(u3);
 RWTexture2D<float4> gNormalRoughness : register(u4);
@@ -43,18 +43,19 @@ struct Accumulation
 ConstantBuffer<Accumulation> gSettings : register(b0);
 
 // A compute shader that accumulates path tracing results, optionally with denoising.
-[RootSignature(ROOT_SIGNATURE)][numthreads(1, 1, 1)] void Accumulation(uint3 threadID
-                                                                       : SV_DispatchThreadID)
+[RootSignature(ROOT_SIGNATURE)]
+[numthreads(1, 1, 1)]
+void Accumulation(uint3 threadID : SV_DispatchThreadID)
 {
     uint sampleIndex = gSettings.sampleIndex;
 
-    // Get the screen coordinates (2D) from the thread ID, and the color / alpha as the result.
-    // Treat the color as the direct lighting value, optionally used below.
+    // Get the screen coordinates (2D) from the thread ID, and the color / alpha from the result of
+    // the most recent sample. Treat the result as the "extra" shading value, optionally used below.
     float2 screenCoords = threadID.xy;
-    float4 result       = gDirect[screenCoords];
-    float3 direct       = result.rgb;
+    float4 result       = gResult[screenCoords];
+    float3 extra        = result.rgb;
 
-    // Combine data from textures if denoising is enabled. Otherwise the "direct" texture has the
+    // Combine data from textures if denoising is enabled. Otherwise the "result" value has the
     // complete path tracing output.
     if (gSettings.isDenoisingEnabled)
     {
@@ -67,10 +68,10 @@ ConstantBuffer<Accumulation> gSettings : register(b0);
         float3 denoisedGlossy  = gGlossyDenoised[screenCoords].rgb * hitFactor;
 
         // Combine the following:
-        // - Direct lighting. This also includes the environment background.
+        // - Extra: shading that is not denoised. See RadianceRayPayload for more information.
         // - The denoised diffuse radiance, modulated by the base color (albedo).
         // - The denoised glossy radiance.
-        result.rgb = direct + denoisedDiffuse * baseColor + denoisedGlossy;
+        result.rgb = extra + (denoisedDiffuse * baseColor) + denoisedGlossy;
     }
 
     // If the sample index is greater than zero, blend the new result color with the previous

@@ -13,6 +13,17 @@
 // limitations under the License.
 #include "BSDF.slang"
 
+// Compute shading from material emission.
+float3 shadeEmission(Material material)
+{
+    // Compute emission from the material properties. The emission is affected by the coat, i.e. the
+    // coat is on top of a glowing layer.
+    float3 emissionCoatBlend = lerp(WHITE, material.coatColor, material.coat);
+    float3 emission          = material.emission * material.emissionColor * emissionCoatBlend;
+
+    return emission;
+}
+
 // Compute shading with a directional light.
 float3 shadeDirectionalLight(float3 dir, float4 colorAndIntensity, float cosRadius,
     RaytracingAccelerationStructure scene, Material material, ShadingData shading, float3 V,
@@ -235,12 +246,6 @@ float3 shadeIndirectLight(RaytracingAccelerationStructure scene,
         indirect.glossy += radiance;
         indirect.glossyHitDist = rayPayload.depthView;
     }
-
-    // Compute emission from the material properties, and add it to the outgoing radiance. The
-    // emission is affected by the coat, i.e. the coat is on top of a glowing layer.
-    float3 emissionCoatBlend = lerp(WHITE, material.coatColor, material.coat);
-    float3 emission          = material.emission * material.emissionColor * emissionCoatBlend;
-    radiance += emission;
 
     return radiance;
 }

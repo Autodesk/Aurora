@@ -11,12 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// The shadow miss shader. This simply sets full visibility on the ray payload, indicating that
-// nothing was hit.
-// The radiance miss shader, which evaluates the environment as an environment light.
+
 #include "PathTracingCommon.slang"
 
-[shader("miss")] void RadianceMissShader(inout RayPayload rayPayload) {
+// The radiance miss shader, which evaluates the environment as an environment light.
+[shader("miss")]
+void RadianceMissShader(inout RayPayload rayPayload)
+{
     // Initialize the radiance ray payload for a miss.
     rayPayload.radianceRay.clear();
 
@@ -32,8 +33,7 @@
     }
 
     // Store the environment color.
-    // NOTE: The miss result is considered to be part of direct lighting, to allow for simpler logic
-    // during accumulation.
-    rayPayload.radianceRay.color  = color;
-    rayPayload.radianceRay.direct = color;
+    // NOTE: The miss result will not be denoised, so it is included in the "extra" shading.
+    rayPayload.radianceRay.color = color;
+    rayPayload.radianceRay.extra = color;
 }

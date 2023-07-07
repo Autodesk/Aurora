@@ -54,8 +54,8 @@ RaytracingAccelerationStructure gNullScene : register(t4);
 // Ray Gen Shader Variables
 // =================================================================================================
 
-// The output texture.
-[[vk::binding(1)]] RWTexture2D<float4> gDirect : register(u0);
+// The output textures (AOVs) as UAVs.
+[[vk::binding(1)]] RWTexture2D<float4> gResult : register(u0);
 RWTexture2D<float> gDepthNDC : register(u1);
 RWTexture2D<float> gDepthView : register(u2);
 RWTexture2D<float4> gNormalRoughness : register(u3);
@@ -100,7 +100,7 @@ cbuffer gGeometryMetadata : register(b0, space1)
 // To hide DX-Vulkan differences, expose geometry access using functions.
 uint3 getIndicesForTriangle(int triangleIndex) {
     return gIndices.Load3((triangleIndex * 3) * 4);
-} 
+}
 
 float3 getPositionForVertex(int vertexIndex)
 {

@@ -38,7 +38,7 @@
 // Source (input) and destination (output) textures.
 RWTexture2D<float4> gFinal : register(u0);
 RWTexture2D<float4> gAccumulation : register(u1);
-RWTexture2D<float4> gDirect : register(u2);
+RWTexture2D<float4> gResult : register(u2);
 RWTexture2D<float> gDepthNDC : register(u3);
 RWTexture2D<float> gDepthView : register(u4);
 RWTexture2D<float4> gNormalRoughness : register(u5);
@@ -70,8 +70,9 @@ float normalizeDepthView(float depthView)
 }
 
 // A compute shader that applies post-processing to the source texture.
-[RootSignature(ROOT_SIGNATURE)][numthreads(1, 1, 1)] void PostProcessing(uint3 threadID
-                                                                         : SV_DispatchThreadID)
+[RootSignature(ROOT_SIGNATURE)]
+[numthreads(1, 1, 1)]
+void PostProcessing(uint3 threadID : SV_DispatchThreadID)
 {
     // Get the screen coordinates (2D) from the thread ID.
     float2 coords = threadID.xy;

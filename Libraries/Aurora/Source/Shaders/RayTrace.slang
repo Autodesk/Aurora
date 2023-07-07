@@ -19,7 +19,8 @@
 #include "Random.slang"
 #include "Sampling.slang"
 
-// A structure for the results of indirect lighting.
+// A structure for the results of indirect lighting and environment light sampling, which is used
+// for denoising.
 struct IndirectOutput
 {
     float3 diffuse;
@@ -42,27 +43,57 @@ struct IndirectOutput
 };
 
 // The radiance ray payload structure.
-// - depthView: The view depth is the distance from the eye to the hit position. This value is in
-//   world units.
-// - depthNDC: The NDC depth is the Z component of NDC space, i.e. after dividing the clip space
-//   position by W. This is the value normally stored in the depth buffer for rasterization. The
-//   projection matrix must generate Z components in [-1.0, 1.0], which is remapped to [0.0, 1.0]
-//   as the NDC depth.
-//
 // NOTE: This is currently 28 floats in size.
 struct RadianceRayPayload
 {
+    // The color value for outgoing radiance from the path.
     float3 color;
+
+    // The opacity accumulated along the path. This is stochastic, i.e. a zero or one value for the
+    // entire path, where zero means transparent or transmissive for the entire path and one means
+    // at least one opaque segment on the path.
     float alpha;
-    float3 direct;
+
+    // The color value for outgoing radiance that is not intended to be denoised. This includes
+    // shading from material emission, discrete lights, and the background. Only data from the first
+    // hit (primary rays) is stored here.
+    float3 extra;
+
+    // The NDC depth is the Z component of NDC space, i.e. after dividing the clip space position by
+    // W. This is the value normally stored in the depth buffer for rasterization. The projection
+    // matrix must generate Z components in [-1.0, 1.0], which is remapped to [0.0, 1.0] as the NDC
+    // depth.
     float depthNDC;
+
+    // The view depth is the distance from the eye to the hit position. This value is in world
+    // units.
     float depthView;
+
+    // The normal in world space of the first hit surface. This is based on the material, and may
+    // include geometric normals perturbed by a bump map.
     float3 normal;
+
+    // The albedo of the first hit surface, as defined by Standard Surface.
     float3 baseColor;
+
+    // The roughness of the first hit surface, as defined by Standard Surface.
     float roughness;
+
+    // The metalness of the first hit surface, as defined by Standard Surface.
     float metalness;
+
+    // Outgoing radiance and hit distances for diffuse and glossy lobes. This is based on shading
+    // from indirect light or sampled environment light, and only data from the first hit (primary
+    // rays) is stored here. This is used for denoising.
     IndirectOutput indirect;
+
+    // The ray depth or number of segments in the path at this point in path evaluation. This is
+    // use to prevent a path from exceeding a certain length. At the first intersection, the depth
+    // value is 1, indicating a first hit (primary ray).
     int depth;
+
+    // Random number generation state, which is updated during path evaluation so that different
+    // random numbers are generated along the path.
     Random rng;
 
     // Clears the radiance ray payload to values expected for a miss.
@@ -77,7 +108,7 @@ struct RadianceRayPayload
     {
         color     = BLACK;
         alpha     = 0.0;
-        direct    = BLACK;
+        extra     = BLACK;
         depthNDC  = 1.0f;
         depthView = INFINITY;
         normal    = -1.0f;
@@ -94,7 +125,7 @@ struct RadianceRayPayload
     void scaleColor(float3 scale)
     {
         color *= scale;
-        direct *= scale;
+        extra *= scale;
         baseColor *= scale;
         indirect.diffuse *= scale;
         indirect.glossy *= scale;
@@ -203,7 +234,7 @@ RadianceRayPayload traceRadianceRay(RaytracingAccelerationStructure scene, Envir
 
         return rayPayload;
     }
-    
+
     // Set the force opaque ray flag to treat all objects as opaque, so that the any hit shader is
     // not called. Also set the radiance or background miss shader.
     uint rayFlags        = RAY_FLAG_FORCE_OPAQUE;

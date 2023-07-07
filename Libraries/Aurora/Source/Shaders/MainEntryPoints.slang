@@ -132,7 +132,7 @@
     // Store initial data in the ray payload.
     rayPayload.radianceRay.color     = BLACK;
     rayPayload.radianceRay.alpha     = 1.0f;
-    rayPayload.radianceRay.direct    = BLACK;
+    rayPayload.radianceRay.extra     = BLACK;
     rayPayload.radianceRay.depthNDC  = depthNDC;
     rayPayload.radianceRay.depthView = depthView;
     rayPayload.radianceRay.normal    = shading.normal;
@@ -141,11 +141,13 @@
     rayPayload.radianceRay.metalness = material.metalness;
     rayPayload.radianceRay.indirect.clear();
 
+    // Shade with material emission.
+    rayPayload.radianceRay.extra += shadeEmission(material);
+
     // Shade with a randomly selected global distant light. Skip this if there are no distant
     // lights.
     if (gFrameData.lights.distantLightCount > 0)
     {
-
         // Choose a random distant light for this sample, by computing an index in range the 0 to
         // (distantLightCount-1).
         int lightIdx = int(
@@ -155,18 +157,19 @@
         if (gFrameData.lights.distantLights[lightIdx].colorAndIntensity.a > 0.0f)
         {
             // Shade the light.
-            rayPayload.radianceRay.direct =
+            rayPayload.radianceRay.extra +=
                 shadeDirectionalLight(gFrameData.lights.distantLights[lightIdx].direction,
                     gFrameData.lights.distantLights[lightIdx].colorAndIntensity,
                     gFrameData.lights.distantLights[lightIdx].cosRadius, gScene, material, shading,
                     V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
-
-            // Add the direct lighting to the color result.
-            // NOTE: For denoising purposes, "direct" lighting only includes the directional light,
-            // and not the environment light computed below.
-            rayPayload.radianceRay.color += rayPayload.radianceRay.direct;
         }
     }
+
+    // Add the extra shading (computed above) to the color result.
+    // NOTE: Extra shading is stored separately in order to not be denoised, but rather to be
+    // combined with denoised shading later. It does not include shading from the environment light
+    // (below), as that may be denoised.
+    rayPayload.radianceRay.color += rayPayload.radianceRay.extra;
 
     // When denoising, primary rays for indirect lighting should not include the base color (also
     // known as albedo, as used by diffuse lobes) in order to avoid blurring out color details. So
@@ -343,7 +346,7 @@
     // Store initial data in the ray payload.
     rayPayload.radianceRay.color     = BLACK;
     rayPayload.radianceRay.alpha     = 1.0f;
-    rayPayload.radianceRay.direct    = BLACK;
+    rayPayload.radianceRay.extra     = BLACK;
     rayPayload.radianceRay.depthNDC  = depthNDC;
     rayPayload.radianceRay.depthView = depthView;
     rayPayload.radianceRay.normal    = shading.normal;
@@ -352,11 +355,13 @@
     rayPayload.radianceRay.metalness = material.metalness;
     rayPayload.radianceRay.indirect.clear();
 
+    // Shade with material emission.
+    rayPayload.radianceRay.extra += shadeEmission(material);
+
     // Shade with a randomly selected global distant light. Skip this if there are no distant
     // lights.
     if (gFrameData.lights.distantLightCount > 0)
     {
-
         // Choose a random distant light for this sample, by computing an index in range the 0 to
         // (distantLightCount-1).
         int lightIdx = int(
@@ -366,18 +371,19 @@
         if (gFrameData.lights.distantLights[lightIdx].colorAndIntensity.a > 0.0f)
         {
             // Shade the light.
-            rayPayload.radianceRay.direct =
+            rayPayload.radianceRay.extra +=
                 shadeDirectionalLight(gFrameData.lights.distantLights[lightIdx].direction,
                     gFrameData.lights.distantLights[lightIdx].colorAndIntensity,
                     gFrameData.lights.distantLights[lightIdx].cosRadius, gScene, material, shading,
                     V, isOpaqueShadowsEnabled, depth, maxDepth, rayPayload.radianceRay.rng);
-
-            // Add the direct lighting to the color result.
-            // NOTE: For denoising purposes, "direct" lighting only includes the directional light,
-            // and not the environment light computed below.
-            rayPayload.radianceRay.color += rayPayload.radianceRay.direct;
         }
     }
+
+    // Add the extra shading (computed above) to the color result.
+    // NOTE: Extra shading is stored separately in order to not be denoised, but rather to be
+    // combined with denoised shading later. It does not include shading from the environment light
+    // (below), as that may be denoised.
+    rayPayload.radianceRay.color += rayPayload.radianceRay.extra;
 
     // When denoising, primary rays for indirect lighting should not include the base color (also
     // known as albedo, as used by diffuse lobes) in order to avoid blurring out color details. So
