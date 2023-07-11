@@ -141,6 +141,13 @@ typedef union
     } parts;
 } DecompFloat16;
 
+/// Compare string with baseline text file on disk.
+/// Returns an error message or empty string if comparison passed.
+/// message argument is concatenated with returned error string if test fails.
+/// With regenerate text file if UPDATE_BASELINE env. var. is set.
+std::string compareTextFile(
+    const std::string filename, const std::string cmpString, const std::string message = "");
+
 /// \brief Convert 16-bit half float to 32-bit full float
 float halfToFloat(const uint16_t x);
 

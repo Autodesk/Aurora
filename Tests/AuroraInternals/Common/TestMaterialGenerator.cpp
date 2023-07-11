@@ -118,7 +118,7 @@ TEST_F(MaterialGeneratorTest, BasicTest)
 
     Aurora::MaterialDefinitionPtr pMtlDef0 = matGen.generate(materialXString0);
     ASSERT_NE(pMtlDef0, nullptr);
-    ASSERT_STREQ(pMtlDef0->source().uniqueId.c_str(), "MaterialX_74d9ebd3c17894d1");
+    ASSERT_STREQ(pMtlDef0->source().uniqueId.c_str(), "MaterialX_d183faa1b8cb18d7");
     ASSERT_EQ(pMtlDef0->defaults().properties.size(), 7);
     ASSERT_EQ(pMtlDef0->defaults().propertyDefinitions.size(), 7);
     ASSERT_NEAR(pMtlDef0->defaults().properties[2].asFloat(), 0.8f, 0.01f);
@@ -127,7 +127,7 @@ TEST_F(MaterialGeneratorTest, BasicTest)
 
     Aurora::MaterialDefinitionPtr pMtlDef1 = matGen.generate(materialXString1);
     ASSERT_NE(pMtlDef1, nullptr);
-    ASSERT_STREQ(pMtlDef1->source().uniqueId.c_str(), "MaterialX_74d9ebd3c17894d1");
+    ASSERT_STREQ(pMtlDef1->source().uniqueId.c_str(), "MaterialX_d183faa1b8cb18d7");
     ASSERT_EQ(pMtlDef1->defaults().properties.size(), 7);
     ASSERT_EQ(pMtlDef1->defaults().propertyDefinitions.size(), 7);
     ASSERT_NEAR(pMtlDef1->defaults().properties[2].asFloat(), 0.1f, 0.01f);
@@ -143,7 +143,7 @@ TEST_F(MaterialGeneratorTest, BasicTest)
 
     Aurora::MaterialDefinitionPtr pMtlDef2 = matGen.generate(materialXString2);
     ASSERT_NE(pMtlDef2, nullptr);
-    ASSERT_STREQ(pMtlDef2->source().uniqueId.c_str(), "MaterialX_205101b950e9fce9");
+    ASSERT_STREQ(pMtlDef2->source().uniqueId.c_str(), "MaterialX_58010dd45510ab94");
     ASSERT_EQ(pMtlDef2->defaults().properties.size(), 6);
     ASSERT_EQ(pMtlDef2->defaults().propertyDefinitions.size(), 6);
     ASSERT_EQ(pMtlDef2->defaults().textureNames.size(), 2);

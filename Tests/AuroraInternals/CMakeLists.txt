@@ -19,6 +19,7 @@ set(TEST_FILES
     "Common/TestProperties.cpp"
     "Common/TestResources.cpp"
     "Common/TestMaterialGenerator.cpp"
+    "Common/TestUniformBuffer.cpp"
 )
 
 set(AURORA_DIR "${CMAKE_SOURCE_DIR}/Libraries/Aurora")
