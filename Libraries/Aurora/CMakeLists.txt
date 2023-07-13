@@ -218,6 +218,8 @@ if(ENABLE_HGI_BACKEND)
         "Source/HGI/HGIGeometry.h"
         "Source/HGI/HGIHandleWrapper.cpp"
         "Source/HGI/HGIHandleWrapper.h"
+        "Source/HGI/HGILight.cpp"
+        "Source/HGI/HGILight.h"
         "Source/HGI/HGIRenderBuffer.cpp"
         "Source/HGI/HGIRenderBuffer.h"
         "Source/HGI/HGIRenderer.cpp"

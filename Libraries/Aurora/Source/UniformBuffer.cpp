@@ -98,7 +98,36 @@ string UniformBuffer::generateHLSLStruct() const
     }
 
     // Closing brace.
-    ss << "}";
+    ss << "}" << endl;
+
+    // Return string.
+    return ss.str();
+}
+
+string UniformBuffer::generateHLSLStructAndAccessors(
+    const string& structName, const string& prefix) const
+{
+    // Create struct using stringstream
+    stringstream ss;
+
+    // String begins at first curly brace (no struct or name)
+    ss << "struct " << structName << endl;
+    ss << generateHLSLStruct();
+    ss << ";" << endl;
+
+    for (size_t i = 0; i < _fields.size(); i++)
+    {
+        if (_fields[i].index != -1)
+        {
+            // If get definition for field.
+            auto def = _definition[_fields[i].index];
+            ss << endl
+               << getHLSLStringFromType(def.type) << " " << prefix << def.variableName << "("
+               << structName << " mtl) {" << endl
+               << "\treturn mtl." << def.variableName << ";" << endl;
+            ss << "}" << endl;
+        }
+    }
 
     // Return string.
     return ss.str();

@@ -141,8 +141,10 @@ bool instanceHasTexCoords()
 uint3 getIndicesForTriangle(int bufferLocation);
 float3 getPositionForVertex(int bufferLocation);
 float3 getNormalForVertex(int bufferLocation);
+float3 getTangentForVertex(int bufferLocation);
 float2 getTexCoordForVertex(int bufferLocation);
 bool instanceHasNormals();
+bool instanceHasTangents();
 bool instanceHasTexCoords();
 
 #endif

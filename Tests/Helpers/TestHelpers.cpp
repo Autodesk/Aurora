@@ -76,7 +76,7 @@ std::string compareTextFile(
             else if (!infile.good() && cmpsstream.good())
                 errMsg = "Reached end of " + filename + " at line " + std::to_string(lineNo) +
                     " before end of comparison string.";
-            else if (infile.good() && cmpsstream.good())
+            else if (infile.good() && !cmpsstream.good())
                 errMsg = "Reached end of comparison string at line " + std::to_string(lineNo) +
                     " before end of " + filename;
             else

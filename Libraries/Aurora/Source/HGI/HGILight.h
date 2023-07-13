@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,33 +13,37 @@
 // limitations under the License.
 #pragma once
 
-#include "HGIHandleWrapper.h"
-#include "MaterialBase.h"
+#include "Properties.h"
 
 BEGIN_AURORA
 
 // Forward declarations.
-class HGIRenderer;
-struct MaterialData;
+class HGIScene;
 
-// An internal implementation for IMaterial.
-class HGIMaterial : public MaterialBase
+// An internal implementation for ILight.
+class HGILight : public ILight, public FixedValues
 {
 public:
-    HGIMaterial(
-        HGIRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef);
-    ~HGIMaterial() {};
+    /*** Lifetime Management ***/
 
-    void update();
+    HGILight(HGIScene* pScene, const string& lightType, int index);
+    ~HGILight() {};
 
-    pxr::HgiBufferHandle ubo() { return _ubo->handle(); }
+    /*** Functions ***/
+    FixedValues& values() override { return *this; }
+
+    int index() const { return _index; }
+
+    bool isDirty() const { return _bIsDirty; }
+    void clearDirtyFlag() { _bIsDirty = false; }
 
 private:
-    void updateGPUStruct(MaterialData& data);
-    HGIRenderer* _pRenderer;
-    HgiBufferHandleWrapper::Pointer _ubo;
+    /*** Private Variables ***/
+
+    HGIScene* _pScene = nullptr;
+    int _index;
 };
 
-using HGIMaterialPtr = std::shared_ptr<HGIMaterial>;
+MAKE_AURORA_PTR(HGILight);
 
 END_AURORA

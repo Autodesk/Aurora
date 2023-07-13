@@ -52,7 +52,7 @@ bool HGIScene::update()
     SceneBase::update();
 
     // Update the environment.
-    if (_environments.changed())
+    if (_environments.changedThisFrame())
     {
         HGIEnvironmentPtr pEnvironment =
             static_pointer_cast<HGIEnvironment>(_pEnvironmentResource->resource());
@@ -62,7 +62,7 @@ bool HGIScene::update()
     // If any active geometry resources have been modified, flush the vertex buffer pool in case
     // there are any pending vertex buffers that are required to update the geometry, and then
     // update the geometry (and update BLAS for "complete" geometry that has position data).
-    if (_geometry.changed())
+    if (_geometry.changedThisFrame())
     {
         for (HGIGeometry& geom : _geometry.modified().resources<HGIGeometry>())
         {
@@ -72,7 +72,7 @@ bool HGIScene::update()
 
     // If any active material resources have been modified update them and build a list of unique
     // samplers for all the active materials.
-    if (_materials.changed())
+    if (_materials.changedThisFrame())
     {
         for (HGIMaterial& mtl : _materials.modified().resources<HGIMaterial>())
         {
@@ -81,7 +81,7 @@ bool HGIScene::update()
     }
 
     // Update the acceleration structure if any geometry or instances have been modified.
-    if (_instances.changed() || _geometry.changed())
+    if (_instances.changedThisFrame() || _geometry.changedThisFrame())
     {
         _rayTracingPipeline.reset();
     }
@@ -92,6 +92,7 @@ bool HGIScene::update()
     {
         rebuildInstanceList();
         rebuildPipeline();
+        // TODO: Should upload lights here too.
         rebuildAccelerationStructure();
         rebuildResourceBindings();
 
@@ -482,14 +483,17 @@ void HGIScene::createResources()
     }
 
     // Create the closest hit shader from template text.
-    string closestHitEntryPointSource = regex_replace(
-        CommonShaders::g_sClosestHitEntryPointTemplate, regex("@MATERIAL_TYPE@"), "Default");
+    string mainEntryPointSource = "#define RADIANCE_HIT 1\n" +
+        regex_replace(CommonShaders::g_sMainEntryPoints, regex("___Material___"), "Default");
+
     _transpiler->setSource(
         "InitializeMaterial.slang", CommonShaders::g_sInitializeDefaultMaterialType);
+    _transpiler->setSource("Options.slang", "");
+    _transpiler->setSource("Definitions.slang", "");
 
     // Transpaile the closest hit shader.
-    if (!_transpiler->transpileCode(closestHitEntryPointSource, transpiledGLSL, transpilerErrors,
-            Transpiler::Language::GLSL))
+    if (!_transpiler->transpileCode(
+            mainEntryPointSource, transpiledGLSL, transpilerErrors, Transpiler::Language::GLSL))
     {
         AU_ERROR("Slang transpiling error on closest hit shdaer:\n%s", transpilerErrors.c_str());
         AU_DEBUG_BREAK();
@@ -638,6 +642,25 @@ void HGIScene::rebuildPipeline()
     // Create the pipeline.
     _rayTracingPipeline = HgiRayTracingPipelineHandleWrapper::create(
         hgi->CreateRayTracingPipeline(pipelineDesc), hgi);
+}
+
+ILightPtr HGIScene::addLightPointer(const string& lightType)
+{
+    // Only distant lights are currently supported.
+    AU_ASSERT(lightType.compare(Names::LightTypes::kDistantLight) == 0,
+        "Only distant lights currently supported");
+
+    // Assign arbritary index to ensure deterministic ordering.
+    int index = _currentLightIndex++;
+
+    // Create the light object.
+    HGILightPtr pLight = make_shared<HGILight>(this, lightType, index);
+
+    // Add weak pointer to distant light map.
+    _distantLights[index] = pLight;
+
+    // Return the new light.
+    return pLight;
 }
 
 IInstancePtr HGIScene::addInstancePointer(const Path& /* path*/, const IGeometryPtr& pGeom,

@@ -21,11 +21,14 @@ BEGIN_AURORA
 // Forward declarations.
 class HGIRenderer;
 
+// The geometry buffer structure, must match GPU layout in
+// Libraries\Aurora\Source\HGI\Shaders\InstanceData.glsl
 struct HGIGeometryBuffers
 {
     uint64_t indexBufferDeviceAddress    = 0ull;
     uint64_t vertexBufferDeviceAddress   = 0ull;
     uint64_t normalBufferDeviceAddress   = 0ull;
+    uint64_t tangentBufferDeviceAddress  = 0ull;
     uint64_t texCoordBufferDeviceAddress = 0ull;
 };
 

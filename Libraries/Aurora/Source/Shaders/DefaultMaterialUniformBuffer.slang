@@ -70,3 +70,232 @@ struct MaterialConstants
 	int _padding8;
 	int _padding9;
 }
+;
+
+float Material_base(MaterialConstants mtl) {
+	return mtl.base;
+}
+
+float3 Material_baseColor(MaterialConstants mtl) {
+	return mtl.baseColor;
+}
+
+float Material_diffuseRoughness(MaterialConstants mtl) {
+	return mtl.diffuseRoughness;
+}
+
+float Material_metalness(MaterialConstants mtl) {
+	return mtl.metalness;
+}
+
+float Material_specular(MaterialConstants mtl) {
+	return mtl.specular;
+}
+
+float3 Material_specularColor(MaterialConstants mtl) {
+	return mtl.specularColor;
+}
+
+float Material_specularRoughness(MaterialConstants mtl) {
+	return mtl.specularRoughness;
+}
+
+float Material_specularIOR(MaterialConstants mtl) {
+	return mtl.specularIOR;
+}
+
+float Material_specularAnisotropy(MaterialConstants mtl) {
+	return mtl.specularAnisotropy;
+}
+
+float Material_specularRotation(MaterialConstants mtl) {
+	return mtl.specularRotation;
+}
+
+float Material_transmission(MaterialConstants mtl) {
+	return mtl.transmission;
+}
+
+float3 Material_transmissionColor(MaterialConstants mtl) {
+	return mtl.transmissionColor;
+}
+
+float Material_subsurface(MaterialConstants mtl) {
+	return mtl.subsurface;
+}
+
+float3 Material_subsurfaceColor(MaterialConstants mtl) {
+	return mtl.subsurfaceColor;
+}
+
+float3 Material_subsurfaceRadius(MaterialConstants mtl) {
+	return mtl.subsurfaceRadius;
+}
+
+float Material_subsurfaceScale(MaterialConstants mtl) {
+	return mtl.subsurfaceScale;
+}
+
+float Material_subsurfaceAnisotropy(MaterialConstants mtl) {
+	return mtl.subsurfaceAnisotropy;
+}
+
+float Material_sheen(MaterialConstants mtl) {
+	return mtl.sheen;
+}
+
+float3 Material_sheenColor(MaterialConstants mtl) {
+	return mtl.sheenColor;
+}
+
+float Material_sheenRoughness(MaterialConstants mtl) {
+	return mtl.sheenRoughness;
+}
+
+float Material_coat(MaterialConstants mtl) {
+	return mtl.coat;
+}
+
+float3 Material_coatColor(MaterialConstants mtl) {
+	return mtl.coatColor;
+}
+
+float Material_coatRoughness(MaterialConstants mtl) {
+	return mtl.coatRoughness;
+}
+
+float Material_coatAnisotropy(MaterialConstants mtl) {
+	return mtl.coatAnisotropy;
+}
+
+float Material_coatRotation(MaterialConstants mtl) {
+	return mtl.coatRotation;
+}
+
+float Material_coatIOR(MaterialConstants mtl) {
+	return mtl.coatIOR;
+}
+
+float Material_coatAffectColor(MaterialConstants mtl) {
+	return mtl.coatAffectColor;
+}
+
+float Material_coatAffectRoughness(MaterialConstants mtl) {
+	return mtl.coatAffectRoughness;
+}
+
+float Material_emission(MaterialConstants mtl) {
+	return mtl.emission;
+}
+
+float3 Material_emissionColor(MaterialConstants mtl) {
+	return mtl.emissionColor;
+}
+
+float3 Material_opacity(MaterialConstants mtl) {
+	return mtl.opacity;
+}
+
+int Material_thinWalled(MaterialConstants mtl) {
+	return mtl.thinWalled;
+}
+
+int Material_hasBaseColorTex(MaterialConstants mtl) {
+	return mtl.hasBaseColorTex;
+}
+
+float2 Material_baseColorTexOffset(MaterialConstants mtl) {
+	return mtl.baseColorTexOffset;
+}
+
+float2 Material_baseColorTexScale(MaterialConstants mtl) {
+	return mtl.baseColorTexScale;
+}
+
+float2 Material_baseColorTexPivot(MaterialConstants mtl) {
+	return mtl.baseColorTexPivot;
+}
+
+float Material_baseColorTexRotation(MaterialConstants mtl) {
+	return mtl.baseColorTexRotation;
+}
+
+int Material_hasSpecularRoughnessTex(MaterialConstants mtl) {
+	return mtl.hasSpecularRoughnessTex;
+}
+
+float2 Material_specularRoughnessTexOffset(MaterialConstants mtl) {
+	return mtl.specularRoughnessTexOffset;
+}
+
+float2 Material_specularRoughnessTexScale(MaterialConstants mtl) {
+	return mtl.specularRoughnessTexScale;
+}
+
+float2 Material_specularRoughnessTexPivot(MaterialConstants mtl) {
+	return mtl.specularRoughnessTexPivot;
+}
+
+float Material_specularRoughnessTexRotation(MaterialConstants mtl) {
+	return mtl.specularRoughnessTexRotation;
+}
+
+int Material_hasEmissionColorTex(MaterialConstants mtl) {
+	return mtl.hasEmissionColorTex;
+}
+
+float2 Material_emissionColorTexOffset(MaterialConstants mtl) {
+	return mtl.emissionColorTexOffset;
+}
+
+float2 Material_emissionColorTexScale(MaterialConstants mtl) {
+	return mtl.emissionColorTexScale;
+}
+
+float2 Material_emissionColorTexPivot(MaterialConstants mtl) {
+	return mtl.emissionColorTexPivot;
+}
+
+float Material_emissionColorTexRotation(MaterialConstants mtl) {
+	return mtl.emissionColorTexRotation;
+}
+
+int Material_hasOpacityTex(MaterialConstants mtl) {
+	return mtl.hasOpacityTex;
+}
+
+float2 Material_opacityTexOffset(MaterialConstants mtl) {
+	return mtl.opacityTexOffset;
+}
+
+float2 Material_opacityTexScale(MaterialConstants mtl) {
+	return mtl.opacityTexScale;
+}
+
+float2 Material_opacityTexPivot(MaterialConstants mtl) {
+	return mtl.opacityTexPivot;
+}
+
+float Material_opacityTexRotation(MaterialConstants mtl) {
+	return mtl.opacityTexRotation;
+}
+
+int Material_hasNormalTex(MaterialConstants mtl) {
+	return mtl.hasNormalTex;
+}
+
+float2 Material_normalTexOffset(MaterialConstants mtl) {
+	return mtl.normalTexOffset;
+}
+
+float2 Material_normalTexScale(MaterialConstants mtl) {
+	return mtl.normalTexScale;
+}
+
+float2 Material_normalTexPivot(MaterialConstants mtl) {
+	return mtl.normalTexPivot;
+}
+
+float Material_normalTexRotation(MaterialConstants mtl) {
+	return mtl.normalTexRotation;
+}

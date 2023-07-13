@@ -100,6 +100,9 @@ public:
     // Generates a HLSL struct from this buffer.
     string generateHLSLStruct() const;
 
+    // Generates a HLSL struct and accessors from this buffer.
+    string generateHLSLStructAndAccessors(const string& structName, const string& prefix) const;
+
     // Generates the HLSL accessor functions for this buffer, with a ByteAddressBuffer being used
     // for storage. Each function name is prefixed with the specified string, e.g. using a
     // "Material42_" prefix might produce the following string:

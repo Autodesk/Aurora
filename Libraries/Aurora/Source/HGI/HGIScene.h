@@ -16,6 +16,7 @@
 #include "HGIEnvironment.h"
 #include "HGIGeometry.h"
 #include "HGIImage.h"
+#include "HGILight.h"
 #include "HGIMaterial.h"
 #include "SceneBase.h"
 
@@ -80,6 +81,7 @@ struct InstanceShaderRecord
 
     // Geometry flags.
     unsigned int hasNormals   = true;
+    unsigned int hasTangents  = false;
     unsigned int hasTexCoords = true;
 };
 
@@ -116,8 +118,12 @@ public:
     IInstancePtr addInstancePointer(const Path& /* path*/, const IGeometryPtr& pGeom,
         const IMaterialPtr& pMaterial, const mat4& transform,
         const LayerDefinitions& materialLayers) override;
+    ILightPtr addLightPointer(const string& lightType) override;
 
 private:
+    map<int, weak_ptr<HGILight>> _distantLights;
+    int _currentLightIndex = 0;
+
     HGIRenderer* _pRenderer = nullptr;
     shared_ptr<Transpiler> _transpiler;
     HgiRayTracingPipelineHandleWrapper::Pointer _rayTracingPipeline;
