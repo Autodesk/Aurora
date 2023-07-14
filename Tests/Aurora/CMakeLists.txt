@@ -83,6 +83,7 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER "Tests")
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${DEFAULT_COMPILE_DEFINITIONS})
 
 if(WIN32)
+    add_dependencies(CopyOpenImageIODLLs MakeRuntimeDir)
     add_dependencies(${PROJECT_NAME} CopyOpenImageIODLLs)
 endif()
 

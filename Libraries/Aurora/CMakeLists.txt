@@ -335,6 +335,7 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${MATERIALX_STDLIB_DIR} ${RUNTIME_OUTPUT_DIR}/MaterialX/libraries
         )
         set_property(TARGET CopyMaterialXLibrary PROPERTY FOLDER "Deployment")
+        add_dependencies(CopyMaterialXLibrary MakeRuntimeDir)
         add_dependencies(${PROJECT_NAME} CopyMaterialXLibrary)
     endif()
 

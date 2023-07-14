@@ -5,16 +5,22 @@
 // Global constants
 COMMONSHELL = new ors.utils.CommonShell(steps, env)
 
-node('forgeogs-win2019-gpu') {
+node('OGS_Win_002') {
   try {
     stage ("Checkout Windows") {
         checkoutGit()
     }
-    stage ("Build Windows") {
-        windowsBuild()
+    stage ("Build Windows Release") {
+        windowsBuild("Release")
     }
-    stage ('Test Windows') {
-        windowsTest()
+    stage ("Build Windows Debug") {
+        windowsBuild("Debug")
+    }
+    stage ('Test Windows Release') {
+        windowsTest("Release")
+    }
+    stage ('Test Windows Debug') {
+        windowsTest("Debug")
     }
   }
   finally {
@@ -27,23 +33,23 @@ node('forgeogs-win2019-gpu') {
 // Checkout Functions
 
 def checkoutGit() {
-  String branch = scm.branches[0].toString()
-  withGit {
-    COMMONSHELL.shell """
-                      git clone -b ${branch} --recurse-submodules https://git.autodesk.com/GFX/Aurora .
-                      git lfs pull
-                      """
-  }
+  checkout([$class: 'GitSCM',
+            branches: scm.branches,
+            doGenerateSubmoduleConfigurations: false,
+            extensions: [[$class: 'GitLFSPull']],
+            submoduleCfg: [],
+            userRemoteConfigs: scm.userRemoteConfigs])
 }
 
 ///////////////////////////////////////////////////
 // Build functions
 
-def windowsBuild() {
-    def EXTERNALS_DIR="c:\\jenkins\\workspace\\AuroraExternals"
+def windowsBuild(Config) {
+  def EXTERNALS_DIR="c:\\jenkins\\workspace\\AuroraExternals"
+  def EXTERNALS_DIR_AURORA="${EXTERNALS_DIR}\\vs2022\\${Config}"
   bat """
     :: Set up EXTERNALS_DIR
-    if not exist ${EXTERNALS_DIR} call mkdir ${EXTERNALS_DIR}
+    if not exist ${EXTERNALS_DIR_AURORA} call mkdir ${EXTERNALS_DIR_AURORA}
 
     :: Set up nasm
     if not exist ${EXTERNALS_DIR}\\nasm-2.15.05-win64.zip call curl -o ${EXTERNALS_DIR}\\nasm-2.15.05-win64.zip https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/win64/nasm-2.15.05-win64.zip
@@ -57,17 +63,17 @@ def windowsBuild() {
 
     :: Set up Vulkan SDK
     :: We need to install Vulkan SDK silently. For more details please refer to https://vulkan.lunarg.com/doc/view/latest/windows/getting_started.html
-    if not exist ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe call curl -o ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe https://sdk.lunarg.com/sdk/download/1.3.231.1/windows/VulkanSDK-1.3.231.1-Installer.exe
-    if not exist "C:\\VulkanSDK\\1.3.231.1\\bin" call ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe --accept-licenses --default-answer --confirm-command install
+    if not exist "C:\\VulkanSDK\\1.3.231.1\\bin" if not exist ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe call curl -o ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe https://sdk.lunarg.com/sdk/download/1.3.231.1/windows/VulkanSDK-1.3.231.1-Installer.exe
+    if not exist "C:\\VulkanSDK\\1.3.231.1\\bin" call ${EXTERNALS_DIR}\\VulkanSDK-1.3.231.1-Installer.exe --accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.debug
     call set PATH=C:\\VulkanSDK\\1.3.231.1\\bin;%PATH%
     call set VK_SDK_PATH=C:\\VulkanSDK\\1.3.231.1
     call set VULKAN_SDK=C:\\VulkanSDK\\1.3.231.1
- 
+
     :: Set up Visual Studio 2022 Environment
     call C:\\"Program Files"\\"Microsoft Visual Studio"\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
 
     :: install externals
-    python -u Scripts\\installExternals.py ${EXTERNALS_DIR} -v -v
+    python -u Scripts\\installExternals.py ${EXTERNALS_DIR_AURORA} --build-variant=${Config} -v -v
 
     :: build Aurora
     echo Configure CMake project
@@ -75,10 +81,10 @@ def windowsBuild() {
 
     :: As the build machine is Windows Server 2019 while target running machine is Windows 10,
     :: Use CMAKE_SYSTEM_VERSION to target the build for a different version of the host operating system than is actually running on the host
-    cmake -S . -B Build -D CMAKE_BUILD_TYPE=Release -D EXTERNALS_DIR=${EXTERNALS_DIR} -DCMAKE_SYSTEM_VERSION=10.0.22000.0
-    cmake --build Build --config Release
+    cmake -S . -B Build -D CMAKE_BUILD_TYPE=${Config} -D EXTERNALS_DIR=${EXTERNALS_DIR_AURORA} -DCMAKE_SYSTEM_VERSION=10.0.22000.0  -G "Visual Studio 17 2022" -A x64
+    cmake --build Build --config ${Config}
     if not errorlevel 0 (
-        echo ERROR: Failed to build the project for Release binaries, see console output for details
+        echo ERROR: Failed to build the project for ${Config} binaries, see console output for details
         exit /b %errorlevel%
     )
     """
@@ -87,19 +93,19 @@ def windowsBuild() {
 ///////////////////////////////////////////////////
 // Test functions
 
-def windowsTest() {
+def windowsTest(Config) {
   bat """
     :: Start unit test
-    echo Starting OGS modernization unit test for Release
+    echo Starting OGS modernization unit test for ${Config}
     setlocal EnableDelayedExpansion
-    pushd Build\\bin\\Release
+    pushd Build\\bin\\${Config}
     set exit_code=0
     for %%i in (.\\*Tests.exe) do (
         set exe=%%i
         set exe_name=!exe:~2,-4!
         !exe!
 
-        if not errorlevel 0 (
+        if !errorlevel! neq 0 (
             echo ERROR: Test !exe_name! exited with non-zero exit code, see console output for details
             set exit_code=1
         )
@@ -107,7 +113,7 @@ def windowsTest() {
     popd
     :: Break further execution when test fails
     if %exit_code% equ 1 goto end
-    echo Done All tests for Release
+    echo Done All tests for ${Config}
     :end
     exit /b %exit_code%
     """
