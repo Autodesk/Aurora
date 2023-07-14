@@ -168,7 +168,7 @@ ConstantBuffer<MaterialLayerShaderIDs> gMaterialLayerIDs : register(b2, space1);
 // Get the layer material index for given layer.
 int getMaterialLayerIndex(int layer)
 {
-    // TODO: Optimize the floattor->scalar look-up.
+    // TODO: Optimize the float->scalar look-up.
     return gMaterialLayerIDs.shaderIDs[layer / 4][layer % 4];
 }
 

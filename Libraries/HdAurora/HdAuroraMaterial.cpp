@@ -31,8 +31,11 @@
 
 #pragma warning(disable : 4506) // inline function warning (from USD but appears in this file)
 
-// Computes the perceived luminance of a color.
+// Developer flag to disable separating the MaterialX document into a MaterialX document with
+// default values and a separate set of name-value pairs. Should always be 1 in production code.
+#define HD_AURORA_SEPARATE_MTLX_DOC 1
 
+// Computes the perceived luminance of a color.
 static float luminance(const pxr::GfVec3f& value)
 {
     static constexpr pxr::GfVec3f kLuminanceFactors = pxr::GfVec3f(0.2125f, 0.7154f, 0.0721f);
@@ -330,12 +333,16 @@ void HdAuroraMaterial::ProcessHDMaterial(HdSceneDelegate* delegate)
     if (GetHDMaterialXDocument(delegate, hdMaterialXType, hdMaterialXDocument))
     {
         Aurora::Properties materialProperties;
+
+#if HD_AURORA_SEPARATE_MTLX_DOC
         if (!hdMaterialXDocument.empty())
         {
             // Separate hdMaterialXDocument into default doc and name-value pair
             hdMaterialXDocument =
                 SeparateHDMaterialXDocument(hdMaterialXDocument, materialProperties);
         }
+#endif
+
         // Send the document to Aurora (with the parameters reset.)
         SetupAuroraMaterial(hdMaterialXType, hdMaterialXDocument);
 
@@ -504,7 +511,7 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         if (vtVal.IsHolding<GfVec3f>())
         {
             // Add the input binding for input to the dynamically built materialX document.
-            // Note: Values are applied seperately and not built into the document, so value is all
+            // Note: Values are applied separately and not built into the document, so value is all
             // zeros here.
             parameterBindingStr += Aurora::Foundation::sFormat(
                 paramBindingTemplate, auroraName.c_str(), "color3", "0.0,0.0,0.0");
@@ -709,7 +716,7 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         if (vtVal.IsHolding<float>())
         {
             float val                      = vtVal.UncheckedGet<float>();
-            materialProperties[auroraName] = 1.0f - val; // Transmission is one minux opacity.
+            materialProperties[auroraName] = 1.0f - val; // Transmission is one minus opacity.
         }
         else if (vtVal.IsHolding<GfVec3f>())
         {
@@ -874,7 +881,7 @@ bool HdAuroraMaterial::ProcessHDMaterialNetwork(VtValue& materialValue)
     auto networkIter = networkMap.map.find(pxr::HdMaterialTerminalTokens->surface);
     if (networkIter == networkMap.map.end())
     {
-        TF_WARN("No surface network in materal network map for material " + GetId().GetString());
+        TF_WARN("No surface network in material network map for material " + GetId().GetString());
         return false;
     }
     auto network = networkIter->second;

@@ -65,12 +65,10 @@ private:
     // Set all the input value of node to zero
     void InitToDefaultValue(
         MaterialX::NodePtr& pNode, Aurora::Properties& materialProperties, bool& isNodegraph);
-    // Seperate the MaterialX document to generate materialX doc with default 0 value
-    // and related properties value pair
+    // Separate the MaterialX document into a MaterialX document with default values and a separate
+    // set of name-value pairs.
     string SeparateHDMaterialXDocument(
         string& materialDocument, Aurora::Properties& materialProperties);
-    // Create a new Aurora material with this material type and document, if required.
-    // Does nothing if current material type and document match the ones provided.
     // Create a new aurora material with this material type and document, if required.
     // Does nothing if current material type and document match the ones provided.
     bool SetupAuroraMaterial(const string& materialType, const string& materialDocument);

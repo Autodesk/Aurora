@@ -175,7 +175,12 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
 
     int minAttrCount = static_cast<int>(_pVertexData->points.size());
     int maxAttrCount = minAttrCount;
-    bool hasTangents = _pVertexData->tangents.size() == _pVertexData->normals.size();
+
+    // The tangents flag is true if we have a valid tangents array that matches size of normals
+    // array, and we haven't disabled tangents with the developer flag.
+    bool hasTangents = HDAURORA_HAS_TANGENTS
+        ? _pVertexData->tangents.size() == _pVertexData->normals.size()
+        : false;
 
     // If there are valid normals but normal and position attribute arrays are not the same
     // clamp indices to smallest value
@@ -348,14 +353,14 @@ void HdAuroraMesh::RebuildAuroraInstances(HdSceneDelegate* delegate)
         { Aurora::Names::VertexAttributes::kPosition, Aurora::AttributeFormat::Float3 },
     };
 
-    // Set normals and tangent attibute type.
+    // Set normals and tangent attribute type.
     geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kNormal] =
         Aurora::AttributeFormat::Float3;
     if (hasTangents)
         geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTangent] =
             Aurora::AttributeFormat::Float3;
 
-    // Set texcoord attibute type, if the mesh has them.
+    // Set texcoord attribute type, if the mesh has them.
     if (_pVertexData->hasTexCoords)
         geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTexCoord0] =
             Aurora::AttributeFormat::Float2;
