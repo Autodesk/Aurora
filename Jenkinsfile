@@ -46,7 +46,7 @@ def checkoutGit() {
 
 def windowsBuild(Config) {
   def EXTERNALS_DIR="c:\\jenkins\\workspace\\AuroraExternals"
-  def EXTERNALS_DIR_AURORA="${EXTERNALS_DIR}\\vs2022\\${Config}"
+  def EXTERNALS_DIR_AURORA="${EXTERNALS_DIR}\\vs2019\\${Config}"
   bat """
     :: Set up EXTERNALS_DIR
     if not exist ${EXTERNALS_DIR_AURORA} call mkdir ${EXTERNALS_DIR_AURORA}
@@ -69,8 +69,8 @@ def windowsBuild(Config) {
     call set VK_SDK_PATH=C:\\VulkanSDK\\1.3.231.1
     call set VULKAN_SDK=C:\\VulkanSDK\\1.3.231.1
 
-    :: Set up Visual Studio 2022 Environment
-    call C:\\"Program Files"\\"Microsoft Visual Studio"\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
+    :: Set up Visual Studio 2019 Environment
+    call C:\\"Program Files (x86)"\\"Microsoft Visual Studio"\\2019\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
 
     :: install externals
     python -u Scripts\\installExternals.py ${EXTERNALS_DIR_AURORA} --build-variant=${Config} -v -v
@@ -81,7 +81,7 @@ def windowsBuild(Config) {
 
     :: As the build machine is Windows Server 2019 while target running machine is Windows 10,
     :: Use CMAKE_SYSTEM_VERSION to target the build for a different version of the host operating system than is actually running on the host
-    cmake -S . -B Build -D CMAKE_BUILD_TYPE=${Config} -D EXTERNALS_DIR=${EXTERNALS_DIR_AURORA} -DCMAKE_SYSTEM_VERSION=10.0.22000.0  -G "Visual Studio 17 2022" -A x64
+    cmake -S . -B Build -D CMAKE_BUILD_TYPE=${Config} -D EXTERNALS_DIR=${EXTERNALS_DIR_AURORA} -DCMAKE_SYSTEM_VERSION=10.0.22000.0  -G "Visual Studio 16 2019" -A x64
     cmake --build Build --config ${Config}
     if not errorlevel 0 (
         echo ERROR: Failed to build the project for ${Config} binaries, see console output for details
