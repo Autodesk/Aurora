@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,24 +120,6 @@ void SceneBase::setBounds(const float* min, const float* max)
     _bounds.add(make_vec3(max));
 
     assert(_bounds.isValid());
-}
-
-void SceneBase::setLight(
-    float intensity, const rgb& color, const vec3& direction, float angularDiameter)
-{
-    _lightIntensity       = intensity;
-    _lightColor           = color;
-    _lightDirection       = normalize(direction);
-    _lightAngularDiameter = angularDiameter;
-}
-
-void SceneBase::setLight(
-    float intensity, const float* color, const float* direction, float angularDiameter)
-{
-    _lightIntensity       = intensity;
-    _lightColor           = make_vec3(color);
-    _lightDirection       = normalize(make_vec3(direction));
-    _lightAngularDiameter = angularDiameter;
 }
 
 void SceneBase::addPermanent(const Path& path)
@@ -407,8 +389,9 @@ void SceneBase::setInstanceProperties(const Paths& paths, const Properties& inst
     }
 }
 
-void SceneBase::update()
+void SceneBase::preUpdate()
 {
+    // Create a default instance so the scene is not completely empty.
     if (_instances.activeCount() == 0)
     {
         if (!_pDefaultInstanceResource->isActive())
@@ -419,7 +402,10 @@ void SceneBase::update()
         if (_pDefaultInstanceResource->isActive())
             _pDefaultInstanceResource->decrementPermanentRefCount();
     }
+}
 
+void SceneBase::update()
+{
     // Update all the active resources, this will build the ResourceNotifier that stores the set of
     // active resources for this frame.
     _instances.update();

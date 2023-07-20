@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,10 @@ HdAuroraInstancer::HdAuroraInstancer(HdSceneDelegate* delegate, SdfPath const& i
 
 HdAuroraInstancer::~HdAuroraInstancer()
 {
-    TF_FOR_ALL(it, _primvarMap) { delete it->second; }
+    TF_FOR_ALL(it, _primvarMap)
+    {
+        delete it->second;
+    }
     _primvarMap.clear();
 }
 

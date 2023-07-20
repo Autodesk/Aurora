@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,6 +72,20 @@ void buildBasis(float3 normal, out float3 tangent, out float3 bitangent)
     bitangent = abs(normal.y) < 0.999f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
     tangent   = normalize(cross(bitangent, normal));
     bitangent = cross(normal, tangent);
+}
+
+// Rebuild tangent and bitangent basis from new normal.
+void rebuildBasis(float3 normal, in out float3 tangent, in out float3 bitangent)
+{
+    bitangent = abs(dot(bitangent, normal)) < 0.999f ? bitangent : tangent;
+    tangent   = normalize(cross(bitangent, normal));
+    bitangent = cross(normal, tangent);
+}
+
+// Compute bitangent from a normal and tangent vector.
+float3 computeBitangent(float3 normal, float3 tangent)
+{
+    return cross(normal, tangent);
 }
 
 #endif // __GLOBALS_H__

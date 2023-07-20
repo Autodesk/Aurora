@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "BSDF.slang"
+
+// Compute shading from material emission.
+float3 shadeEmission(Material material)
+{
+    // Compute emission from the material properties. The emission is affected by the coat, i.e. the
+    // coat is on top of a glowing layer.
+    float3 emissionCoatBlend = lerp(WHITE, material.coatColor, material.coat);
+    float3 emission          = material.emission * material.emissionColor * emissionCoatBlend;
+
+    return emission;
+}
 
 // Compute shading with a directional light.
 float3 shadeDirectionalLight(float3 dir, float4 colorAndIntensity, float cosRadius,

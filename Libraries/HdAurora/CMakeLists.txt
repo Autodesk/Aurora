@@ -3,18 +3,25 @@ project(hdAurora)
 
 find_package(glm REQUIRED) # Find the GLM vector maths package.
 find_package(OpenGL REQUIRED)
-find_package(Vulkan REQUIRED)
 find_package(GLEW REQUIRED)
-
+find_package(MaterialX REQUIRED) # MaterialX SDK
 find_package(pxr REQUIRED) # Find the Universal Scene Description (USD) library
+# Alias the namespace to meet the cmake convention on imported targets
+add_library(MaterialX::GenGlsl ALIAS MaterialXGenGlsl)
+
+# On windows, the version resource and header files that add the version information to the DLL.
+if(WIN32)
+set(VERSION_FILES
+    ${VERSION_FOLDER}/AuroraVersion.h
+    HdAurora.rc
+)
+endif()
 
 # Add shard library with all source files.
 add_library(${PROJECT_NAME} SHARED
     "DLL.cpp"
     "HdAuroraImageCache.cpp"
     "HdAuroraImageCache.h"
-    "HdAuroraCamera.cpp"
-    "HdAuroraCamera.h"
     "HdAuroraInstancer.cpp"
     "HdAuroraInstancer.h"
     "HdAuroraLight.cpp"
@@ -33,15 +40,19 @@ add_library(${PROJECT_NAME} SHARED
     "HdAuroraRenderPass.h"
     "HdAuroraTokens.h"
     "pch.h"
+    ${VERSION_FILES}
 )
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	FOLDER "Libraries"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     PDB_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
+
+    # Follow the USD convention of lower-case initial on libraries.
+    OUTPUT_NAME "hdAurora"
 )
 
 # Add dependencies.
@@ -50,6 +61,7 @@ PRIVATE
     glm::glm
     OpenGL::GL
     GLEW::glew
+    MaterialX::GenGlsl
     pxr::usd
     pxr::hf
     pxr::hd
@@ -94,6 +106,12 @@ if(WIN32)
 else() # Linux
     #TODO anything we need to set to support the Aurora execution?
 endif()
+
+# Add the version folder required by HdAurora.rc
+target_include_directories(${PROJECT_NAME}
+PRIVATE
+    ${VERSION_FOLDER}
+)
 
 # Install the binaries.
 install(TARGETS ${PROJECT_NAME}  DESTINATION ${INSTALL_BIN}/usd)

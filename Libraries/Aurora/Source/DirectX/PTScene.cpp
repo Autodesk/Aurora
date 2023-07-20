@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include "PTEnvironment.h"
 #include "PTGeometry.h"
 #include "PTGroundPlane.h"
+#include "PTLight.h"
 #include "PTMaterial.h"
 #include "PTRenderer.h"
 #include "PTShaderLibrary.h"
@@ -71,8 +72,11 @@ struct HitGroupShaderRecord
         PositionBufferAddress          = geometry.PositionBuffer;
         HasNormals                     = geometry.NormalBuffer ? 1 : 0;
         NormalBufferAddress            = HasNormals ? geometry.NormalBuffer : 0;
-        HasTexCoords                   = geometry.TexCoordBuffer ? 1 : 0;
+        HasTangents                    = geometry.TangentBuffer != 0;
+        TangentBufferAddress           = HasTangents ? geometry.TangentBuffer : 0;
+        HasTexCoords                   = geometry.TexCoordBuffer != 0;
         TexCoordBufferAddress          = HasTexCoords ? geometry.TexCoordBuffer : 0;
+        IsOpaque                       = material.isOpaque();
         MaterialLayerCount             = materialLayerCount;
         MaterialBufferAddress          = material.buffer()->GetGPUVirtualAddress();
         MaterialLayerIndexTableAddress = pMaterialLayerIndexBuffer
@@ -101,10 +105,13 @@ struct HitGroupShaderRecord
     D3D12_GPU_VIRTUAL_ADDRESS IndexBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS PositionBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS NormalBufferAddress;
+    D3D12_GPU_VIRTUAL_ADDRESS TangentBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS TexCoordBufferAddress;
-    int HasNormals;
-    int HasTexCoords;
+    uint32_t HasNormals;
+    uint32_t HasTangents;
+    uint32_t HasTexCoords;
     uint32_t MaterialLayerCount;
+    uint32_t IsOpaque;
     D3D12_GPU_VIRTUAL_ADDRESS MaterialBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS MaterialLayerIndexTableAddress;
     D3D12_GPU_DESCRIPTOR_HANDLE TexturesHeapAddress;
@@ -127,25 +134,29 @@ PTInstance::PTInstance(PTScene* pScene, const PTGeometryPtr& pGeometry,
         _layers.push_back(make_pair(dynamic_pointer_cast<PTMaterial>(layers[i].first),
             dynamic_pointer_cast<PTGeometry>(layers[i].second)));
 
-        _layers[i].first->materialType()->incrementRefCount(PTMaterialType::EntryPoint::kLayerMiss);
+        _layers[i].first->shader()->incrementRefCount(EntryPointTypes::kLayerMiss);
     }
 }
 
 PTInstance::~PTInstance()
 {
     if (_pMaterial)
-        _pMaterial->materialType()->decrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
+    {
+        _pMaterial->shader()->decrementRefCount(EntryPointTypes::kRadianceHit);
+        // The shadow anyhit is always attached.
+        _pMaterial->shader()->decrementRefCount(EntryPointTypes::kShadowAnyHit);
+    }
 
     for (size_t i = 0; i < _layers.size(); i++)
     {
-        _layers[i].first->materialType()->decrementRefCount(PTMaterialType::EntryPoint::kLayerMiss);
+        _layers[i].first->shader()->decrementRefCount(EntryPointTypes::kLayerMiss);
     }
 }
 
 void PTInstance::setMaterial(const IMaterialPtr& pMaterial)
 {
     if (_pMaterial)
-        _pMaterial->materialType()->decrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
+        _pMaterial->shader()->decrementRefCount(EntryPointTypes::kRadianceHit);
 
     // Cast the (optional) material to the renderer implementation. Use the default material if one
     // is / not specified.
@@ -153,7 +164,11 @@ void PTInstance::setMaterial(const IMaterialPtr& pMaterial)
         ? dynamic_pointer_cast<PTMaterial>(pMaterial)
         : dynamic_pointer_cast<PTMaterial>(_pScene->defaultMaterialResource()->resource());
 
-    _pMaterial->materialType()->incrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
+    _pMaterial->shader()->incrementRefCount(EntryPointTypes::kRadianceHit);
+    // The shadow anyhit is always attached. This is needed as the ordering is arbitrary for anyhit
+    // shader invocations, so we cannot mix shaders with and without anyhit shadow shaders in the
+    // same scene.
+    _pMaterial->shader()->incrementRefCount(EntryPointTypes::kShadowAnyHit);
 
     // Set the instance as dirty.
     _bIsDirty = true;
@@ -171,7 +186,7 @@ void PTInstance::setTransform(const mat4& transform)
 
 void PTInstance::setObjectIdentifier(int /*objectId*/)
 {
-    // TODO: implement object id setting for AuroraPT
+    // TODO: implement object id setting for Aurora
 }
 
 bool PTInstance::update()
@@ -213,6 +228,28 @@ PTScene::PTScene(
     _pGroundPlane = pRenderer->defaultGroundPlane();
 
     createDefaultResources();
+}
+
+ILightPtr PTScene::addLightPointer(const string& lightType)
+{
+    // Only distant lights are currently supported.
+    AU_ASSERT(lightType.compare(Names::LightTypes::kDistantLight) == 0,
+        "Only distant lights currently supported");
+
+    // The remaining operations are not yet thread safe.
+    std::lock_guard<std::mutex> lock(_mutex);
+
+    // Assign arbritary index to ensure deterministic ordering.
+    int index = _currentLightIndex++;
+
+    // Create the light object.
+    PTLightPtr pLight = make_shared<PTLight>(this, lightType, index);
+
+    // Add weak pointer to distant light map.
+    _distantLights[index] = pLight;
+
+    // Return the new light.
+    return pLight;
 }
 
 IInstancePtr PTScene::addInstancePointer(const Path& /* path*/, const IGeometryPtr& pGeom,
@@ -261,13 +298,24 @@ ID3D12Resource* PTScene::getHitGroupShaderTable(size_t& recordStride, uint32_t& 
     return _pHitGroupShaderTable.Get();
 }
 
+// Sort function, used to sort lights to ensure deterministic ordering.
+bool compareLights(PTLight* first, PTLight* second)
+{
+    return (first->index() < second->index());
+}
+
 void PTScene::update()
 {
     // Update base class.
     SceneBase::update();
 
+    // Delete the transfer buffers that were uploaded last frame.
+    _pRenderer->deleteUploadedTransferBuffers();
+
     // Update the environment.
-    if (_environments.active().modified())
+    // This is called if *any* active environment objects have changed, as that will almost always
+    // be the only active one.
+    if (_environments.changedThisFrame())
     {
         _pEnvironment = static_pointer_cast<PTEnvironment>(_pEnvironmentResource->resource());
         _pEnvironment->update();
@@ -277,26 +325,85 @@ void PTScene::update()
     // Update the ground plane.
     _pGroundPlane->update();
 
+    // See if any distant lights have been changed this frame, and build vector of active lights.
+    bool distantLightsUpdated = false;
+    vector<PTLight*> currLights;
+    for (auto iter = _distantLights.begin(); iter != _distantLights.end(); iter++)
+    {
+        // Get the light and ensure weak pointer still valid.
+        PTLightPtr pLight = iter->second.lock();
+        if (pLight)
+        {
+            // Add to currently active light vector.
+            currLights.push_back(pLight.get());
+
+            // If the dirty flag is set, GPU data must be updated.
+            if (pLight->isDirty())
+            {
+                distantLightsUpdated = true;
+                pLight->clearDirtyFlag();
+            }
+        }
+        else
+        {
+            // If the weak pointer is not valid remove it from the map, and ensure GPU data is
+            // updated (as a light has been removed.)
+            _distantLights.erase(iter->first);
+            distantLightsUpdated = true;
+        }
+    }
+
+    // If distant lights have changed update the LightData struct that is passed to the GPU.
+    if (distantLightsUpdated)
+    {
+        // Sort the lights by index, to ensure deterministic ordering.
+        sort(currLights.begin(), currLights.end(), compareLights);
+
+        // Set the distant light count to minimum of current light vector size and the max distant
+        // light limit.  Lights in the sorted array past LightLimits::kMaxDistantLights are ignored.
+        _lights.distantLightCount =
+            std::min(int(currLights.size()), int(LightLimits::kMaxDistantLights));
+
+        // Add to the light data buffer that is copied to the frame data for this frame.
+        for (int i = 0; i < _lights.distantLightCount; i++)
+        {
+            // Store the cosine of the radius for use in the shader.
+            _lights.distantLights[i].cosRadius =
+                cos(0.5f * currLights[i]->asFloat(Names::LightProperties::kAngularDiameter));
+
+            // Invert the direction for use in the shader.
+            _lights.distantLights[i].direction =
+                -currLights[i]->asFloat3(Names::LightProperties::kDirection);
+
+            // Store color in RGB and intensity in alpha.
+            _lights.distantLights[i].colorAndIntensity =
+                vec4(currLights[i]->asFloat3(Names::LightProperties::kColor),
+                    currLights[i]->asFloat(Names::LightProperties::kIntensity));
+        }
+    }
+
     // If any active geometry resources have been modified, flush the vertex buffer pool in case
     // there are any pending vertex buffers that are required to update the geometry, and then
-    // update the geometry (and update BLAS for "complete" geometry that has position data).
-    if (_geometry.changed())
+    // update the geometry.
+    if (_geometry.changedThisFrame())
     {
-        _pRenderer->flushVertexBufferPool();
-        for (PTGeometry& geom : _geometry.active().resources<PTGeometry>())
+        // Iterate through the modified geometry (which will include the newly active ones.)
+        for (PTGeometry& geom : _geometry.modified().resources<PTGeometry>())
         {
             geom.update();
-            if (!geom.isIncomplete())
-                geom.updateBLAS();
         }
+
+        // Flush the vertex buffer pool.
+        _pRenderer->flushVertexBufferPool();
     }
 
     // If any active material resources have been modified update them and build a list of unique
     // samplers for all the active materials.
-    if (_materials.changed())
+    if (_materials.changedThisFrame())
     {
         map<size_t, uint32_t> materialSamplerIndicesMap;
         _samplerLookup.clear();
+        // Iterate through the all the active materials, even ones that have not changed.
         for (PTMaterial& mtl : _materials.active().resources<PTMaterial>())
         {
             mtl.update();
@@ -311,8 +418,21 @@ void PTScene::update()
         clearDesciptorHeap();
     }
 
-    // If any active instances have been modified, update all the active instances.
-    if (_instances.changed())
+    // Upload any transfer buffers that have been updated this frame.
+    _pRenderer->uploadTransferBuffers();
+
+    // Update the geometry BLAS (after any transfer buffers have been uploaded.)
+    if (_geometry.changedThisFrame())
+    {
+        for (PTGeometry& geom : _geometry.modified().resources<PTGeometry>())
+        {
+            if (!geom.isIncomplete())
+                geom.updateBLAS();
+        }
+    }
+
+    // If any active instances have been modified or activated, update all the active instances.
+    if (_instances.changedThisFrame())
     {
         for (PTInstance& instance : _instances.active().resources<PTInstance>())
         {
@@ -321,7 +441,7 @@ void PTScene::update()
     }
 
     // Update the acceleration structure if any geometry or instances have been modified.
-    if (_instances.active().modified() || _geometry.active().modified())
+    if (_instances.changedThisFrame() || _geometry.changedThisFrame())
     {
 
         // Ensure the acceleration structure is no longer being accessed.
@@ -333,7 +453,7 @@ void PTScene::update()
     }
 
     // Update the scene resources: the acceleration structure, the descriptor heap, and the shader
-    // tables.  Will only doanything if the relevant pointers have been cleared.
+    // tables.  Will only do anything if the relevant pointers have been cleared.
     updateAccelerationStructure();
     updateDescriptorHeap();
     updateShaderTables();
@@ -599,23 +719,26 @@ void PTScene::updateShaderTables()
 
         size_t recordStride = HitGroupShaderRecord::stride();
 
-        // Create a buffer for the shader table, and map it for writing.
-        size_t shaderTableSize          = recordStride * instanceCount;
-        _pHitGroupShaderTable           = _pRenderer->createBuffer(shaderTableSize);
-        uint8_t* pShaderTableMappedData = nullptr;
-        checkHR(_pHitGroupShaderTable->Map(
-            0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+        // Create a transfer buffer for the shader table, and map it for writing.
+        size_t shaderTableSize = recordStride * instanceCount;
+        TransferBuffer hitGroupTransferBuffer =
+            _pRenderer->createTransferBuffer(shaderTableSize, "HitGroupShaderTable");
+        uint8_t* pShaderTableMappedData = hitGroupTransferBuffer.map();
+
+        // Retain the GPU buffer from the transfer buffer, the upload buffer will be deleted by the
+        // renderer once upload complete.
+        _pHitGroupShaderTable = hitGroupTransferBuffer.pGPUBuffer;
 
         // Iterate the instance data objects, creating a hit group shader record for each one, and
         // copying the shader record data to the shader table.
         for (int i = 0; i < _lstInstanceData.size(); i++)
         {
             const auto& instanceData = _lstInstanceData[i];
-            // Get the hit group shader ID from the material type, which will change if the shader
+            // Get the hit group shader ID from the material shader, which will change if the shader
             // library is rebuilt.
             PTMaterial& instanceMtl = activeMaterialResources[instanceData.mtlIndex];
             const DirectXShaderIdentifier hitGroupShaderID =
-                instanceMtl.materialType()->getShaderID();
+                _pShaderLibrary->getShaderID(instanceMtl.shader());
 
             // Lookup texture and sampler handle for instance.
             CD3DX12_GPU_DESCRIPTOR_HANDLE mtlTextureHandle =
@@ -638,7 +761,7 @@ void PTScene::updateShaderTables()
         }
 
         // Close the shader table buffer.
-        _pHitGroupShaderTable->Unmap(0, nullptr); // no HRESULT
+        hitGroupTransferBuffer.unmap();
     }
     // Create and populate the miss shader table if necessary.
     if (!_pMissShaderTable)
@@ -649,11 +772,15 @@ void PTScene::updateShaderTables()
         // Create a buffer for the shader table and write the shader identifiers for the miss
         // shaders.
         // NOTE: There are no arguments (and indeed no local root signatures) for these shaders.
-        size_t shaderTableSize          = _missShaderRecordStride * _missShaderRecordCount;
-        _pMissShaderTable               = _pRenderer->createBuffer(shaderTableSize);
-        uint8_t* pShaderTableMappedData = nullptr;
-        checkHR(
-            _pMissShaderTable->Map(0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+        size_t shaderTableSize = _missShaderRecordStride * _missShaderRecordCount;
+
+        // Create the transfer buffer.
+        TransferBuffer missShaderTableTransferBuffer =
+            _pRenderer->createTransferBuffer(shaderTableSize, "MissShaderTable");
+        _pMissShaderTable = missShaderTableTransferBuffer.pGPUBuffer;
+
+        // Map the shader table buffer.
+        uint8_t* pShaderTableMappedData      = missShaderTableTransferBuffer.map();
         uint8_t* pEndOfShaderTableMappedData = pShaderTableMappedData + shaderTableSize;
 
         // Get the shader identifiers from the shader library, which will change if the library is
@@ -663,12 +790,15 @@ void PTScene::updateShaderTables()
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE, kNullShaderID.data(), SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
-            _pShaderLibrary->getBackgroundMissShaderID(), SHADER_ID_SIZE);
+            _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kBackgroundMiss),
+            SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
         ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
-            _pShaderLibrary->getRadianceMissShaderID(), SHADER_ID_SIZE);
+            _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kRadianceMiss),
+            SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
-        ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE, _pShaderLibrary->getShadowMissShaderID(),
+        ::memcpy_s(pShaderTableMappedData, SHADER_ID_SIZE,
+            _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kShadowMiss),
             SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
 
@@ -680,8 +810,8 @@ void PTScene::updateShaderTables()
             auto& parentInstanceData = _lstInstanceData[layerData.index];
             PTMaterial& layerMtl     = activeMaterialResources[layerData.instanceData.mtlIndex];
 
-            // Get the material type
-            auto pMtlType = layerMtl.materialType();
+            // Get the material shader
+            auto pShader = layerMtl.shader();
 
             // Create the geometry by merging the layer geometry with parent instance's geometry.
             PTGeometry::GeometryBuffers geometryLayerBuffers =
@@ -733,8 +863,8 @@ void PTScene::updateShaderTables()
 
             // Create hit group (as layer miss shader has same layout as luminance closest hit
             // shader)
-            HitGroupShaderRecord layerRecord(pMtlType->getLayerShaderID(), geometryLayerBuffers,
-                layerMtl, nullptr, mtlTextureHandle, mtlSamplerHandle, 0);
+            HitGroupShaderRecord layerRecord(_pShaderLibrary->getLayerShaderID(pShader),
+                geometryLayerBuffers, layerMtl, nullptr, mtlTextureHandle, mtlSamplerHandle, 0);
             layerRecord.copyTo(pShaderTableMappedData);
             pShaderTableMappedData += _missShaderRecordStride;
         }
@@ -743,7 +873,7 @@ void PTScene::updateShaderTables()
         AU_ASSERT(pShaderTableMappedData == pEndOfShaderTableMappedData, "Shader table overrun");
 
         // Unmap the table.
-        _pMissShaderTable->Unmap(0, nullptr); // no HRESULT
+        missShaderTableTransferBuffer.unmap(); // no HRESULT
     }
 }
 

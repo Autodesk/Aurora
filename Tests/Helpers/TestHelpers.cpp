@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #endif
 
 #include <algorithm>
+#include <fstream>
 #include <sys/stat.h>
 
 // Compatibility macros for stat file access modes
@@ -43,6 +44,79 @@ uint32_t as_uint(const float x)
 float as_float(const uint32_t x)
 {
     return *(float*)&x;
+}
+
+std::string compareTextFile(
+    const std::string filename, const std::string cmpString, const std::string message)
+{
+    std::string errMsg = "";
+
+    std::stringstream cmpsstream(cmpString);
+    std::fstream infile;
+    infile.open(filename, std::ios::in);
+    if (infile.bad())
+    {
+        errMsg = "Failed to open baseline text file:" + filename;
+    }
+    if (errMsg.empty())
+    {
+        std::string inlinestr;
+        std::string cmplinestr;
+        bool atEof = false;
+        int lineNo = 0;
+        do
+        {
+            lineNo++;
+            std::getline(infile, inlinestr);
+            std::getline(cmpsstream, cmplinestr);
+            if (infile.eof() && cmpsstream.eof())
+                atEof = true;
+            else if (infile.bad() || cmpsstream.bad())
+                errMsg = "Error reading file " + filename;
+            else if (!infile.good() && cmpsstream.good())
+                errMsg = "Reached end of " + filename + " at line " + std::to_string(lineNo) +
+                    " before end of comparison string.";
+            else if (infile.good() && !cmpsstream.good())
+                errMsg = "Reached end of comparison string at line " + std::to_string(lineNo) +
+                    " before end of " + filename;
+            else
+            {
+                if (inlinestr.compare(cmplinestr) != 0)
+                {
+                    errMsg = "Line comparison failed for line " + std::to_string(lineNo) + " of " +
+                        filename + "\n" + inlinestr + "is not the same as\n" + cmplinestr;
+                }
+            }
+
+        } while (errMsg.empty() && !atEof);
+
+        infile.close();
+    }
+    if (!errMsg.empty())
+    {
+
+        if (getFlagEnvironmentVariable("UPDATE_BASELINE"))
+        {
+            std::cout << "UPDATE_BASELINE env. var. is set. generating new baseline textfile for "
+                      << filename << std::endl;
+
+            std::ofstream newfile;
+            newfile.open(filename, std::ios::out);
+            newfile << cmpString;
+            newfile.close();
+
+            return "";
+        }
+        else
+        {
+            errMsg = message + errMsg;
+            errMsg +=
+                "\nRun tests with the environment variable UPDATE_BASELINE set to update the "
+                "baseline.";
+        }
+    }
+
+    return errMsg;
 }
 
 float halfToFloat(const uint16_t x)
@@ -156,16 +230,6 @@ std::string combinePaths(const std::string& path0, const std::string& path1)
     // Just combine with / for now
     // TODO: Better platform-specific solution, handle edge cases
     return path0 + "/" + path1;
-}
-
-void sanitizeFileName(std::string& fileName)
-{
-    // Replace non-file chars with underscore
-    // TODO: More exhaustive set of chars
-    std::replace(fileName.begin(), fileName.end(), '/', '_');
-    std::replace(fileName.begin(), fileName.end(), '\\', '_');
-    std::replace(fileName.begin(), fileName.end(), '?', '_');
-    std::replace(fileName.begin(), fileName.end(), '*', '_');
 }
 
 bool createDirectory(const std::string& path)

@@ -20,14 +20,16 @@ using namespace pxr;
 
 BEGIN_AURORA
 
-HGIMaterial::HGIMaterial(HGIRenderer* pRenderer) : _pRenderer(pRenderer)
+HGIMaterial::HGIMaterial(
+    HGIRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef) :
+    MaterialBase(pShader, pDef), _pRenderer(pRenderer)
 {
     // Create buffer descriptor, passing material as initial data.
     HgiBufferDesc uboDesc;
     uboDesc.debugName = "Material UBO";
     uboDesc.usage     = HgiBufferUsageUniform | HgiBufferUsageRayTracingExtensions |
         HgiBufferUsageShaderDeviceAddress;
-    uboDesc.byteSize = sizeof(MaterialData);
+    uboDesc.byteSize = uniformBuffer().size();
 
     // Create UBO.
     _ubo =
@@ -37,13 +39,13 @@ HGIMaterial::HGIMaterial(HGIRenderer* pRenderer) : _pRenderer(pRenderer)
 void HGIMaterial::update()
 {
     // Build a structure from values map into staging buffer.
-    MaterialData* pStaging = getStagingAddress<MaterialData>(_ubo);
-    updateGPUStruct(*pStaging);
+    void* pStaging = _ubo->handle()->GetCPUStagingAddress();
+    ::memcpy_s(pStaging, uniformBuffer().size(), uniformBuffer().data(), uniformBuffer().size());
 
     // Transfer staging buffer to GPU.
     pxr::HgiBlitCmdsUniquePtr blitCmds = _pRenderer->hgi()->CreateBlitCmds();
     pxr::HgiBufferCpuToGpuOp blitOp;
-    blitOp.byteSize              = sizeof(MaterialData);
+    blitOp.byteSize              = uniformBuffer().size();
     blitOp.cpuSourceBuffer       = pStaging;
     blitOp.sourceByteOffset      = 0;
     blitOp.gpuDestinationBuffer  = _ubo->handle();

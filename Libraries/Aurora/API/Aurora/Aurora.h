@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -230,6 +230,55 @@ struct PropertyValue
         type = Type::Undefined;
         _string.clear();
         _strings.clear();
+    }
+
+    /// Compare property value for inequality, based on type.
+    bool operator!=(const PropertyValue& in) const { return !(*this == in); }
+
+    /// Compare property value for equality, based on type.
+    bool operator==(const PropertyValue& in) const
+    {
+        // If types don't match never equal.
+        if (type != in.type)
+            return false;
+
+        // Compare based on type value.
+        switch (type)
+        {
+        case Type::Bool:
+            return _bool == in._bool;
+        case Type::Int:
+            return _int == in._int;
+        case Type::Float:
+            return _float == in._float;
+        case Type::Float2:
+            return _float2 == in._float2;
+        case Type::Float3:
+            return _float3 == in._float3;
+        case Type::Float4:
+            return _float4 == in._float4;
+        case Type::Matrix4:
+            return _matrix4 == in._matrix4;
+        case Type::String:
+            return _string == in._string;
+        case Type::Strings:
+            // If string array lengths do not match, equality is false.
+            if (_strings.size() != in._strings.size())
+                return false;
+
+            // If any string does not match equality is false.
+            for (size_t i = 0; i < _strings.size(); i++)
+            {
+                if (_strings[i] != in._strings[i])
+                    return false;
+            }
+
+            // Return true if all strings match.
+            return true;
+        default:
+            // Invalid values are always non-equal.
+            return false;
+        }
     }
 
     union
@@ -746,6 +795,20 @@ protected:
 };
 MAKE_AURORA_PTR(IInstance);
 
+/// A class representing a light.  Which are added to the scene to provide direct illumination.
+class AURORA_API ILight
+{
+public:
+    /// Gets the lights's properties, which can be read and modified as needed.
+    ///
+    /// The properties are specific to the light type.
+    virtual IValues& values() = 0;
+
+protected:
+    virtual ~ILight() = default; // hidden destructor
+};
+MAKE_AURORA_PTR(ILight);
+
 /// The types of resources that can be associated with an Aurora scene (directly or indirectly).
 enum ResourceType
 {
@@ -756,6 +819,7 @@ enum ResourceType
     Sampler,
     GroundPlane,
     Image,
+    Light,
     Invalid
 };
 
@@ -893,33 +957,20 @@ public:
     /// result in undefined behavior. This may be updated internally in the future.
     virtual void setBounds(const float* min, const float* max) = 0;
 
-    /// Sets the properties of the global directional light.
-    ///
-    /// \param intensity The light intensity. Set this to zero to disable the light.
-    /// \param color The light color, which is multiplied by the intensity.
-    /// \param direction The light direction, away from the light / toward the scene.
-    /// \param angularDiameter The light angular diameter in radians. For example, the angular
-    /// diameter of the sun is about 0.017 radians.
-    virtual void setLight(
-        float intensity, const rgb& color, const vec3& direction, float angularDiameter = 0.1f) = 0;
-
-    /// Sets the properties of the global directional light.
-    ///
-    /// TODO: Remove. Replaced by GLM types.
-    /// \param intensity The light intensity. Set this to zero to disable the light.
-    /// \param color The light color, which is multiplied by the intensity.
-    /// \param direction The light direction, away from the light / toward the scene.
-    /// \param angularDiameter The light angular diameter in radians. For example, the angular
-    /// diameter of the sun is about 0.017 radians.
-    virtual void setLight(float intensity, const float* color, const float* direction,
-        float angularDiameter = 0.1f) = 0;
-
     /// Sets the ground plane for the scene.
     virtual void setGroundPlanePointer(const IGroundPlanePtr& pGroundPlane) = 0;
 
     virtual IInstancePtr addInstancePointer(const Path& path, const IGeometryPtr& geom,
         const IMaterialPtr& pMaterial, const mat4& pTransform,
         const LayerDefinitions& materialLayers = {}) = 0;
+
+    /// Add a new light to add illumination to the scene.
+    /// The light will be removed from the scene, when the shared pointer becomes unused.
+    ///
+    /// \param lightType Type of light (one of strings in
+    /// Aurora::Names::LightTypes).
+    /// \return A smart pointer to the new lights.
+    virtual ILightPtr addLightPointer(const string& lightType) = 0;
 
 protected:
     virtual ~IScene() = default; // hidden destructor

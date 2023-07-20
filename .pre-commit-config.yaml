@@ -1,0 +1,9 @@
+# clang-format pre-commit hook configuration file. 
+# Should be activated before commiting code to the Aurora repository, see Doc\CodingStandards.md for more details.
+repos:
+-   repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v16.0.6
+    hooks:
+    -   id: clang-format
+        exclude: Source/DirectX/DirectXHeaders/d3dx12.h
+    

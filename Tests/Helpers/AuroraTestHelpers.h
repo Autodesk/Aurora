@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,6 +58,9 @@ public:
 
     // Gets a pointer to normals for teapot test model
     static const float* uvs();
+
+    // Gets a pointer to tangents for teapot test model
+    static const float* tangents();
 
     // Gets the number of floats in teapot vertices
     static uint32_t verticesCount();
@@ -133,6 +136,8 @@ public:
 
     /// \brief Gets the default scene. (null if createDefaultScene not called)
     Aurora::IScenePtr defaultScene() { return _pDefaultScene; }
+
+    Aurora::ILightPtr defaultDistantLight() { return _pDefaultDistantLight; }
 
     /// \brief Gets the default renderer's render buffer width.
     size_t defaultRendererWidth() { return _defaultRendererWidth; }
@@ -258,6 +263,9 @@ private:
 
     // Default renderer object
     Aurora::IRendererPtr _pDefaultRenderer;
+
+    // Default distant light.
+    Aurora::ILightPtr _pDefaultDistantLight;
 
     // Default renderer's render buffer object
     Aurora::IRenderBufferPtr _pDefaultRenderBuffer;

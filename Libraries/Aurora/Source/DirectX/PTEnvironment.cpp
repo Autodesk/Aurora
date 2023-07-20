@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ bool PTEnvironment::update()
     // Update the constant buffer with environment data, creating the buffer if needed. The lambda
     // here translates values to the data object for the constant buffer (GPU).
     _pRenderer->updateBuffer<EnvironmentData>(
-        _pConstantBuffer, [this](EnvironmentData& data) { updateGPUStruct(data); });
+        _constantBuffer, [this](EnvironmentData& data) { updateGPUStruct(data); });
 
     _bIsDirty = false;
 

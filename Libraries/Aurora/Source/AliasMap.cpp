@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ void build(const float* pPixels, uvec2 dimensions, Entry* pOutputBuffer, size_t 
 
     // Ensure output buffer size is correct (is being put in GPU texture so must match exactly).
     AU_ASSERT(outputBufferSize == bufferSize,
-        "Expected ouput buffer of size %d bytes, instead is %d bytes", pixelCount * sizeof(Entry),
+        "Expected output buffer of size %d bytes, instead is %d bytes", pixelCount * sizeof(Entry),
         outputBufferSize);
 
     // A pair of luminance-related values, for a single pixel. Pixel luminance is used to determine

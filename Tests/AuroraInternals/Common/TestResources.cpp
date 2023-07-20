@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -268,57 +268,58 @@ TEST_F(ResourcesTest, TrackerTest)
     Aurora::ResourceMap resources;
     shared_ptr<FlubResource> pFlub0 = make_shared<FlubResource>("flub0", resources, tracker);
     shared_ptr<FlubResource> pFlub1 = make_shared<FlubResource>("flub1", resources, tracker);
-    ASSERT_FALSE(tracker.changed());
+    ASSERT_FALSE(tracker.changedThisFrame());
 
     tracker.update();
-    ResourceNotifier<Flub>& notifier = tracker.active();
-    ASSERT_EQ(notifier.count(), 0);
-    ASSERT_TRUE(notifier.modified());
+
+    ResourceNotifier<Flub>& activeNotifier = tracker.active();
+    ASSERT_EQ(activeNotifier.count(), 0);
+    ASSERT_FALSE(activeNotifier.changedThisFrame());
 
     pFlub0->setProperties({ { "uv", vec2(0.5, 0.5) } });
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_FALSE(tracker.changedThisFrame());
 
     // Activate resource now stuff has changed.
     pFlub0->incrementPermanentRefCount();
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_FALSE(tracker.changedThisFrame());
     tracker.update();
-    ASSERT_EQ(notifier.count(), 1);
-    ASSERT_TRUE(notifier.modified());
-    auto& activeRes = notifier.resources();
+    ASSERT_EQ(activeNotifier.count(), 1);
+    ASSERT_TRUE(activeNotifier.changedThisFrame());
+    auto& activeRes = activeNotifier.resources();
     ASSERT_EQ(activeRes[0].ptr(), pFlub0->resource().get());
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_TRUE(tracker.changedThisFrame());
 
     // Update again, active count remains at one, but no changes.
     tracker.update();
-    ASSERT_EQ(notifier.count(), 1);
-    ASSERT_TRUE(notifier.modified());
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_EQ(activeNotifier.count(), 1);
+    ASSERT_FALSE(activeNotifier.changedThisFrame());
+    ASSERT_FALSE(tracker.changedThisFrame());
 
-    // Modify active resource, changes reported.
     pFlub0->setProperties({ { "uv", vec2(0.75, 0.5) } });
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_FALSE(tracker.changedThisFrame());
 
     tracker.update();
-    ASSERT_EQ(notifier.count(), 1);
-    ASSERT_TRUE(notifier.modified());
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_EQ(activeNotifier.count(), 1);
+    ASSERT_FALSE(activeNotifier.changedThisFrame());
+    ASSERT_TRUE(tracker.changedThisFrame());
 
+    tracker.update();
     pFlub1->incrementPermanentRefCount();
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_FALSE(tracker.changedThisFrame());
 
     tracker.update();
-    ASSERT_EQ(notifier.count(), 2);
-    ASSERT_EQ(notifier.resources()[0].ptr(), pFlub0->resource().get());
-    ASSERT_EQ(notifier.resources()[1].ptr(), pFlub1->resource().get());
-    ASSERT_TRUE(notifier.modified());
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_EQ(activeNotifier.count(), 2);
+    ASSERT_EQ(activeNotifier.resources()[0].ptr(), pFlub0->resource().get());
+    ASSERT_EQ(activeNotifier.resources()[1].ptr(), pFlub1->resource().get());
+    ASSERT_TRUE(activeNotifier.changedThisFrame());
+    ASSERT_TRUE(tracker.changedThisFrame());
 
     pFlub0->decrementPermanentRefCount();
     pFlub1->decrementPermanentRefCount();
-    ASSERT_TRUE(tracker.changed());
+    ASSERT_TRUE(tracker.changedThisFrame());
     tracker.update();
-    ASSERT_TRUE(tracker.changed());
-    ASSERT_EQ(notifier.count(), 0);
+    ASSERT_TRUE(tracker.changedThisFrame());
+    ASSERT_EQ(activeNotifier.count(), 0);
 }
 
 size_t hashFlub(const Flub& flub)
@@ -355,6 +356,90 @@ TEST_F(ResourcesTest, HashLookupTest)
     lookup.clear();
     ASSERT_EQ(lookup.unique().size(), 0);
     ASSERT_EQ(lookup.count(), 0);
+}
+
+TEST_F(ResourcesTest, TrackerUpdateTest)
+{
+    // Create two active resources.
+    TypedResourceTracker<FlubResource, Flub> tracker;
+    Aurora::ResourceMap resources;
+    shared_ptr<FlubResource> pFlub0 = make_shared<FlubResource>("flub0", resources, tracker);
+    shared_ptr<FlubResource> pFlub1 = make_shared<FlubResource>("flub1", resources, tracker);
+    pFlub0->incrementPermanentRefCount();
+    pFlub1->incrementPermanentRefCount();
+
+    // Get the active and modified notifier from the tracker.
+    ResourceNotifier<Flub>& activeNotifier   = tracker.active();
+    ResourceNotifier<Flub>& modifiedNotifier = tracker.modified();
+
+    // Update has not been called so nothing is shown as changed yet.
+    ASSERT_FALSE(activeNotifier.changedThisFrame());
+    ASSERT_EQ(modifiedNotifier.count(), 0);
+    ASSERT_FALSE(tracker.changedThisFrame());
+
+    // Update the tracker
+    tracker.update();
+
+    // Active notifier has now changed, and two modified object this frame.
+    ASSERT_EQ(modifiedNotifier.count(), 2);
+    ASSERT_TRUE(activeNotifier.changedThisFrame());
+    ASSERT_TRUE(tracker.changedThisFrame());
+
+    // Update the tracker (with no changes at all)
+    tracker.update();
+
+    // Nothing has changed, even after update.
+    ASSERT_EQ(modifiedNotifier.count(), 0);
+    ASSERT_FALSE(activeNotifier.changedThisFrame());
+    ASSERT_FALSE(tracker.changedThisFrame());
+
+    // Change a property
+    pFlub0->setProperties({ { "uv", vec2(0, 1) } });
+
+    // Update the tracker
+    tracker.update();
+
+    // The modified list is non-empty.
+    ASSERT_EQ(modifiedNotifier.count(), 1);
+    ASSERT_TRUE(tracker.changedThisFrame());
+    // Active notifier not changed this frame as nothing activated or deactivated.
+    ASSERT_FALSE(activeNotifier.changedThisFrame());
+
+    // Update with no changes.
+    tracker.update();
+
+    // Nothing was changed after update.
+    ASSERT_EQ(modifiedNotifier.count(), 0);
+    ASSERT_FALSE(activeNotifier.changedThisFrame());
+    ASSERT_FALSE(tracker.changedThisFrame());
+
+    // Create and activate a new object.
+    shared_ptr<FlubResource> pFlub2 = make_shared<FlubResource>("flub2", resources, tracker);
+    pFlub2->incrementPermanentRefCount();
+
+    // Update the tracker
+    tracker.update();
+
+    // Update has now been called so modified list is non-empty (As an activate counts as
+    // modification).
+    ASSERT_EQ(modifiedNotifier.count(), 1);
+    ASSERT_TRUE(tracker.changedThisFrame());
+    // Active notifier has changed and now has three entries.
+    ASSERT_TRUE(activeNotifier.changedThisFrame());
+    ASSERT_EQ(activeNotifier.count(), 3);
+
+    // Delete an object.
+    pFlub2->decrementPermanentRefCount();
+
+    // Update the tracker
+    tracker.update();
+
+    // Modified list is empty as deactivations don't count as modifications.
+    ASSERT_EQ(modifiedNotifier.count(), 0);
+    ASSERT_TRUE(tracker.changedThisFrame());
+    // Active notifier has changed and now has twp entries.
+    ASSERT_TRUE(activeNotifier.changedThisFrame());
+    ASSERT_EQ(activeNotifier.count(), 2);
 }
 
 } // namespace

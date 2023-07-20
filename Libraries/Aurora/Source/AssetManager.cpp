@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@
 // TODO: Image loading will eventually be handled by clients.
 #pragma warning(push)
 // Disabe type conversion warnings intruduced from stb master.
-// refer to the commit in stb https://github.com/nothings/stb/commit/b15b04321dfd8a2307c49ad9c5bf3c0c6bcc04cc
+// refer to the commit in stb
+// https://github.com/nothings/stb/commit/b15b04321dfd8a2307c49ad9c5bf3c0c6bcc04cc
 #pragma warning(disable : 4244)
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>

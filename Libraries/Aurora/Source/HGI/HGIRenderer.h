@@ -100,6 +100,10 @@ private:
     HgiSamplerHandleWrapper::Pointer _sampler;
     HgiTextureHandleWrapper::Pointer _pDirectTex;
     HgiTextureHandleWrapper::Pointer _pAccumulationTex;
+
+    MaterialShaderLibrary _shaderLibrary;
+    shared_ptr<MaterialDefinition> _pDefaultMaterialDefinition;
+    shared_ptr<MaterialShader> _pDefaultMaterialShader;
 };
 
 MAKE_AURORA_PTR(HGIRenderer);

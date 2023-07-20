@@ -132,9 +132,17 @@ If you encounter unexpected issues with automatic linting and formatting tools, 
 ### clang-format
 
 We use [clang-format](https://clang.llvm.org/docs/ClangFormat.html) to automatically format code to be compliant with the standards.
-- Formatting rules are defined by the `.clang-format` file in the root of each repository.
+- Formatting rules are defined by the [.clang-format](/.clang-format) file in the repository root folder.
+- clang-format operates on several file formats including (but not limited to): C, C++, C#, CUDA, JavaScript, JSON, and Objective-C. It does not currently operate on shader code (e.g. HLSL or Slang), so these must be formatted manually.
+- Any lines of source code that should not be formatted by clang-format should be surrounded by `// clang-format off` and `// clang-format on` single-line comments.
 - To manually run clang-format on a file in Visual Studio, use _Edit | Advanced | Format Document_ (Ctrl-K+D).
-- You can also use the [Format All Files extension](https://marketplace.visualstudio.com/items?itemName=munyabe.FormatAllFiles) to format all the files in a project. Make sure to undo changes to files that should not be formatted with clang-format, e.g. HLSL files.
+- It is recommended to use the clang-format [pre-commit](https://pre-commit.com) hook, that is setup via the [YAML config file](/.pre-commit-config.yaml). Enable this with the following steps:
+  1. Open a command prompt in the source root folder.
+  2. Ensure the Python executable and `Scripts` folder is in your system path.
+  3. Install pre-commit with the command: `python -m pip install pre-commit`
+  4. Install the hooks with command: `pre-commit install`
+  5. All subsequent Git commits will invoke clang-format on the changed files. If any changes are made by this process, it means that one or more files have incorrect formatting and the commit will fail. The developer should ensure the newly modified files are added to the commit and attempt to commit again. 
+  6. If needed clang-format can be invoked on all the files in the repository with the command: `pre-commit run --all-files`
 
 ## C++ Features
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -170,6 +170,7 @@ private:
     Aurora::IRenderer::Backend _rendererType = Aurora::IRenderer::Backend::Default;
     Aurora::IRendererPtr _pRenderer;
     Aurora::IGroundPlanePtr _pGroundPlane;
+    Aurora::ILightPtr _pDistantLight;
     Aurora::IScenePtr _pScene;
     Aurora::IWindowPtr _pWindow;
     vector<string> _assetPaths;

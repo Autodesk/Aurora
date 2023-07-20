@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -84,26 +84,24 @@ HdAuroraDistantLight::HdAuroraDistantLight(
     SdfPath const& rprimId, HdAuroraRenderDelegate* renderDelegate) :
     HdLight(rprimId), _owner(renderDelegate)
 {
+    // Create a light with default properties.
     GfVec3f lightDirection     = { 0.1f, -1.0f, 0.1f };
     GfVec3f lightColor         = { 1.0f, 1.0f, 1.0f };
-    float lighIntensity        = 0.0f;
+    float lightIntensity       = 0.0f;
     float lightAngularDiameter = 0.1f;
-    _owner->GetScene()->setLight(
-        lighIntensity, lightColor.data(), lightDirection.data(), lightAngularDiameter);
+    _pDistantLight = _owner->GetScene()->addLightPointer(Aurora::Names::LightTypes::kDistantLight);
+    _pDistantLight->values().setFloat(Aurora::Names::LightProperties::kIntensity, lightIntensity);
+    _pDistantLight->values().setFloat(
+        Aurora::Names::LightProperties::kAngularDiameter, lightAngularDiameter);
+    _pDistantLight->values().setFloat3(Aurora::Names::LightProperties::kColor, lightColor.data());
+    _pDistantLight->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, lightDirection.data());
 }
 
 HdAuroraDistantLight::~HdAuroraDistantLight()
 {
     // Ensure sampler counter is reset.
     _owner->SetSampleRestartNeeded(true);
-
-    /// Reset the light intensity to zero.
-    GfVec3f lightDirection     = { 0.1f, -1.0f, 0.1f };
-    GfVec3f lightColor         = { 1.0f, 1.0f, 1.0f };
-    float lighIntensity        = 0.0f;
-    float lightAngularDiameter = 0.1f;
-    _owner->GetScene()->setLight(
-        lighIntensity, lightColor.data(), lightDirection.data(), lightAngularDiameter);
 }
 
 HdDirtyBits HdAuroraDistantLight::GetInitialDirtyBitsMask() const
@@ -147,11 +145,27 @@ void HdAuroraDistantLight::Sync(
     GfVec3f lightColor =
         (delegate->GetLightParamValue(id, HdLightTokens->color)).Get<pxr::GfVec3f>();
 
+    // Get the light angle from Hyrdra
+    float lightAngleDegrees = (delegate->GetLightParamValue(id, HdLightTokens->angle)).Get<float>();
+
     // Compute light direction from transform matrix.
     GfMatrix4f transformMatrix(delegate->GetTransform(id));
     GfVec3f lightDirection = { -transformMatrix[2][0], -transformMatrix[2][1],
         -transformMatrix[2][2] };
-    _owner->GetScene()->setLight(intensity, lightColor.data(), lightDirection.data());
+
+    // Set the light intensity in Aurora.
+    _pDistantLight->values().setFloat(Aurora::Names::LightProperties::kIntensity, intensity);
+
+    // Set the light color in Aurora.
+    _pDistantLight->values().setFloat3(Aurora::Names::LightProperties::kColor, lightColor.data());
+
+    // Set the light direction in Aurora.
+    _pDistantLight->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, lightDirection.data());
+
+    // Set the light angle (in radians) in Aurora.
+    _pDistantLight->values().setFloat(
+        Aurora::Names::LightProperties::kAngularDiameter, glm::radians(lightAngleDegrees));
 
     *dirtyBits = Clean;
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Prefix containing the common code used by all material types.
-// NOTE: Does not contain a hit shader. Hit shaders for the different material types must be
-// appended to this file.
 #include "PathTracingCommon.slang"
 
-// The background miss shader, which evaluates the environment as a background. This is
-// typically done from primary, transmission, and transparency rays.
-[shader("miss")] void BackgroundMissShader(inout RayPayload rayPayload)
+// The background miss shader, which evaluates the environment as a background. This is typically
+// done from primary, transmission, and transparency rays.
+[shader("miss")]
+void BackgroundMissShader(inout RayPayload rayPayload)
 {
     // Initialize the radiance ray payload for a miss.
     rayPayload.radianceRay.clear();
@@ -29,8 +27,7 @@
     float3 color            = evaluateEnvironment(environment, WorldRayDirection(), true);
 
     // Store the environment color.
-    // NOTE: The miss result is considered to be part of direct lighting, to allow for simpler logic
-    // during accumulation.
-    rayPayload.radianceRay.color  = color;
-    rayPayload.radianceRay.direct = color;
+    // NOTE: The miss result will not be denoised, so it is included in the "extra" shading.
+    rayPayload.radianceRay.color = color;
+    rayPayload.radianceRay.extra = color;
 }

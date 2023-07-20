@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -157,13 +157,8 @@ bool RendererBase::updateFrameDataGPUStruct(FrameData* pStaging)
     const Foundation::BoundingBox& bounds = _pScene->bounds();
     frameData.sceneSize                   = glm::length(bounds.max() - bounds.min());
 
-    // Get the light properties.
-    // NOTE: The light direction is inverted, as expected by the shaders. The light size is
-    // converted from a diameter in radians to the cosine of the radius.
-    frameData.lightDir                 = -_pScene->lightDirection();
-    frameData.lightColorAndIntensity   = make_vec4(_pScene->lightColor());
-    frameData.lightColorAndIntensity.w = _pScene->lightIntensity();
-    frameData.lightCosRadius           = cos(0.5f * _pScene->lightAngularDiameter());
+    // Copy the current light buffer for the scene to this frame's light data.
+    memcpy(&frameData.lights, &_pScene->lights(), sizeof(frameData.lights));
 
     int debugMode                    = _values.asInt(kLabelDebugMode);
     int traceDepth                   = _values.asInt(kLabelTraceDepth);

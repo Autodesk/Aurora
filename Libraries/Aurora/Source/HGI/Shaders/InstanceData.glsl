@@ -10,6 +10,7 @@
 layout(buffer_reference, std430, buffer_reference_align=4, scalar) buffer Indices     { uint i[]; };
 layout(buffer_reference, std430, buffer_reference_align=4, scalar) buffer Positions   { vec3 v[]; };
 layout(buffer_reference, std430, buffer_reference_align=4, scalar) buffer Normals     { vec3 n[]; };
+layout(buffer_reference, std430, buffer_reference_align=4, scalar) buffer Tangents    { vec3 tn[]; };
 layout(buffer_reference, std430, buffer_reference_align=4, scalar) buffer TexCoords   { vec2 t[]; };
 
 // Buffer type for material.
@@ -25,6 +26,7 @@ layout(shaderRecordEXT, std430) buffer InstanceShaderRecord
     Indices indices;
     Positions positions;
     Normals normals;
+    Tangents tangents;
     TexCoords texcoords;
 
     // Material data.
@@ -38,6 +40,7 @@ layout(shaderRecordEXT, std430) buffer InstanceShaderRecord
 
     // Geometry flags.
     uint hasNormals;
+    uint hasTangents;
     uint hasTexCoords;
 } instance;
 
@@ -62,18 +65,28 @@ vec3 getNormalForVertex_0(int vertexIndex) {
 }
 
 // Implementation for forward declared geometry accessor function in PathTracingCommon.slang.
+vec3 getTangentForVertex_0(int vertexIndex) {
+    return instance.tangents.tn[vertexIndex];
+}
+
+// Implementation for forward declared geometry accessor function in PathTracingCommon.slang.
 vec2 getTexCoordForVertex_0(int vertexIndex) {
     return instance.texcoords.t[vertexIndex];
 }
 
 // Implementation for forward declared geometry accessor function in PathTracingCommon.slang.
 bool instanceHasNormals_0() {
-    return true;//instance.hasNormals;
+    return instance.hasNormals!=0;
+}
+
+// Implementation for forward declared geometry accessor function in PathTracingCommon.slang.
+bool instanceHasTangents_0() {
+    return instance.hasTangents!=0;
 }
 
 // Implementation for forward declared geometry accessor function in PathTracingCommon.slang.
 bool instanceHasTexCoords_0() {
-    return true;//instance.hasTexCoords;
+    return instance.hasTexCoords!=0;
 }
 
 // Implementation for forward declared material accessor function in Material.hlsli.
@@ -89,6 +102,12 @@ vec4 sampleBaseColorTexture_0(vec2 uv, float level) {
 // Implementation for forward declared texture sample function in Material.hlsli.
 vec4 sampleSpecularRoughnessTexture_0(vec2 uv, float level) {
     return texture(textureSamplers[nonuniformEXT(instance.specularRoughnessTextureIndex)], uv);
+}
+
+// Implementation for forward declared texture sample function in Material.hlsli.
+vec4 sampleEmissionColorTexture_0(vec2 uv, float level) {
+    // TODO: Implement emission color in HGI backend.
+    return vec4(0,0,0,0);
 }
 
 // Implementation for forward declared texture sample function in Material.hlsli.

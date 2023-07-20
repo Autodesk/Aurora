@@ -34,7 +34,7 @@ add_executable(${PROJECT_NAME}
 source_group("Helpers" FILES ${HELPER_FILES})
 source_group("Tests" FILES ${TEST_FILES})
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	FOLDER "Tests"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
@@ -83,6 +83,7 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER "Tests")
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${DEFAULT_COMPILE_DEFINITIONS})
 
 if(WIN32)
+    add_dependencies(CopyOpenImageIODLLs MakeRuntimeDir)
     add_dependencies(${PROJECT_NAME} CopyOpenImageIODLLs)
 endif()
 

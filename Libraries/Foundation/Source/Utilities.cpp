@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,42 @@
 #include <stdio.h>
 #endif
 
+#include <fstream>
+
 namespace Aurora
 {
 namespace Foundation
 {
+
+void sanitizeFileName(std::string& fileName)
+{
+    // Replace non-file chars with underscore
+    // TODO: More exhaustive set of chars
+    std::replace(fileName.begin(), fileName.end(), '/', '_');
+    std::replace(fileName.begin(), fileName.end(), '\\', '_');
+    std::replace(fileName.begin(), fileName.end(), '?', '_');
+    std::replace(fileName.begin(), fileName.end(), '*', '_');
+}
+
+bool writeStringToFile(
+    const std::string& str, const std::string& filename, const std::string& folder)
+{
+    // If the folder is empty, use the module path.
+    std::string pathFolder = folder.empty() ? getModulePath() : folder;
+
+    // Create path from folder+filename (assume slash at end of folder.)
+    std::string path = pathFolder + filename;
+
+    // Write string to output stream.
+    std::ofstream outputFile;
+    outputFile.open(path);
+    outputFile << str;
+    if (!outputFile.good())
+        return false;
+    outputFile.close();
+
+    return true;
+}
 
 void hashCombine(size_t& seed, size_t otherHash)
 {

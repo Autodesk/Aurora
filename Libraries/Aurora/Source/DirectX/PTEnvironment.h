@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 #pragma once
 
 #include "EnvironmentBase.h"
+#include "MemoryPool.h"
 
 BEGIN_AURORA
 
@@ -36,7 +37,7 @@ public:
         // Light texture and background texture.
         return 2;
     }
-    ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
+    ID3D12Resource* buffer() const { return _constantBuffer.pGPUBuffer.Get(); }
     ID3D12Resource* aliasMap() const;
     bool update();
     void createDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT increment) const;
@@ -47,7 +48,7 @@ private:
     /*** Private Variables ***/
 
     PTRenderer* _pRenderer = nullptr;
-    ID3D12ResourcePtr _pConstantBuffer;
+    TransferBuffer _constantBuffer;
 };
 MAKE_AURORA_PTR(PTEnvironment);
 

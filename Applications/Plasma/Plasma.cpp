@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ Plasma::Plasma(HINSTANCE hInstance, unsigned int width, unsigned int height)
         ::SetWindowTextW(_hwnd, Foundation::s2w(report.str()).c_str());
     });
 }
-#else //! INTERACTIVE_PLASMA
+#else  //! INTERACTIVE_PLASMA
 // Application constructor.
 Plasma::Plasma(unsigned int width, unsigned int height)
 {
@@ -554,6 +554,8 @@ bool Plasma::initialize()
         _camera.fit(_sceneContents.bounds, kDefaultDirection);
     }
 
+    _pDistantLight = _pScene->addLightPointer(Aurora::Names::LightTypes::kDistantLight);
+
     // Get the environment map file path from the env argument.
     if (arguments.count("env"))
     {
@@ -753,7 +755,11 @@ void Plasma::updateLighting()
             { Aurora::Names::EnvironmentProperties::kBackgroundTransform, transform } });
 
     // Update the directional light.
-    _pScene->setLight(lightIntensity, value_ptr(lightColor), value_ptr(_lightDirection));
+    _pDistantLight->values().setFloat(Aurora::Names::LightProperties::kIntensity, lightIntensity);
+    _pDistantLight->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(lightColor));
+    _pDistantLight->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(_lightDirection));
 }
 
 void Plasma::updateGroundPlane()
@@ -1647,7 +1653,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance
 
     return result ? 0 : -1;
 }
-#else //! INTERACTIVE_PLASMA
+#else  //! INTERACTIVE_PLASMA
 int main(int argc, char* argv[])
 {
     // Create an application object on the stack, and run it. The run() function returns when

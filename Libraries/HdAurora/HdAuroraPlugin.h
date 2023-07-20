@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,6 @@ public:
     bool IsSupported() const override;
 
 private:
-    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&) = delete;
+    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&)            = delete;
     HdAuroraRendererPlugin& operator=(const HdAuroraRendererPlugin&) = delete;
 };

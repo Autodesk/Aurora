@@ -80,6 +80,11 @@ set(COMMON_SOURCE
     "Source/GeometryBase.h"
     "Source/MaterialBase.cpp"
     "Source/MaterialBase.h"
+    "Source/MaterialBase.cpp"
+    "Source/MaterialDefinition.h"
+    "Source/MaterialDefinition.cpp"
+    "Source/MaterialShader.h"
+    "Source/MaterialShader.cpp"
     "Source/pch.h"
     "Source/Properties.h"
     "Source/RendererBase.cpp"
@@ -91,6 +96,8 @@ set(COMMON_SOURCE
     "Source/ResourceStub.h"
     "Source/SceneBase.cpp"
     "Source/SceneBase.h"
+    "Source/UniformBuffer.cpp"
+    "Source/UniformBuffer.h"
     "Source/Transpiler.h"
     "Source/Transpiler.cpp"
     "Source/WindowsHeaders.h"
@@ -102,6 +109,7 @@ file(MAKE_DIRECTORY "${COMPILED_SHADERS_DIR}")
 
 # The slang shaders that are shared by DX and HGI backends.
 set(COMMON_SHADERS
+    "Source/Shaders/BackgroundMissShader.slang"
     "Source/Shaders/BSDF.slang"
     "Source/Shaders/BSDFCommon.slang"
     "Source/Shaders/Colors.slang"
@@ -111,13 +119,11 @@ set(COMMON_SHADERS
     "Source/Shaders/Globals.slang"
     "Source/Shaders/GLSLToHLSL.slang"
     "Source/Shaders/GroundPlane.slang"
-    "Source/Shaders/ClosestHitEntryPointTemplate.slang"
-    "Source/Shaders/ShadowHitEntryPointTemplate.slang"
-    "Source/Shaders/LayerShaderEntryPointTemplate.slang"
+    "Source/Shaders/InitializeDefaultMaterialType.slang"
+    "Source/Shaders/MainEntryPoints.slang"
     "Source/Shaders/Material.slang"
     "Source/Shaders/MaterialXCommon.slang"
     "Source/Shaders/PathTracingCommon.slang"
-    "Source/Shaders/BackgroundMissShader.slang"
     "Source/Shaders/ShadowMissShader.slang"
     "Source/Shaders/RadianceMissShader.slang"
     "Source/Shaders/RayGenShader.slang"
@@ -126,9 +132,16 @@ set(COMMON_SHADERS
     "Source/Shaders/RayTrace.slang"
     "Source/Shaders/ReferenceBSDF.slang"
     "Source/Shaders/StandardSurfaceBSDF.slang"
-    "Source/Shaders/InitializeDefaultMaterialType.slang"
     "Source/Shaders/Sampling.slang"
 )
+
+#  On windows, the version resource and header files that add the version information to the DLL.
+if(WIN32)
+set(VERSION_FILES
+    ${VERSION_FOLDER}/AuroraVersion.h
+    Aurora.rc
+)
+endif()
 
 # Set MINIFIED_SHADERS_HEADER to filename of auto-generated header file containing minified Slang shader strings.
 set(MINIFIED_COMMON_SHADERS_HEADER "${COMPILED_SHADERS_DIR}/CommonShaders.h")
@@ -155,6 +168,7 @@ if(ENABLE_DIRECTX_BACKEND)
 
     # DirectX backend source.
     set(DIRECTX_SOURCE
+        "Source/DirectX/MemoryPool.cpp"
         "Source/DirectX/MemoryPool.h"
         "Source/DirectX/PTDevice.cpp"
         "Source/DirectX/PTDevice.h"
@@ -166,6 +180,8 @@ if(ENABLE_DIRECTX_BACKEND)
         "Source/DirectX/PTGroundPlane.h"
         "Source/DirectX/PTImage.cpp"
         "Source/DirectX/PTImage.h"
+        "Source/DirectX/PTLight.cpp"
+        "Source/DirectX/PTLight.h"
         "Source/DirectX/PTMaterial.cpp"
         "Source/DirectX/PTMaterial.h"
         "Source/DirectX/PTRenderer.cpp"
@@ -202,6 +218,8 @@ if(ENABLE_HGI_BACKEND)
         "Source/HGI/HGIGeometry.h"
         "Source/HGI/HGIHandleWrapper.cpp"
         "Source/HGI/HGIHandleWrapper.h"
+        "Source/HGI/HGILight.cpp"
+        "Source/HGI/HGILight.h"
         "Source/HGI/HGIRenderBuffer.cpp"
         "Source/HGI/HGIRenderBuffer.h"
         "Source/HGI/HGIRenderer.cpp"
@@ -235,6 +253,7 @@ add_library(${PROJECT_NAME} SHARED
     ${HGI_SOURCE}
     ${HGI_SHADERS}
     ${MINIFIED_HGI_SHADERS_HEADER}
+    ${VERSION_FILES}
 )
 
 # Add to libraries folder
@@ -316,6 +335,7 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${MATERIALX_STDLIB_DIR} ${RUNTIME_OUTPUT_DIR}/MaterialX/libraries
         )
         set_property(TARGET CopyMaterialXLibrary PROPERTY FOLDER "Deployment")
+        add_dependencies(CopyMaterialXLibrary MakeRuntimeDir)
         add_dependencies(${PROJECT_NAME} CopyMaterialXLibrary)
     endif()
 
@@ -343,13 +363,15 @@ else() # Linux
     #TODO anything we need to set to support the Aurora execution?
 endif()
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	FOLDER "Libraries"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
-    PDB_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
+    PDB_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"    
+    # Follow the USD convention of lower-case initial on libraries.
+    OUTPUT_NAME "aurora"
 )
 
 if(ENABLE_MATERIALX)
@@ -369,16 +391,16 @@ if(ENABLE_HGI_BACKEND)
 endif()
 
 if(ENABLE_DIRECTX_BACKEND)
-    set(D2D12_TARGETS D3D12::D3D12 D3D12::compiler)
+    set(D3D12_TARGETS D3D12::D3D12 D3D12::compiler)
 else()
-    set(D2D12_TARGETS "")
+    set(D3D12_TARGETS "")
 endif()
 
 target_link_libraries(${PROJECT_NAME}
 PRIVATE
     Foundation
     ${MATERIALX_TARGETS} # MaterialX needs to be in front of USD due to the conflicts of MaterialX.h in USD
-    ${D2D12_TARGETS}
+    ${D3D12_TARGETS}
     ${USD_TARGETS}
     ${DENOISER_TARGETS}
     stb::stb
@@ -392,6 +414,7 @@ PUBLIC
 PRIVATE
     "Source"                  # Source folder for PCH
     "${PROJECT_BINARY_DIR}"
+    ${VERSION_FOLDER}
 )
 
 # Set the default compile definitions.

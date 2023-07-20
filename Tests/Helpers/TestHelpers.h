@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -141,6 +141,13 @@ typedef union
     } parts;
 } DecompFloat16;
 
+/// Compare string with baseline text file on disk.
+/// Returns an error message or empty string if comparison passed.
+/// message argument is concatenated with returned error string if test fails.
+/// With regenerate text file if UPDATE_BASELINE env. var. is set.
+std::string compareTextFile(
+    const std::string filename, const std::string cmpString, const std::string message = "");
+
 /// \brief Convert 16-bit half float to 32-bit full float
 float halfToFloat(const uint16_t x);
 
@@ -152,9 +159,6 @@ float createFloat32(uint32_t mantisa, uint32_t exponent, uint32_t sign);
 
 /// \brief Create half from integer mantisa, exponent, and sign components
 uint16_t createFloat16(uint16_t mantisa, uint16_t exponent, uint16_t sign);
-
-/// \brief Sanitize file name, by replacing any non-file name chars with underscore
-void sanitizeFileName(std::string& fileName);
 
 /// \brief Get the named environment variable.
 //  \return The contents of the variable, or empty string if none.

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ void PTGroundPlane::update()
 
     // Update the constant buffer with ground plane data, creating the buffer if needed. The lambda
     // here translates values to the data object for the constant buffer (GPU).
-    _pRenderer->updateBuffer<GroundPlaneData>(_pConstantBuffer, [this](GroundPlaneData& data) {
+    _pRenderer->updateBuffer<GroundPlaneData>(_constantBuffer, [this](GroundPlaneData& data) {
         data.enabled             = _values.asBoolean("enabled") ? 1 : 0;
         data.position            = _values.asFloat3("position");
         data.normal              = _values.asFloat3("normal");

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include "MemoryPool.h"
 #include "Properties.h"
 
 BEGIN_AURORA
@@ -34,7 +35,7 @@ public:
 
     /*** Functions ***/
 
-    ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
+    ID3D12Resource* buffer() const { return _constantBuffer.pGPUBuffer.Get(); }
     void update();
 
 private:
@@ -59,7 +60,7 @@ private:
     /*** Private Variables ***/
 
     PTRenderer* _pRenderer;
-    ID3D12ResourcePtr _pConstantBuffer;
+    TransferBuffer _constantBuffer;
 };
 MAKE_AURORA_PTR(PTGroundPlane);
 

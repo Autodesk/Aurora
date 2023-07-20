@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,10 @@ BEGIN_AURORA
 // Convenience macro to compare reflection data from shader to CPU offset
 // NOTE: Can only be used inside PTMaterial::validateOffsets().
 #define VALIDATE_OFFSET(_member)                                                                   \
-    if (structDescriptions[#_member].Offset != offsetof(MaterialData, _member))                    \
+    if (structDescriptions[#_member].Offset != uniformBuffer.getOffsetForVariable(#_member))       \
     {                                                                                              \
         AU_ERROR("%s offset mismatch: %d!=%d\n", #_member, structDescriptions[#_member].Offset,    \
-            offsetof(MaterialData, _member));                                                      \
+            uniformBuffer.getOffsetForVariable(#_member));                                         \
         isValid = false;                                                                           \
     }
 
@@ -90,6 +90,8 @@ bool PTMaterial::validateOffsets(const PTShaderLibrary& pShaderLibrary)
         structDescriptions[pVarName] = varDesc;
     }
 
+    UniformBuffer uniformBuffer(StandardSurfaceUniforms, StandardSurfaceDefaults.properties);
+    // AU_INFO("%s", uniformBuffer.generateHLSLStruct().c_str());
     // Validate each offset; isValid flag will get set to false if invalid.
     bool isValid = true;
     VALIDATE_OFFSET(base);
@@ -123,27 +125,33 @@ bool PTMaterial::validateOffsets(const PTShaderLibrary& pShaderLibrary)
     VALIDATE_OFFSET(opacity);
     VALIDATE_OFFSET(thinWalled);
     VALIDATE_OFFSET(hasBaseColorTex);
-    VALIDATE_OFFSET(baseColorTexTransform);
+    VALIDATE_OFFSET(baseColorTexRotation);
     VALIDATE_OFFSET(hasSpecularRoughnessTex);
-    VALIDATE_OFFSET(specularRoughnessTexTransform);
+    VALIDATE_OFFSET(specularRoughnessTexOffset);
+    VALIDATE_OFFSET(hasEmissionColorTex);
+    VALIDATE_OFFSET(emissionColorTexOffset);
+    VALIDATE_OFFSET(emissionColorTexScale);
+    VALIDATE_OFFSET(emissionColorTexPivot);
+    VALIDATE_OFFSET(emissionColorTexRotation);
     VALIDATE_OFFSET(hasOpacityTex);
-    VALIDATE_OFFSET(opacityTexTransform);
+    VALIDATE_OFFSET(opacityTexPivot);
     VALIDATE_OFFSET(hasNormalTex);
-    VALIDATE_OFFSET(normalTexTransform);
-    VALIDATE_OFFSET(isOpaque);
+    VALIDATE_OFFSET(normalTexScale);
+    VALIDATE_OFFSET(normalTexRotation);
 
     // Validate structure size
-    if (sizeof(MaterialData) != cbDesc.Size)
+    if (cbDesc.Size != uniformBuffer.size())
     {
-        AU_ERROR("%s struct sizes differ: %d!=%d", cbDesc.Name, sizeof(MaterialData), cbDesc.Size);
+        AU_ERROR("%s struct sizes differ: %d!=%d", cbDesc.Name, cbDesc.Size, uniformBuffer.size());
         isValid = false;
     }
 
     return isValid;
 }
 
-PTMaterial::PTMaterial(PTRenderer* pRenderer, shared_ptr<PTMaterialType> pType) :
-    _pRenderer(pRenderer), _pType(pType)
+PTMaterial::PTMaterial(
+    PTRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef) :
+    MaterialBase(pShader, pDef), _pRenderer(pRenderer)
 {
 }
 
@@ -155,11 +163,20 @@ bool PTMaterial::update()
         return false;
     }
 
-    // Update the constant buffer with material data, creating the buffer if needed. The lambda here
-    // translates values to the data object for the constant buffer (GPU).
-    // NOTE: The order here matches the order of the MaterialData structure.
-    _pRenderer->updateBuffer<MaterialData>(
-        _pConstantBuffer, [this](MaterialData& data) { updateGPUStruct(data); });
+    // Run the type-specific update function on this material.
+    definition()->updateFunction()(*this);
+
+    // Create a transfer buffer for the material data if it doesn't already exist.
+    if (!_constantBuffer.size)
+    {
+        _constantBuffer = _pRenderer->createTransferBuffer(
+            uniformBuffer().size(), std::to_string(uint64_t(this)) + "MaterialBuffer");
+    }
+
+    // Copy the data to the transfer buffer.
+    void* pMappedData = _constantBuffer.map(uniformBuffer().size());
+    ::memcpy_s(pMappedData, uniformBuffer().size(), uniformBuffer().data(), uniformBuffer().size());
+    _constantBuffer.unmap();
 
     _bIsDirty = false;
 
@@ -211,29 +228,26 @@ void PTMaterial::createDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT i
     // Create a SRV (descriptor) on the descriptor heap for the base color image, if any.
     PTImagePtr pImage = dynamic_pointer_cast<PTImage>(_values.asImage("base_color_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the base color image SRV.
     handle.Offset(increment);
 
     // Create a SRV (descriptor) on the descriptor heap for the specular roughness image, if any.
     pImage = dynamic_pointer_cast<PTImage>(_values.asImage("specular_roughness_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the specular roughness image SRV.
     handle.Offset(increment);
 
     // Create a SRV (descriptor) on the descriptor heap for the normal image, if any.
     pImage = dynamic_pointer_cast<PTImage>(_values.asImage("normal_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the normal image SRV.
     handle.Offset(increment);
 
-    // Create a SRV (descriptor) on the descriptor heap for the normal image, if any.
+    // Create a SRV (descriptor) on the descriptor heap for the emission color image, if any.
+    pImage = dynamic_pointer_cast<PTImage>(_values.asImage("emission_color_image"));
+    PTImage::createSRV(*_pRenderer, pImage.get(), handle);
+    handle.Offset(increment);
+
+    // Create a SRV (descriptor) on the descriptor heap for the opacity image, if any.
     pImage = dynamic_pointer_cast<PTImage>(_values.asImage("opacity_image"));
     PTImage::createSRV(*_pRenderer, pImage.get(), handle);
-
-    // Increment the heap location pointed to by the handle past the opacity image SRV.
     handle.Offset(increment);
 }
 

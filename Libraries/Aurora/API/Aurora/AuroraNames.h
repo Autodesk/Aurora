@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,12 +91,12 @@ struct VertexAttributes
 {
     static AURORA_API const std::string kPosition;
     static AURORA_API const std::string kNormal;
+    static AURORA_API const std::string kTangent;
     static AURORA_API const std::string kTexCoord0;
     static AURORA_API const std::string kTexCoord1;
     static AURORA_API const std::string kTexCoord2;
     static AURORA_API const std::string kTexCoord3;
     static AURORA_API const std::string kTexCoord4;
-    static AURORA_API const std::string kTangent;
     static AURORA_API const std::string kIndices;
 };
 
@@ -116,6 +116,30 @@ struct MaterialTypes
     /// MaterialX path material type.
     /// Document argument must be path to a MaterialX XML file.
     static AURORA_API const std::string kMaterialXPath;
+};
+
+/// Types of light.
+struct LightTypes
+{
+    /// Distant (aka directional) light
+    static AURORA_API const std::string kDistantLight;
+};
+
+/// Light properties (only some will be valid properties for a given light type.)
+struct LightProperties
+{
+    /// Light direction (only valid for LightTypes::kDistantLight.)
+    static AURORA_API const std::string kDirection;
+    /// The angular diameter of the light in radians (only valid for LightTypes::kDistantLight.)
+    static AURORA_API const std::string kAngularDiameter;
+    /// Light exposure (defines the power of the light with kIntensity.)
+    /// TODO: Implement a more physically accurate photometric model with correct units.
+    static AURORA_API const std::string kExposure;
+    /// Light intensity (defines the power of the light with kExposure.)
+    /// TODO: Implement a more physically accurate photometric model with correct units.
+    static AURORA_API const std::string kIntensity;
+    /// Light color as RGB.
+    static AURORA_API const std::string kColor;
 };
 
 } // namespace Names

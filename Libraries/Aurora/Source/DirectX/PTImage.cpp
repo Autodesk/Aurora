@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,14 +39,20 @@ PTImage::PTImage(PTRenderer* pRenderer, const IImage::InitData& initData)
     // sampling of that environment image.
     if (initData.isEnvironment)
     {
-        // Create a GPU buffer containing the alias map data.
-        size_t bufferSize            = _dimensions.x * _dimensions.y * sizeof(AliasMap::Entry);
-        _pAliasMapBuffer             = _pRenderer->createBuffer(bufferSize);
-        AliasMap::Entry* pMappedData = nullptr;
-        checkHR(_pAliasMapBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData)));
+        // Create a transfer buffer for the alias map data.
+        size_t bufferSize = _dimensions.x * _dimensions.y * sizeof(AliasMap::Entry);
+        TransferBuffer transferBuffer =
+            _pRenderer->createTransferBuffer(bufferSize, _name + "AliasMap");
+
+        // Build the alias map directly in the mapped buffer.
+        AliasMap::Entry* pMappedData = reinterpret_cast<AliasMap::Entry*>(transferBuffer.map());
         AliasMap::build(static_cast<const float*>(initData.pImageData), _dimensions, pMappedData,
             bufferSize, _luminanceIntegral);
-        _pAliasMapBuffer->Unmap(0, nullptr); // no HRESULT
+        transferBuffer.unmap();
+
+        // Retain the GPU buffer pointer from the transfer buffer (upload buffer will be deleted
+        // after upload complete.)
+        _pAliasMapBuffer = transferBuffer.pGPUBuffer;
     }
 }
 

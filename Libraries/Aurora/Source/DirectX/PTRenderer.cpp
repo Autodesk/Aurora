@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,10 @@
 #include "PTGeometry.h"
 #include "PTGroundPlane.h"
 #include "PTImage.h"
+#include "PTLight.h"
 #include "PTMaterial.h"
 #include "PTScene.h"
 #include "PTShaderLibrary.h"
-#include "PTTarget.h"
 
 #if ENABLE_MATERIALX
 #include "MaterialX/MaterialGenerator.h"
@@ -78,17 +78,14 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
     // TODO: Should be per-scene not per-renderer.
     _pShaderLibrary = make_unique<PTShaderLibrary>(_pDXDevice);
 
-    // Enable layer shaders on all platforms except AMD GPUs.
-    // TODO: There is a driver bug that causes a failure on AMD, when attempting to trace a ray with
-    // a null acceleration structure. This capability is needed for material layers. Once this
-    // driver bug is fixed, this can either be removed, or check for a specific driver version.
-    _pShaderLibrary->setOption("ENABLE_LAYERS", _pDevice->vendor() != PTDevice::Vendor::kAMD);
+    // Enable layer shaders.
+    _pShaderLibrary->setOption("ENABLE_LAYERS", true);
 
 #if ENABLE_MATERIALX
     // Get the materialX folder relative to the module path.
     string mtlxFolder = Foundation::getModulePath() + "MaterialX";
     // Initialize the MaterialX code generator.
-    _pMaterialXGenerator = make_unique<MaterialXCodeGen::MaterialGenerator>(this, mtlxFolder);
+    _pMaterialXGenerator = make_unique<MaterialXCodeGen::MaterialGenerator>(mtlxFolder);
 
     // Default to MaterialX distance unit to centimeters.
     _pShaderLibrary->setOption(
@@ -115,7 +112,7 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     });
     _pVertexBufferPool   = make_unique<VertexBufferPool>(
-        [&](size_t size) { return createBuffer(size, "Vertex Buffer Pool"); });
+        [&](size_t size) { return createTransferBuffer(size, "VertexBufferPool"); });
 }
 
 PTRenderer::~PTRenderer()
@@ -172,9 +169,9 @@ IMaterialPtr PTRenderer::createMaterialPointer(
     // This has no overhead, so just do it each time.
     _pAssetMgr->enableVerticalFlipOnImageLoad(_values.asBoolean(kLabelIsFlipImageYEnabled));
 
-    // The material type and default values for this material.
-    PTMaterialTypePtr pMtlType;
-    map<string, Value> defaultValues;
+    // The material shader and definition for this material.
+    MaterialShaderPtr pShader;
+    shared_ptr<MaterialDefinition> pDef;
 
     // Create a material type based on the material type name provided.
     if (materialType.compare(Names::MaterialTypes::kBuiltIn) == 0)
@@ -182,32 +179,33 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         // Work out built-in type.
         string builtInType = document;
 
-        // Get the built-in material type from the shader library.
-        pMtlType = _pShaderLibrary->getBuiltInMaterialType(builtInType);
+        // Get the built-in material type and definition for built-in.
+        pShader = _pShaderLibrary->getBuiltInShader(builtInType);
+        pDef    = _pShaderLibrary->getBuiltInMaterialDefinition(builtInType);
 
-        // Print error and provide null material type if built-in not found.
+        // Print error and provide null material shader if built-in not found.
         // TODO: Proper error handling for this case.
-        if (!pMtlType)
+        if (!pShader)
         {
             AU_ERROR("Unknown built-in material type %s for material %s", document.c_str(),
                 name.c_str());
-            pMtlType = nullptr;
+            pShader = nullptr;
         }
     }
     else if (materialType.compare(Names::MaterialTypes::kMaterialX) == 0)
     {
-        // Generate a material type from the materialX document.
-        pMtlType = generateMaterialX(document, &defaultValues);
+        // Generate a material shader and definition from the materialX document.
+        pShader = generateMaterialX(document, &pDef);
 
         // If flag is set dump the document to disk for development purposes.
         if (AU_DEV_DUMP_MATERIALX_DOCUMENTS)
         {
-            string mltxPath = Foundation::getModulePath() + name + "Dumped.mtlx";
-            AU_INFO("Dumping MTLX document to:%s", mltxPath.c_str());
-            ofstream outputFile;
-            outputFile.open(mltxPath);
-            outputFile << document;
-            outputFile.close();
+            string mltxPath = name + "Dumped.mtlx";
+            Foundation::sanitizeFileName(mltxPath);
+            if (Foundation::writeStringToFile(document, mltxPath))
+                AU_INFO("Dumping MTLX document to:%s", mltxPath.c_str());
+            else
+                AU_WARN("Failed to dump MTLX document to:%s", mltxPath.c_str());
         }
     }
     else if (materialType.compare(Names::MaterialTypes::kMaterialXPath) == 0)
@@ -221,66 +219,40 @@ IMaterialPtr PTRenderer::createMaterialPointer(
         {
             AU_ERROR("Failed to load MaterialX document %s for material %s", document.c_str(),
                 name.c_str());
-            pMtlType = nullptr;
+            pShader = nullptr;
         }
         else
         {
-            // If Material XML document loaded, use it to generate material type.
-            pMtlType = generateMaterialX(*pMtlxDocument, &defaultValues);
+            // If Material XML document loaded, use it to generate the material shader and
+            // definition.
+            pShader = generateMaterialX(*pMtlxDocument, &pDef);
         }
     }
     else
     {
-        // Print error and return null material type if material type not found.
+        // Print error and return null material shader if material type not found.
         // TODO: Proper error handling for this case.
-        AU_ERROR("Unrecognized material type %s for material %s, using Default built-in instead.",
-            materialType.c_str(), name.c_str());
-        pMtlType = nullptr;
+        AU_ERROR(
+            "Unrecognized material type %s for material %s.", materialType.c_str(), name.c_str());
+        pShader = nullptr;
     }
 
     // Error case, just return null material.
-    if (!pMtlType)
+    if (!pShader || !pDef)
         return nullptr;
 
-    // Create the material object with the material type.
-    auto pNewMtl = make_shared<PTMaterial>(this, pMtlType);
+    // Create the material object with the material shader and definition.
+    auto pNewMtl = make_shared<PTMaterial>(this, pShader, pDef);
 
-    // Set the default values on the new material.
-    for (auto valIter : defaultValues)
+    // Set the default textures on the new material.
+    for (int i = 0; i < pDef->defaults().textures.size(); i++)
     {
-        auto defaultVal = valIter.second;
-        switch (defaultVal.type())
-        {
-        case Aurora::IValues::Type::Float:
-            // Set float default value.
-            pNewMtl->values().setFloat(valIter.first, defaultVal.asFloat());
-            break;
-        case Aurora::IValues::Type::Int:
-            // Set int default value.
-            pNewMtl->values().setInt(valIter.first, defaultVal.asInt());
-            break;
-        case Aurora::IValues::Type::Boolean:
-            // Set bool default value.
-            pNewMtl->values().setBoolean(valIter.first, defaultVal.asBoolean());
-            break;
-        case Aurora::IValues::Type::Float2:
-            // Set 2d vector default value.
-            pNewMtl->values().setFloat2(valIter.first, &defaultVal.asFloat2().x);
-            break;
-        case Aurora::IValues::Type::Float3:
-            // Set 3d vector default value.
-            pNewMtl->values().setFloat3(valIter.first, &defaultVal.asFloat3().x);
-            break;
-        case Aurora::IValues::Type::Sampler:
-        {
-            pNewMtl->values().setSampler(valIter.first, defaultVal.asSampler());
-        }
-        break;
-        case Aurora::IValues::Type::String:
-        {
-            // Image default values are provided as strings and must be loaded.
-            auto textureFilename = defaultVal.asString();
+        auto txtDef = pDef->defaults().textures[i];
 
+        // Image default values are provided as strings and must be loaded.
+        auto textureFilename = txtDef.defaultFilename;
+        if (!textureFilename.empty())
+        {
             // Load the pixels for the image using asset manager.
             auto pImageData = _pAssetMgr->acquireImage(textureFilename);
             if (!pImageData)
@@ -292,7 +264,11 @@ IMaterialPtr PTRenderer::createMaterialPointer(
             }
             else
             {
-                // Create Aurora image from the loaded pixels.
+                // Set the linearize flag.
+                // TODO: Should effect caching.
+                pImageData->data.linearize = txtDef.linearize;
+
+                // Create Ultra image from the loaded pixels.
                 // TODO: This should be cached by filename.
                 auto pImage = createImagePointer(pImageData->data);
                 if (!pImage)
@@ -305,13 +281,41 @@ IMaterialPtr PTRenderer::createMaterialPointer(
                 else
                 {
                     // Set the default image.
-                    pNewMtl->setImage(valIter.first, pImage);
+                    pNewMtl->setImage(txtDef.name, pImage);
                 }
             }
         }
-        break;
-        default:
-            break;
+
+        // If we have an address mode, create a sampler for texture.
+        // Currently only the first two hardcoded textures have samplers, so only do this for first
+        // two textures.
+        // TODO: Move to fully data driven textures and samplers.
+        if (i < 2 && (!txtDef.addressModeU.empty() || !txtDef.addressModeV.empty()))
+        {
+            Properties samplerProps;
+
+            // Set U address mode.
+            if (txtDef.addressModeU.compare("periodic") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeU] = Names::AddressModes::kWrap;
+            else if (txtDef.addressModeU.compare("clamp") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeU] = Names::AddressModes::kClamp;
+            else if (txtDef.addressModeU.compare("mirror") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeU] =
+                    Names::AddressModes::kMirror;
+
+            // Set V address mode.
+            if (txtDef.addressModeV.compare("periodic") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeV] = Names::AddressModes::kWrap;
+            else if (txtDef.addressModeV.compare("clamp") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeV] = Names::AddressModes::kClamp;
+            else if (txtDef.addressModeV.compare("mirror") == 0)
+                samplerProps[Names::SamplerProperties::kAddressModeV] =
+                    Names::AddressModes::kMirror;
+
+            // Create a sampler and set in the material.
+            // TODO: Don't assume hardcoded _sampler prefix.
+            auto pSampler = createSamplerPointer(samplerProps);
+            pNewMtl->setSampler(txtDef.name + "_sampler", pSampler);
         }
     }
 
@@ -464,6 +468,26 @@ ID3D12ResourcePtr PTRenderer::createBuffer(size_t size, const string& name,
     return pResource;
 }
 
+TransferBuffer PTRenderer::createTransferBuffer(size_t sz, const string& name,
+    D3D12_RESOURCE_FLAGS gpuBufferFlags, D3D12_RESOURCE_STATES gpuBufferState,
+    D3D12_RESOURCE_STATES gpuBufferFinalState)
+{
+    TransferBuffer buffer;
+    // Create the upload buffer in the UPLOAD heap (which will mean it is in CPU memory not VRAM).
+    buffer.pUploadBuffer = createBuffer(sz, name + ":Upload");
+    // Create the GPU buffer in the DEFAULT heap, with the flags and state provided (these will
+    // default to D3D12_RESOURCE_FLAG_NONE and D3D12_RESOURCE_STATE_COPY_DEST).
+    buffer.pGPUBuffer =
+        createBuffer(sz, name + ":GPU", D3D12_HEAP_TYPE_DEFAULT, gpuBufferFlags, gpuBufferState);
+    // Set the size.
+    buffer.size = sz;
+    // Set the renderer to this (will call transferBufferUpdated from unmap.)
+    buffer.pRenderer = this;
+    // Set the final state for the buffer, which it will transition to after uploading.
+    buffer.finalState = gpuBufferFinalState;
+    return buffer;
+}
+
 ID3D12ResourcePtr PTRenderer::createTexture(uvec2 dimensions, DXGI_FORMAT format,
     const string& name, bool isUnorderedAccess, bool shareable)
 {
@@ -504,14 +528,95 @@ D3D12_GPU_VIRTUAL_ADDRESS PTRenderer::getScratchBuffer(size_t size)
     return _pScratchBufferCache->get(size);
 }
 
-void PTRenderer::getVertexBuffer(VertexBuffer& vertexBuffer, void* pData)
+void PTRenderer::transferBufferUpdated(const TransferBuffer& buffer)
 {
-    _pVertexBufferPool->get(vertexBuffer, pData);
+    // Get the mapped range for buffer (set the end to buffer size, in the case where end==0.)
+    size_t beginMap = buffer.mappedRange.Begin;
+    size_t endMap   = buffer.mappedRange.End == 0 ? buffer.size : buffer.mappedRange.End;
+
+    // See if this buffer already exists in pending list.
+    auto iter = _pendingTransferBuffers.find(buffer.pGPUBuffer.Get());
+    if (iter != _pendingTransferBuffers.end())
+    {
+        // Just update the mapped range in the existing pending buffer.
+        iter->second.mappedRange.Begin = std::min(iter->second.mappedRange.Begin, beginMap);
+        iter->second.mappedRange.End   = std::max(iter->second.mappedRange.End, endMap);
+        return;
+    }
+
+    // Add the buffer in the pending list, updating the end range if needed.
+    _pendingTransferBuffers[buffer.pGPUBuffer.Get()]                 = buffer;
+    _pendingTransferBuffers[buffer.pGPUBuffer.Get()].mappedRange.End = endMap;
+}
+
+void PTRenderer::getVertexBuffer(VertexBuffer& vertexBuffer, void* pData, size_t size)
+{
+    _pVertexBufferPool->get(vertexBuffer, pData, size);
 }
 
 void PTRenderer::flushVertexBufferPool()
 {
     _pVertexBufferPool->flush();
+}
+
+void PTRenderer::deleteUploadedTransferBuffers()
+{
+    // Do nothing if no buffers to delete.
+    if (_transferBuffersToDelete.empty())
+        return;
+
+    // Clear the list, so any upload or GPU buffer without a reference to it will be deleted.
+    _transferBuffersToDelete.clear();
+}
+
+void PTRenderer::uploadTransferBuffers()
+{
+    // If there are no transfer buffers pending, do nothing.
+    if (_pendingTransferBuffers.empty())
+        return;
+
+    // Begin a command list.
+    ID3D12GraphicsCommandList4Ptr pCommandList = beginCommandList();
+
+    // Iterate through all pending buffers.
+    for (auto iter = _pendingTransferBuffers.begin(); iter != _pendingTransferBuffers.end(); iter++)
+    {
+        // Get pending buffer.
+        auto& buffer = iter->second;
+
+        // Calculate the byte count from the mapped range (which will be the maximum range mapped
+        // this frame.)
+        size_t bytesToCopy = buffer.mappedRange.End - buffer.mappedRange.Begin;
+
+        // If this buffer was previously uploaded we need transition back to
+        // D3D12_RESOURCE_STATE_COPY_DEST before copying.
+        if (buffer.wasUploaded)
+            addTransitionBarrier(
+                buffer.pGPUBuffer.Get(), buffer.finalState, D3D12_RESOURCE_STATE_COPY_DEST);
+
+        // Submit buffer copy command for mapped range from the upload buffer to the GPU buffer.
+        pCommandList->CopyBufferRegion(buffer.pGPUBuffer.Get(), buffer.mappedRange.Begin,
+            buffer.pUploadBuffer.Get(), buffer.mappedRange.Begin, bytesToCopy);
+
+        // Transition the buffer to its final state.
+        // Note in practice the Nvidia driver seems to do this implicitly without any problems,
+        // though the spec says this explicit transition is required.
+        addTransitionBarrier(
+            buffer.pGPUBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, buffer.finalState);
+
+        // Set the uploaded flag.
+        buffer.wasUploaded = true;
+
+        // Add the buffer to the list to be deleted (if nothing has kept a reference to it) next
+        // frame.
+        _transferBuffersToDelete[iter->first] = iter->second;
+    }
+
+    // Submit the command list.
+    submitCommandList();
+
+    // Clear the pending list.
+    _pendingTransferBuffers.clear();
 }
 
 ID3D12CommandAllocator* PTRenderer::getCommandAllocator()
@@ -698,7 +803,7 @@ void PTRenderer::initFrameData()
     // Create a buffer to store frame data for each buffer. A single buffer can be used for this,
     // as long as each section of the buffer is not written to while it is being used by the GPU.
     size_t frameDataBufferSize = _FRAME_DATA_SIZE * _taskCount;
-    _pFrameDataBuffer          = createBuffer(frameDataBufferSize, "FrameData");
+    _frameDataBuffer           = createTransferBuffer(frameDataBufferSize, "FrameData");
 }
 
 void PTRenderer::initRayGenShaderTable()
@@ -710,22 +815,21 @@ void PTRenderer::initRayGenShaderTable()
     rayGenShaderRecordStride = ALIGNED_SIZE(rayGenShaderRecordStride, SHADER_RECORD_ALIGNMENT);
     _rayGenShaderTableSize   = rayGenShaderRecordStride; // just one shader record
 
-    // Create a buffer for the shader table and map it for writing.
-    _pRayGenShaderTable = createBuffer(_rayGenShaderTableSize);
+    // Create a transfer buffer for the shader table.
+    _rayGenShaderTable = createTransferBuffer(_rayGenShaderTableSize, "RayGenShaderTable");
 }
 
 void PTRenderer::updateRayGenShaderTable()
 {
-    uint8_t* pShaderTableMappedData = nullptr;
-    checkHR(
-        _pRayGenShaderTable->Map(0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+    // Map the ray gen shader table.
+    uint8_t* pShaderTableMappedData = _rayGenShaderTable.map();
 
     // Write the shader identifier for the ray gen shader.
-    ::memcpy_s(pShaderTableMappedData, _rayGenShaderTableSize, _pShaderLibrary->getRayGenShaderID(),
-        SHADER_ID_SIZE);
+    ::memcpy_s(pShaderTableMappedData, _rayGenShaderTableSize,
+        _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kRayGen), SHADER_ID_SIZE);
 
-    // Close the shader table buffer.
-    _pRayGenShaderTable->Unmap(0, nullptr); // no HRESULT
+    // Unmap the shader table buffer.
+    _rayGenShaderTable.unmap();
 }
 
 void PTRenderer::initAccumulation()
@@ -774,13 +878,16 @@ void PTRenderer::renderInternal(uint32_t sampleStart, uint32_t sampleCount)
     // Retain certain option state for the frame.
     bool isResetHistoryEnabled = _values.asBoolean(kLabelIsResetHistoryEnabled);
 
+    // Call preUpdate function (will create any resources before the scene and shaders are rebuilt).
+    dxScene()->preUpdate();
+
     // Have any options changed?
     if (_bIsDirty)
     {
 #if ENABLE_MATERIALX
         // Get the units option.
         string unit = _values.asString(kLabelUnits);
-        // Lookup the unit in in the code generator, and ensure it is valid.
+        // Lookup the unit in the code generator, and ensure it is valid.
         auto unitIter = _pMaterialXGenerator->codeGenerator().units().indices.find(unit);
         if (unitIter == _pMaterialXGenerator->codeGenerator().units().indices.end())
         {
@@ -925,12 +1032,14 @@ void PTRenderer::updateFrameData()
     uint8_t* pFrameDataBufferMappedData = nullptr;
     size_t start                        = _FRAME_DATA_SIZE * _taskIndex;
     size_t end                          = start + _FRAME_DATA_SIZE;
-    D3D12_RANGE range                   = { start, end };
-    checkHR(
-        _pFrameDataBuffer->Map(0, &range, reinterpret_cast<void**>(&pFrameDataBufferMappedData)));
+    pFrameDataBufferMappedData          = _frameDataBuffer.map(end, start);
     ::memcpy_s(
         pFrameDataBufferMappedData + start, _FRAME_DATA_SIZE, &_frameData, sizeof(_frameData));
-    _pFrameDataBuffer->Unmap(0, nullptr); // no HRESULT
+    _frameDataBuffer.unmap();
+
+    // Upload the transfer buffers after changing the frame data, so the new frame data is available
+    // on the GPU while rendering frame.
+    uploadTransferBuffers();
 }
 
 void PTRenderer::updateSceneResources()
@@ -944,14 +1053,12 @@ void PTRenderer::updateSceneResources()
 
     // Set the descriptor heap on the ray gen shader table, for descriptors needed from the heap for
     // the ray gen shader. The ray gen shader expects the first entry to be the direct texture.
-    uint8_t* pShaderTableMappedData = nullptr;
-    checkHR(
-        _pRayGenShaderTable->Map(0, nullptr, reinterpret_cast<void**>(&pShaderTableMappedData)));
+    uint8_t* pShaderTableMappedData = _rayGenShaderTable.map();
     CD3DX12_GPU_DESCRIPTOR_HANDLE handle(_pDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
         kDirectDescriptorOffset, _handleIncrementSize);
     ::memcpy_s(pShaderTableMappedData + SHADER_ID_SIZE, _rayGenShaderTableSize, &handle,
         SHADER_RECORD_DESCRIPTOR_SIZE);
-    _pRayGenShaderTable->Unmap(0, nullptr); // no HRESULT
+    _rayGenShaderTable.unmap();
 }
 
 void PTRenderer::updateOutputResources()
@@ -1170,7 +1277,7 @@ void PTRenderer::prepareRayDispatch(D3D12_DISPATCH_RAYS_DESC& dispatchRaysDesc)
     dispatchRaysDesc.Depth  = 1;
 
     // ... the shader table for the ray generation shader...
-    D3D12_GPU_VIRTUAL_ADDRESS address = _pRayGenShaderTable->GetGPUVirtualAddress();
+    D3D12_GPU_VIRTUAL_ADDRESS address = _rayGenShaderTable.pGPUBuffer->GetGPUVirtualAddress();
     dispatchRaysDesc.RayGenerationShaderRecord.StartAddress = address;
     dispatchRaysDesc.RayGenerationShaderRecord.SizeInBytes  = _rayGenShaderTableSize;
 
@@ -1224,7 +1331,7 @@ void PTRenderer::submitRayDispatch(
 
         // 2) The frame data constant buffer, for the current task index.
         D3D12_GPU_VIRTUAL_ADDRESS frameDataBufferAddress =
-            _pFrameDataBuffer->GetGPUVirtualAddress() + _FRAME_DATA_SIZE * _taskIndex;
+            _frameDataBuffer.pGPUBuffer->GetGPUVirtualAddress() + _FRAME_DATA_SIZE * _taskIndex;
         pCommandList->SetComputeRootConstantBufferView(2, frameDataBufferAddress);
 
         // 3) The environment data constant buffer.
@@ -1413,42 +1520,28 @@ bool PTRenderer::isDenoisingAOVsEnabled() const
         _values.asInt(kLabelDebugMode) > kDebugModeErrors;
 }
 
-shared_ptr<PTMaterialType> PTRenderer::generateMaterialX(
-    [[maybe_unused]] const string& document, [[maybe_unused]] map<string, Value>* pDefaultValuesOut)
+shared_ptr<MaterialShader> PTRenderer::generateMaterialX([[maybe_unused]] const string& document,
+    [[maybe_unused]] shared_ptr<MaterialDefinition>* pDefOut)
 {
 #if ENABLE_MATERIALX
-    // Generate the shader for the materialX document, along with its unique material name.
-    MaterialTypeSource materialTypeSource;
-    if (!_pMaterialXGenerator->generate(document, pDefaultValuesOut, materialTypeSource))
+    // Generate the material definition for the materialX document, this contains the source code,
+    // default values, and a unique name.
+    shared_ptr<MaterialDefinition> pDef = _pMaterialXGenerator->generate(document);
+    if (!pDef)
     {
         return nullptr;
     }
 
-    // Set the shared definitions, this will only change anything if string is different to current
-    // one.
-    string definitions;
-    _pMaterialXGenerator->generateDefinitions(definitions);
-    _pShaderLibrary->setDefinitionsHLSL(definitions);
-
-    // Acquire a material type for this shader.
+    // Acquire a material shader for the definition.
     // This will create a new one if needed (and trigger a rebuild), otherwise will it will return
     // existing one.
-    bool typeCreated;
-    auto pType = _pShaderLibrary->acquireMaterialType(materialTypeSource, &typeCreated);
-    if (typeCreated)
-    {
-        if (AU_DEV_DUMP_PROCESSED_MATERIALX_DOCUMENTS)
-        {
-            string mltxPath = Foundation::getModulePath() + materialTypeSource.name + "Dumped.mtlx";
-            AU_INFO("Dumping processed MTLX document to:%s", mltxPath.c_str());
-            ofstream outputFile;
-            outputFile.open(mltxPath);
-            outputFile << document;
-            outputFile.close();
-        }
-    }
+    auto pShader = _pShaderLibrary->acquireShader(*pDef);
 
-    return pType;
+    // Output the definition pointer.
+    if (pDefOut)
+        *pDefOut = pDef;
+
+    return pShader;
 #else
     return nullptr;
 #endif

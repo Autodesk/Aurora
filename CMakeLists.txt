@@ -4,12 +4,23 @@ cmake_minimum_required(VERSION 3.24)
 
 # Forbid the in-source build
 if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
-    message(FATAL_ERROR “In-source build is not allowed!”)
+    message(FATAL_ERROR "In-source build is not allowed!")
 endif()
 
 # Set the project name and project variables
-project(Aurora VERSION 0.0.0.1)
+project(Aurora VERSION 23.07.0.0)
 
+# Create a folder for the version header files
+set(VERSION_FOLDER "${PROJECT_BINARY_DIR}/VersionFiles")
+file(MAKE_DIRECTORY "${VERSION_FOLDER}")
+
+# Configure version information in version header file (included by the .rc files that define the DLL version information for each library.)
+set(DEBUG_FLAG_VALUE 0x0L)
+set(DEBUG_SUFFIX )
+string(TIMESTAMP AURORA_BUILD_YEAR "%Y")
+configure_file(${CMAKE_SOURCE_DIR}/AuroraVersion.h.in ${VERSION_FOLDER}/AuroraVersion.h)
+
+# Set the root folder.
 set(AURORA_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
 # install path if the user did not explicitly specify one.

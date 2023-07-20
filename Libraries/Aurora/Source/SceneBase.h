@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,38 @@ struct ImageAsset;
 class SceneBase : public IScene
 {
 public:
+    // Limits for light counts of different light light types.
+    enum LightLimits
+    {
+        kMaxDistantLights = 4, // Maximum distant lights (must match GPU version in Frame.slang).
+    };
+
+    // Structure representing a single distant light.
+    // Must match GPU struct in Frame.slang
+    struct DistantLight
+    {
+        // Light color (in RGB) and intensity (in alpha channel.)
+        vec4 colorAndIntensity;
+        // Direction of light (inverted as expected by shaders.)
+        vec3 direction = vec3(0, 0, 1);
+        // The light size is converted from a diameter in radians to the cosine of the radius.
+        float cosRadius = 0.0f;
+    };
+
+    // Structure representing the lights in the scene.
+    // Must match GPU struct in Frame.slang
+    struct LightData
+    {
+        // Array of distant lights, only first distantLightCount are used.
+        DistantLight distantLights[LightLimits::kMaxDistantLights];
+
+        // Number of active distant lights.
+        int distantLightCount = 0;
+
+        // Explicitly pad struct to 16-byte boundary.
+        int pad[3];
+    };
+
     SceneBase(IRenderer* pRenderer) : _pRenderer(pRenderer) {}
     ~SceneBase();
 
@@ -34,10 +66,6 @@ public:
     ResourceType getResourceType(const Path& path) override;
     void setBounds(const vec3& min, const vec3& max) override;
     void setBounds(const float* min, const float* max) override;
-    void setLight(float intensity, const rgb& color, const vec3& direction,
-        float angularDiameter = 0.1f) override;
-    void setLight(float intensity, const float* color, const float* direction,
-        float angularDiameter) override;
     void setImageDescriptor(const Path& atPath, const ImageDescriptor& desc) override;
     void setImageFromFilePath(
         const Path& atPath, const string& filePath, bool forceLinear, bool isEnvironment) override;
@@ -64,17 +92,17 @@ public:
     /*** Functions ***/
 
     void update();
+    void preUpdate();
+
     shared_ptr<EnvironmentResource> defaultEnvironment();
 
     const Foundation::BoundingBox& bounds() const { return _bounds; }
-    float lightIntensity() const { return _lightIntensity; }
-    const vec3& lightColor() const { return _lightColor; }
-    const vec3& lightDirection() const { return _lightDirection; }
-    float lightAngularDiameter() const { return _lightAngularDiameter; }
 
     shared_ptr<MaterialResource> defaultMaterialResource() { return _pDefaultMaterialResource; }
 
     RendererBase* rendererBase();
+
+    LightData& lights() { return _lights; }
 
 protected:
     // Is the path a valid resource path.
@@ -95,10 +123,8 @@ protected:
 
     IRenderer* _pRenderer = nullptr;
     Foundation::BoundingBox _bounds;
-    float _lightIntensity       = 1.0f;
-    rgb _lightColor             = rgb(1.0f, 1.0f, 1.0f);
-    vec3 _lightDirection        = normalize(vec3(-1.0f, -0.5f, -1.0f));
-    float _lightAngularDiameter = 0.1f;
+
+    LightData _lights;
 
     ResourceMap _resources;
 

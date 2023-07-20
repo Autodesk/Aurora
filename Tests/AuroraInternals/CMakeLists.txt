@@ -1,5 +1,12 @@
 project(AuroraInternalsTests)
 
+# Add the preprocessor definition for MaterialX flag.
+add_compile_definitions(ENABLE_MATERIALX=1)
+
+find_package(MaterialX REQUIRED) # MaterialX SDK
+# Alias the namespace to meet the cmake convention on imported targets
+add_library(MaterialX::GenGlsl ALIAS MaterialXGenGlsl)
+
 # List of common helper files shared by all tests. TEST_HELPERS_FOLDER variable is set in parent cmake file.
 set(HELPER_FILES
     "${TEST_HELPERS_FOLDER}/TestHelpers.cpp"
@@ -11,6 +18,8 @@ set(TEST_FILES
     "Common/TestAssetManager.cpp"
     "Common/TestProperties.cpp"
     "Common/TestResources.cpp"
+    "Common/TestMaterialGenerator.cpp"
+    "Common/TestUniformBuffer.cpp"
 )
 
 set(AURORA_DIR "${CMAKE_SOURCE_DIR}/Libraries/Aurora")
@@ -23,6 +32,10 @@ set(AURORA_FILES
     "${AURORA_DIR}/Source/EnvironmentBase.h"
     "${AURORA_DIR}/Source/MaterialBase.cpp"
     "${AURORA_DIR}/Source/MaterialBase.h"
+    "${AURORA_DIR}/Source/MaterialDefinition.cpp"
+    "${AURORA_DIR}/Source/MaterialDefinition.h"
+    "${AURORA_DIR}/Source/MaterialShader.cpp"
+    "${AURORA_DIR}/Source/MaterialShader.h"
     "${AURORA_DIR}/Source/pch.h"
     "${AURORA_DIR}/Source/Properties.h"
     "${AURORA_DIR}/Source/RendererBase.cpp"
@@ -33,9 +46,15 @@ set(AURORA_FILES
     "${AURORA_DIR}/Source/ResourceStub.h"
     "${AURORA_DIR}/Source/SceneBase.cpp"
     "${AURORA_DIR}/Source/SceneBase.h"
+    "${AURORA_DIR}/Source/UniformBuffer.cpp"
+    "${AURORA_DIR}/Source/UniformBuffer.h"
     "${AURORA_DIR}/Source/Aurora.cpp"
     "${AURORA_DIR}/Source/AuroraNames.cpp"
     "${AURORA_DIR}/Source/WindowsHeaders.h"
+    "${AURORA_DIR}/Source/MaterialX/MaterialGenerator.h"
+    "${AURORA_DIR}/Source/MaterialX/MaterialGenerator.cpp"
+    "${AURORA_DIR}/Source/MaterialX/BSDFCodeGenerator.h"
+    "${AURORA_DIR}/Source/MaterialX/BSDFCodeGenerator.cpp"
 )
 
 
@@ -52,7 +71,7 @@ source_group("Helpers" FILES ${HELPER_FILES})
 source_group("Tests" FILES ${TEST_FILES})
 source_group("Aurora" FILES ${AURORA_FILES})
 
-# Set custom ouput properties.
+# Set custom output properties.
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	FOLDER "Tests"
     RUNTIME_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
@@ -71,6 +90,7 @@ PRIVATE
     glm::glm
     stb::stb
     Foundation
+    MaterialXGenGlsl
 )
 
 # Add helpers include folder.

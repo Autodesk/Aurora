@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
 #pragma once
 
 #include "BSDFCodeGenerator.h"
+#include "MaterialBase.h"
 
 BEGIN_AURORA
 
-struct MaterialTypeSource;
+struct MaterialShaderSource;
 
 namespace MaterialXCodeGen
 {
@@ -25,26 +26,22 @@ namespace MaterialXCodeGen
 class MaterialGenerator
 {
 public:
-    MaterialGenerator(IRenderer* pRenderer, const string& mtlxFolder);
+    MaterialGenerator(const string& mtlxFolder);
 
     /// Generate shader code for material.
-    bool generate(const string& document, map<string, Value>* pDefaultValuesOut,
-        MaterialTypeSource& sourceOut);
-
-    // Generate shared definition functions.
-    void generateDefinitions(string& definitionHLSLOut);
+    shared_ptr<MaterialDefinition> generate(const string& document);
 
     // Get the code generator used to generate material shader code.
-    MaterialXCodeGen::BSDFCodeGenerator& codeGenerator() { return *_pCodeGenerator; }
+    BSDFCodeGenerator& codeGenerator() { return *_pCodeGenerator; }
 
 private:
     // Code generator used to generate MaterialX files.
     unique_ptr<MaterialXCodeGen::BSDFCodeGenerator> _pCodeGenerator;
 
     // Mapping from a MaterialX output property to a Standard Surface property.
-    map<string, string> _materialXOutputParamMapping;
+    map<string, string> _bsdfInputParamMapping;
 
-    IRenderer* _pRenderer;
+    map<string, weak_ptr<MaterialDefinition>> _definitions;
 };
 
 } // namespace MaterialXCodeGen

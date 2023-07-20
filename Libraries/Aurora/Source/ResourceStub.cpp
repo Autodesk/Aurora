@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,8 @@ void ResourceStub::clearReferences()
 
 void ResourceStub::setProperties(const Properties& props)
 {
+    // Count of the number of properties actually applied.
+    size_t numApplied = 0;
 
     // Iterate through all the supplied properties.
     for (auto iter = props.begin(); iter != props.end(); iter++)
@@ -49,48 +51,57 @@ void ResourceStub::setProperties(const Properties& props)
         // Get name of property.
         const Path& propName = iter->first;
 
-        // Is this a string property (as in, it does *not* have a string applicator function
-        // assoicated with it)?
-        bool isStringProperty =
-            _stringPropertyApplicators.find(propName) != _stringPropertyApplicators.end();
-
-        // We assume any string properies that do not have an explicit string applicator function
-        // are actually paths not strings.
-        if (iter->second.type == PropertyValue::Type::String && !isStringProperty)
+        // Only apply the property if different from existing value.
+        if (_properties[propName] != iter->second)
         {
-            // Setup a reference for this path property.
-            const Path& path = iter->second.asString();
-            setReference(propName, path);
-        }
+            // Increment applied count.
+            numApplied++;
 
-        // We assume any string array properies are actually paths not strings.
-        else if (iter->second.type == PropertyValue::Type::Strings)
-        {
-            Strings paths = iter->second.asStrings();
+            // Is this a string property (as in, it does *not* have a string applicator function
+            // associated with it)?
+            bool isStringProperty =
+                _stringPropertyApplicators.find(propName) != _stringPropertyApplicators.end();
 
-            // Set references to all the paths in form "propName[n]"
-            for (int i = 0; i < static_cast<int>(paths.size()); i++)
+            // We assume any string properties that do not have an explicit string applicator
+            // function are actually paths not strings.
+            if (iter->second.type == PropertyValue::Type::String && !isStringProperty)
             {
-                string refName = getIndexedPropertyName(propName, i);
-                setReference(refName, paths[i]);
+                // Setup a reference for this path property.
+                const Path& path = iter->second.asString();
+                setReference(propName, path);
             }
 
-            // Clear any previous references that exist past end of array.
-            for (int i = static_cast<int>(paths.size());; i++)
+            // We assume any string array properties are actually paths not strings.
+            else if (iter->second.type == PropertyValue::Type::Strings)
             {
-                string refName = getIndexedPropertyName(propName, i);
-                if (_references.find(refName) == _references.end())
-                    break;
-                else
-                    setReference(refName, "");
-            }
-        }
+                Strings paths = iter->second.asStrings();
 
-        // Apply the property (will apply to the resource itself if we are active.)
-        applyProperty(iter->first, iter->second);
+                // Set references to all the paths in form "propName[n]"
+                for (int i = 0; i < static_cast<int>(paths.size()); i++)
+                {
+                    string refName = getIndexedPropertyName(propName, i);
+                    setReference(refName, paths[i]);
+                }
+
+                // Clear any previous references that exist past end of array.
+                for (int i = static_cast<int>(paths.size());; i++)
+                {
+                    string refName = getIndexedPropertyName(propName, i);
+                    if (_references.find(refName) == _references.end())
+                        break;
+                    else
+                        setReference(refName, "");
+                }
+            }
+
+            // Apply the property (will apply to the resource itself if we are active.)
+            applyProperty(iter->first, iter->second);
+        }
     }
 
-    if (isActive() && _tracker.resourceModified)
+    // Call the resource modified callback if the resource is active and some propreties were
+    // applied.
+    if (isActive() && numApplied && _tracker.resourceModified)
         _tracker.resourceModified(*this, props);
 }
 

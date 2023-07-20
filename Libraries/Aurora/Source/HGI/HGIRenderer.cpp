@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "pch.h"
 
+#include "CompiledShaders/CommonShaders.h"
 #include "CompiledShaders/HGIShaders.h"
 #include "HGIEnvironment.h"
 #include "HGIGroundPlane.h"
@@ -27,7 +28,10 @@ using namespace pxr;
 
 BEGIN_AURORA
 
-HGIRenderer::HGIRenderer(uint32_t activeFrameCount) : RendererBase(activeFrameCount)
+const vector<string> DefaultEntryPoints = { "RADIANCE_HIT" };
+
+HGIRenderer::HGIRenderer(uint32_t activeFrameCount) :
+    RendererBase(activeFrameCount), _shaderLibrary(DefaultEntryPoints)
 {
 
     _isValid = true;
@@ -38,6 +42,21 @@ HGIRenderer::HGIRenderer(uint32_t activeFrameCount) : RendererBase(activeFrameCo
 
     // Vulkan texture coordinates are upside down compared to DX.
     _pAssetMgr->enableVerticalFlipOnImageLoad(!_values.asBoolean(kLabelIsFlipImageYEnabled));
+
+    MaterialShaderSource defaultMaterialSource(
+        "Default", CommonShaders::g_sInitializeDefaultMaterialType);
+
+    // Create the material definition for default shader.
+    _pDefaultMaterialDefinition = make_shared<MaterialDefinition>(defaultMaterialSource,
+        MaterialBase::StandardSurfaceDefaults, MaterialBase::updateBuiltInMaterial, false);
+
+    // Create shader from the definition.
+    MaterialShaderDefinition shaderDef;
+    _pDefaultMaterialDefinition->getShaderDefinition(shaderDef);
+    _pDefaultMaterialShader = _shaderLibrary.acquire(shaderDef);
+
+    // Ensure the radiance hit entry point is compiled for default shader.
+    _pDefaultMaterialShader->incrementRefCount("RADIANCE_HIT");
 }
 HGIRenderer::~HGIRenderer()
 {
@@ -309,7 +328,7 @@ IMaterialPtr HGIRenderer::createMaterialPointer(
     }
 
     // Create and return a new material object.
-    return make_shared<HGIMaterial>(this);
+    return make_shared<HGIMaterial>(this, _pDefaultMaterialShader, _pDefaultMaterialDefinition);
 }
 
 IGeometryPtr HGIRenderer::createGeometryPointer(

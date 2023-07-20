@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ static void copyVertexChannelData(vector<ComponentType>& dst, const AttributeDat
         ComponentType* pDstComp = dst.data();
         for (size_t i = 0; i < vertexCount; i++)
         {
-            // Copy the individual element from the soure buffer to destination.
+            // Copy the individual element from the source buffer to destination.
             const ComponentType* pSrcComp = reinterpret_cast<const ComponentType*>(pSrc);
             for (uint32_t j = 0; j < componentCount; j++)
             {
@@ -116,6 +116,10 @@ bool PTGeometry::update()
     {
         createVertexBuffer(_normalBuffer, _normals.data(), sizeof(float) * _vertexCount * 3);
     }
+    if (!_tangents.empty())
+    {
+        createVertexBuffer(_tangentBuffer, _tangents.data(), sizeof(float) * _vertexCount * 3);
+    }
     if (!_texCoords.empty())
     {
         createVertexBuffer(_texCoordBuffer, _texCoords.data(), sizeof(float) * _vertexCount * 2);
@@ -146,8 +150,7 @@ bool PTGeometry::updateBLAS()
 
 void PTGeometry::createVertexBuffer(VertexBuffer& vertexBuffer, void* pData, size_t dataSize) const
 {
-    vertexBuffer.size = dataSize;
-    _pRenderer->getVertexBuffer(vertexBuffer, pData);
+    _pRenderer->getVertexBuffer(vertexBuffer, pData, dataSize);
 }
 
 ID3D12ResourcePtr PTGeometry::buildBLAS()
@@ -164,7 +167,7 @@ ID3D12ResourcePtr PTGeometry::buildBLAS()
     // Specify the vertex data.
     triangles.VertexCount                = _vertexCount;
     triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
-    triangles.VertexBuffer.StartAddress  = _positionBuffer.address();
+    triangles.VertexBuffer.StartAddress  = _positionBuffer.gpuAddress();
     triangles.VertexBuffer.StrideInBytes = sizeof(float) * 3;
 
     // Specify the index data, if any.
@@ -172,7 +175,7 @@ ID3D12ResourcePtr PTGeometry::buildBLAS()
     {
         triangles.IndexCount  = _indexCount;
         triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-        triangles.IndexBuffer = _indexBuffer.address();
+        triangles.IndexBuffer = _indexBuffer.gpuAddress();
     }
 
     // Describe the BLAS.

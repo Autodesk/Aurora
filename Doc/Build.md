@@ -6,13 +6,14 @@ Several prerequisites must be installed before building Aurora.
 
 ### Windows
 On windows the following packages should be installed and added to the system PATH environment variable:
-* Microsoft Visual Studio 2019 (https://my.visualstudio.com/Downloads?q=visual%20studio%202019)
-* CMake 3.26.11 (https://github.com/Kitware/CMake/releases/download/v3.26.1/cmake-3.26.1-windows-x86_64.msi)
-* Python 3.9.13 (https://www.python.org/downloads/release/python-3913/)
-* PySide6 python package (install with `pip3 install pyside6`)
-* PyOpenGL python package (install with `pip3 install PyOpenGL`)
-* NASM 2.16 (https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/win64/nasm-2.16.01-installer-x64.exe)
-* Vulkan SDK (https://vulkan.lunarg.com/sdk/home#windows).  Should be accessible via the VULKAN_SDK environment variable.
+* [Microsoft Visual Studio 2019](https://my.visualstudio.com/Downloads?q=visual%20studio%202019) or [2022](https://my.visualstudio.com/Downloads?q=visual%20studio%202022).
+* CMake 3.26.11 ([installer](https://github.com/Kitware/CMake/releases/download/v3.26.1/cmake-3.26.1-windows-x86_64.msi)).
+* Python 3.9.13 ([installer](https://www.python.org/downloads/release/python-3913)) and the following Python packages:
+  * PySide6: install with `pip3 install pyside6`.
+  * PyOpenGL: install with `pip3 install PyOpenGL`.
+
+* NASM 2.16 ([installer](https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/win64/nasm-2.16.01-installer-x64.exe)).
+* [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). This should be accessible via the `VULKAN_SDK` environment variable.
 
 ### Linux
 The following dependencies are required on Linux.  The versions listed are the recommended version for Ubuntu 20.04:
@@ -37,7 +38,7 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
 
 1. **Download or clone** the contents of this repository to a location of your choice. Cloning with Git is not strictly necessary as Aurora does not currently use submodules. We refer to this location as *AURORA_DIR*.
 
-2. **Start a command line** with access to your C++ compiler tools. When using Visual Studio, the "x64 Native Tools Command Prompt for VS 2019" shortcut will provide the proper environment. The CMake and Python executables must also be available, through the PATH environment variable.
+2. **Start a command line** with access to your C++ compiler tools. When using Visual Studio, the "x64 Native Tools Command Prompt for VS 2019" (or 2022) shortcut will provide the proper environment. The CMake and Python executables must also be available, through the PATH environment variable.
 
 3. **Installing externals:** Run *[Scripts/installExternals.py](Scripts/installExternals.py)* with Python in *AURORA_DIR* to build and install externals.
 
@@ -56,7 +57,7 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
 
 4. **Generating projects:** Run CMake in *AURORA_DIR* to generate build projects, e.g. a Visual Studio solution.
 
-   - You may specify the externals installation directory (*EXTERNALS_ROOT*, above) as a CMake path variable called `EXTERNALS_ROOT`. If no `EXTERNALS_ROOT` is specified, the `EXTERNALS_ROOT` built by the latest run of *installExternals.py* will be used automatically. If you are using cmake-gui, you should specify this variable before generating.
+   - You may specify the externals installation directory (*EXTERNALS_ROOT*, above) as a CMake path variable called `EXTERNALS_ROOT`. This must be specified as an absolute path, e.g. with a drive letter on Windows. If no `EXTERNALS_ROOT` is specified, the `EXTERNALS_ROOT` built by the latest run of *installExternals.py* will be used automatically. If you are using cmake-gui, you should specify this variable before generating.
 
    - You must specify a build directory, and we refer to this location as *AURORA_BUILD_DIR*. The recommended build directory is *{AURORA_DIR}/Build*, which is filtered by [.gitignore](.gitignore) so it won't appear as local changes for Git.
 
@@ -66,13 +67,15 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
      cmake -S . -B {AURORA_BUILD_DIR} -D CMAKE_BUILD_TYPE={CONFIGURATION} -D EXTERNALS_ROOT={EXTERNALS_ROOT}
      ```
 
+     As noted above, the value for `EXTERNALS_ROOT` must be specified as an absolute path.
+
    - The *CONFIGURATION* value can be one of `Debug` or `Release` (default).
 
    - On Windows, `CMAKE_BUILD_TYPE` is ignored during the cmake configuration. You are required to specify the build configuration with `--config {CONFIGURATION}` during the cmake build.
 
    - You can optionally specify the desired graphics API backend as described below, e.g. `-D ENABLE_HGI_BACKEND=ON`.
 
-   - On Windows, you may need to specify the toolchain and architecture with `-G "Visual Studio 16 2019" -A x64`.
+   - On Windows, you may need to specify the toolchain and architecture with `-G "Visual Studio 16 2019" -A x64` or `-G "Visual Studio 17 2022" -A x64`.
 
 5. **Building:** You can load the *Aurora.sln* Visual Studio solution file from the Aurora build directory, and build Aurora using the build configuration used with the *installExternals.py* script (see below), or use CMake.
 

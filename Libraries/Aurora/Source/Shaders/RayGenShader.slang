@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
 // limitations under the License.
 
 // Prefix containing the common code used by all material types.
-// NOTE: Does not contain a hit shader. Hit shaders for the different material types must be
-// appended to this file.
 #include"PathTracingCommon.slang"
 
 // The ray generation shader.
@@ -53,21 +51,23 @@
         float4 groundPlaneResult = shadeGroundPlane(gGroundPlane, gScene, environment, origin, dir,
             rayPayload.depthView, gFrameData.isOpaqueShadowsEnabled, maxDepth, rng);
 
-        // Blend the ground plane result with the radiance and direct lighting.
-        // TODO: The latter ensures the ground plane result appears when denoising, but the result
-        // itself still needs to be denoised.
-        result.rgb        = lerp(result.rgb, groundPlaneResult.rgb, groundPlaneResult.a);
-        rayPayload.direct = lerp(rayPayload.direct, groundPlaneResult.rgb, groundPlaneResult.a);
+        // Blend the ground plane result with the radiance and "extra" shading. The extra shading is
+        // not itself denoised but is added to denoised output.
+        // TODO: The ground plane is currently treated as extra shading and is not denoised; it
+        // needs to contribute to the denoising input in order to be denoised.
+        result.rgb       = lerp(result.rgb, groundPlaneResult.rgb, groundPlaneResult.a);
+        rayPayload.extra = lerp(rayPayload.extra, groundPlaneResult.rgb, groundPlaneResult.a);
     }
 #endif
 
     // Adjust the radiance of the sample, e.g. to perform corrections.
     adjustRadiance(gFrameData.maxLuminance, gFrameData.isDisplayErrorsEnabled, result.rgb);
 
-    // Store the result in the output texture. The output texture is called "direct" as it contains
-    // direct lighting when denoising is enabled, or complete lighting otherwise.
-    result.rgb            = gFrameData.isDenoisingEnabled ? rayPayload.direct : result.rgb;
-    gDirect[screenCoords] = result;
+    // Store the result in the "result" output texture. If denoising is enabled, only the "extra"
+    // (non-denoised) shading is included in the result texture, as the rest of shading is stored in
+    // the denoising AOVs below.
+    result.rgb            = gFrameData.isDenoisingEnabled ? rayPayload.extra : result.rgb;
+    gResult[screenCoords] = result;
 
 #if DIRECTX
     // Store the NDC depth value, if enabled. The value is only stored if the first sample was

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,17 +20,25 @@ BEGIN_AURORA
 // Forward declarations.
 class PTRenderer;
 
-// A structure describing a vertex buffer obtained from a vertex buffer pool.
-struct VertexBuffer
+// A class describing a vertex buffer obtained from a vertex buffer pool.
+class VertexBuffer
 {
-    ID3D12ResourcePtr pBuffer;
-    size_t size   = 0;
-    size_t offset = 0;
-
-    D3D12_GPU_VIRTUAL_ADDRESS address() const
+public:
+    VertexBuffer(ID3D12ResourcePtr buffer = nullptr, size_t size = 0, size_t offset = 0) :
+        _pGPUBuffer(buffer), _size(size), _offset(offset)
     {
-        return pBuffer ? pBuffer->GetGPUVirtualAddress() + offset : 0;
     }
+
+    D3D12_GPU_VIRTUAL_ADDRESS gpuAddress() const
+    {
+        return _pGPUBuffer ? _pGPUBuffer->GetGPUVirtualAddress() + _offset : 0;
+    }
+    size_t size() { return _size; }
+
+private:
+    ID3D12ResourcePtr _pGPUBuffer;
+    size_t _size   = 0;
+    size_t _offset = 0;
 };
 
 // An internal implementation for IGeometry.
@@ -44,6 +52,7 @@ public:
         D3D12_GPU_VIRTUAL_ADDRESS IndexBuffer    = 0;
         D3D12_GPU_VIRTUAL_ADDRESS PositionBuffer = 0;
         D3D12_GPU_VIRTUAL_ADDRESS NormalBuffer   = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS TangentBuffer  = 0;
         D3D12_GPU_VIRTUAL_ADDRESS TexCoordBuffer = 0;
     };
 
@@ -57,10 +66,11 @@ public:
     GeometryBuffers buffers() const
     {
         GeometryBuffers buffers;
-        buffers.IndexBuffer    = _indexBuffer.address();
-        buffers.PositionBuffer = _positionBuffer.address();
-        buffers.NormalBuffer   = _normalBuffer.address();
-        buffers.TexCoordBuffer = _texCoordBuffer.address();
+        buffers.IndexBuffer    = _indexBuffer.gpuAddress();
+        buffers.PositionBuffer = _positionBuffer.gpuAddress();
+        buffers.NormalBuffer   = _normalBuffer.gpuAddress();
+        buffers.TangentBuffer  = _tangentBuffer.gpuAddress();
+        buffers.TexCoordBuffer = _texCoordBuffer.gpuAddress();
         return buffers;
     }
     ID3D12Resource* blas() { return _pBLAS.Get(); }
@@ -83,6 +93,7 @@ private:
     VertexBuffer _indexBuffer;
     VertexBuffer _positionBuffer;
     VertexBuffer _normalBuffer;
+    VertexBuffer _tangentBuffer;
     VertexBuffer _texCoordBuffer;
 };
 MAKE_AURORA_PTR(PTGeometry);

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,13 @@ namespace Aurora
 {
 namespace Foundation
 {
+
+/// Remove illegal chars from a filename.
+void sanitizeFileName(std::string& fileName);
+
+/// Write string to file, returns false if write fails.
+bool writeStringToFile(
+    const std::string& str, const std::string& filename, const std::string& folder = "");
 
 /// Combine a hash with a seed value.
 void hashCombine(size_t& seed, size_t otherHash);

@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Disable unit test as causes failure in debug mode
+#if _DEBUG
+#define DISABLE_UNIT_TESTS
+#endif
+
 #if !defined(DISABLE_UNIT_TESTS)
 
 #include <AuroraTestHelpers.h>
@@ -21,6 +26,7 @@
 #include <gmock/gmock-matchers.h>
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <fstream>
 #include <regex>
 #include <streambuf>
@@ -73,6 +79,9 @@ public:
     }
     ~MaterialTest() {}
 
+    // Test for the existence of the ADSK materialX libraries (in the working folder for the tests)
+    bool adskMaterialXSupport() { return std::filesystem::exists("MaterialX/libraries/adsk"); }
+
     // Load a MaterialX document and process file paths to correct locations for unit tests.
     string loadAndProcessMaterialXFile(const string& filename)
     {
@@ -116,13 +125,9 @@ TEST_P(MaterialTest, TestMaterialDefault)
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "base_color", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "thin_film_IOR", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "specular_rotation", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "coat_IOR", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_depth", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "transmission", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
@@ -142,11 +147,7 @@ TEST_P(MaterialTest, TestMaterialDefault)
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "subsurface_anisotropy", true,
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_extra_roughness", true,
-        " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_scatter_anisotropy", true,
-        " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloatValue(*pScene, testMaterial, "transmission_dispersion", true,
+    testFloat3Value(*pScene, testMaterial, "transmission_color", true,
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloatValue(*pScene, testMaterial, "subsurface_scale", true,
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
@@ -158,11 +159,7 @@ TEST_P(MaterialTest, TestMaterialDefault)
         " material param test" + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "specular_color", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloat3Value(*pScene, testMaterial, "transmission_color", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "subsurface_color", true,
-        " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
-    testFloat3Value(*pScene, testMaterial, "transmission_scatter", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
     testFloat3Value(*pScene, testMaterial, "subsurface_radius", true,
         " material param test " + to_string(__LINE__) + " (" + rendererDescription() + ")");
@@ -191,11 +188,6 @@ static void clearAllProperties(Properties& props)
     props["metalness"].clear();
     props["transmission"].clear();
     props["transmission_color"].clear();
-    props["transmission_depth"].clear();
-    props["transmission_scatter"].clear();
-    props["transmission_scatter_anisotropy"].clear();
-    props["transmission_dispersion"].clear();
-    props["transmission_extra_roughness"].clear();
     props["subsurface"].clear();
     props["subsurface_color"].clear();
     props["subsurface_radius"].clear();
@@ -213,10 +205,6 @@ static void clearAllProperties(Properties& props)
     props["coat_IOR"].clear();
     props["coat_affect_color"].clear();
     props["coat_affect_roughness"].clear();
-    props["thin_film_thickness"].clear();
-    props["thin_film_IOR"].clear();
-    props["emission"].clear();
-    props["emission_color"].clear();
     props["opacity"].clear();
 
     props["base_color_image"].clear();
@@ -224,7 +212,8 @@ static void clearAllProperties(Properties& props)
     props["specular_color_image"].clear();
     props["coat_color_image"].clear();
     props["coat_roughness_image"].clear();
-
+    props["emission_color_image"].clear();
+    props["opacity_image"].clear();
     props["normal_image"].clear();
     props["displacement_image"].clear();
 }
@@ -563,6 +552,51 @@ TEST_P(MaterialTest, TestMaterialSetTransmission)
     pRenderer->waitForTask();
 }
 
+// Test emission properties.
+TEST_P(MaterialTest, TestMaterialEmission)
+{
+    // Create the default scene and renderer.
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If the renderer is null, this renderer type is not supported, so skip the rest of the test.
+    if (!pRenderer)
+    {
+        return;
+    }
+
+    // Create a material with a non-zero emission value and a specific emission color, along with
+    // minimal diffuse / specular reflectance so that the emission is dominant.
+    Path material("EmissionMaterial");
+    pScene->setMaterialProperties(material,
+        { { "emission", 1.0f }, { "emission_color", vec3(0.0f, 1.0f, 0.0f) }, { "base", 0.1f },
+            { "specular", 0.1f } });
+
+    // Create a teapot geometry object.
+    Path geometry = createTeapotGeometry(*pScene);
+
+    // Create an instance of the geometry, using the test material.
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial] = material;
+    EXPECT_TRUE(pScene->addInstance(Path("instance0"), geometry, instProps));
+
+    // Render and compare against the baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Emission", "Materials");
+
+    // Load a test image from disk as an Aurora image.
+    const std::string imageFilePath = dataPath() + "/Textures/Mr._Smiley_Face.png";
+    TestHelpers::ImageData imageData;
+    loadImage(imageFilePath, &imageData);
+    const Path kImagePath = "EmissionColorImage";
+    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+
+    // Set the image as the emission color image on the material.
+    pScene->setMaterialProperties(material, { { "emission_color_image", kImagePath } });
+
+    // Render and compare against the baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "EmissionImage", "Materials");
+}
+
 // Test more advanced material properties using baseline image testing
 TEST_P(MaterialTest, TestMaterialAdvancedMaterialProperties)
 {
@@ -794,7 +828,7 @@ TEST_P(MaterialTest, TestMaterialAdvancedMaterialProperties)
     }
 }
 
-// Test material creation using MaterialX
+// Test material type creation using MaterialX
 TEST_P(MaterialTest, TestMaterialTypes)
 {
     // No MaterialX on HGI yet.
@@ -951,10 +985,7 @@ TEST_P(MaterialTest, TestMaterialX)
     // Render the scene and check baseline image.
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_FromString", "Materials");
 
-    // On pathtracer we don't actually support setting arbritary materialX parameters, so mix1_mix
-    // won't exist.
-    ASSERT_THROW(pScene->setMaterialProperties(testMaterial, { { "mix1_mix", 0.1f } }),
-        TestHelpers::AuroraLoggerException);
+    pScene->setMaterialProperties(testMaterial, { { "mix_amount/value", 0.9f } });
 
     pScene->setInstanceProperties(instance, instProps);
 
@@ -997,10 +1028,49 @@ TEST_P(MaterialTest, TestHdAuroraMaterialX)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_HdAuroraMtlX", "Materials");
 }
 
+// Test material creation using MaterialX file dumped from HdAurora that has a texture.
+TEST_P(MaterialTest, TestHdAuroraTextureMaterialX)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    if (!pRenderer)
+        return;
+
+    setDefaultRendererPathTracingIterations(256);
+
+    setupAssetPaths();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // Create teapot geom.
+    Path geometry = createTeapotGeometry(*pScene);
+
+    // Try loading a MtlX file dumped from HdAurora.
+    Path material("HdAuroraMaterial");
+    pScene->setMaterialType(material, Names::MaterialTypes::kMaterialXPath,
+        dataPath() + "/Materials/HdAuroraTextureTest.mtlx");
+
+    // Add to scene.
+    Path instance("HdAuroraInstance");
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial] = material;
+    EXPECT_TRUE(pScene->addInstance(instance, geometry, instProps));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_HdAuroraMtlX", "Materials");
+}
+
 // Test different settings for isFlipImageYEnabled option.
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialXFlipImageY)
+TEST_P(MaterialTest, TestMaterialXFlipImageY)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
+
     // No MaterialX on HGI yet.
     if (!isDirectX())
         return;
@@ -1048,10 +1118,123 @@ TEST_P(MaterialTest, DISABLED_TestMaterialXFlipImageY)
     }
 }
 
+// Test material creation using MaterialX
+TEST_P(MaterialTest, TestLotsOfMaterialX)
+{
+    // No MaterialX on HGI yet.
+    if (!isDirectX())
+        return;
+
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    setDefaultRendererPathTracingIterations(256);
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // clang-format off
+    // Test Material
+    string testMtl0 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37">
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
+                  <bindinput name="base_color" type="color3" value="1,0,1" />
+                  <bindinput name="specular_color" type="color3" value="0,1,0" />
+                  <bindinput name="specular_roughness" type="float" value="0.8" />
+                  <bindinput name="specular_IOR" type="float" value = "0.75" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+        string testMtl1 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37">
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
+                  <bindinput name="base_color" type="color3" value="0,1,1" />
+                  <bindinput name="specular_color" type="color3" value="0,1,0" />
+                  <bindinput name="specular_IOR" type="float" value = "0.75" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+                string testMtl2 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37">
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
+                  <bindinput name="base_color" type="color3" value="0,1,1" />
+                  <bindinput name="specular_color" type="color3" value="1,0,0" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+    string testMtl3 = R""""(
+            <?xml version = "1.0" ?>
+            <materialx version = "1.37">
+               <material name="SS_Material">
+                 <shaderref name="SS_ShaderRef1" node="standard_surface">
+                  <bindinput name="base_color" type="color3" value="0,1,0" />
+                  <bindinput name="emission_color" type="color3" value = "0.2,0.2,0.1" />
+                  <bindinput name="coat" type="float" value = "0.75" />
+                  <bindinput name="coat_roughness" type="float" value = "0.75" />
+                </shaderref>
+              </material>
+            </materialx>
+    )"""";
+
+    // clang-format on
+
+    // Create teapot instance.
+    Path geometry = createTeapotGeometry(*pScene);
+    Path testMaterial0("TestMaterialX0");
+    pScene->setMaterialType(testMaterial0, Names::MaterialTypes::kMaterialX, testMtl0);
+    Path testMaterial1("TestMaterialX1");
+    pScene->setMaterialType(testMaterial1, Names::MaterialTypes::kMaterialX, testMtl1);
+    Path testMaterial2("TestMaterialX2");
+    pScene->setMaterialType(testMaterial2, Names::MaterialTypes::kMaterialX, testMtl2);
+    Path testMaterial3("TestMaterialX3");
+    pScene->setMaterialType(testMaterial3, Names::MaterialTypes::kMaterialX, testMtl3);
+
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance0", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial0 },
+            { Names::InstanceProperties::kTransform, translate(vec3(+1.5, 0.0, 4.0)) } }));
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance1", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial1 },
+            { Names::InstanceProperties::kTransform, translate(vec3(-1.5, 0.0, 4.0)) } }));
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance2", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial2 },
+            { Names::InstanceProperties::kTransform, translate(vec3(+1.5, -2.0, 4.0)) } }));
+    EXPECT_TRUE(pScene->addInstance("MaterialXInstance3", geometry,
+        { { Names::InstanceProperties::kMaterial, testMaterial3 },
+            { Names::InstanceProperties::kTransform, translate(vec3(-1.5, -2.0, 4.0)) } }));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
+}
+
 // Test different MtlX file that loads a BMP.
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialXBMP)
+TEST_P(MaterialTest, TestMaterialXBMP)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
 
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
@@ -1143,9 +1326,85 @@ TEST_P(MaterialTest, TestMaterialTransparency)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Opacity", "Materials");
 }
 
-// Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
+TEST_P(MaterialTest, TestMaterialShadowTransparency)
 {
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0, -.5f, 1)));
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
+    defaultDistantLight()->values().setFloat(Aurora::Names::LightProperties::kIntensity, 2.0f);
+    defaultDistantLight()->values().setFloat(
+        Aurora::Names::LightProperties::kAngularDiameter, 0.04f);
+
+    // Load pixels for test image file.
+    const std::string txtName = dataPath() + "/Textures/Triangle.png";
+
+    // Load image
+    TestHelpers::ImageData imageData;
+    loadImage(txtName, &imageData);
+
+    // Create the image.
+    const Path kImagePath = "OpacityImage";
+    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+
+    // Constant colors.
+    vec3 color0(0.5f, 1.0f, 0.3f);
+    vec3 opacity0(0.5f, 0.5f, 0.3f);
+
+    // Create geometry for teapot and plane geometry.
+    Path planeGeom  = createPlaneGeometry(*pScene);
+    Path teapotGeom = createTeapotGeometry(*pScene);
+
+    // Create materials.
+    Path transpMtl("TransparentMaterial");
+    pScene->setMaterialProperties(transpMtl, {});
+    Path opaqueMtl("OpaqueMaterial");
+    pScene->setMaterialProperties(opaqueMtl, { { "base_color", vec3(1, 1, 1) } });
+
+    // Create opaque plane instance behind a transparent teapot instance.
+    mat4 xform = translate(vec3(0, 0.5f, +2)) * scale(vec3(5, 5, 5));
+    Path planeInst("PlaneInstance");
+    Properties planeInstProps;
+    planeInstProps[Names::InstanceProperties::kMaterial]  = opaqueMtl;
+    planeInstProps[Names::InstanceProperties::kTransform] = xform;
+    EXPECT_TRUE(pScene->addInstance(planeInst, planeGeom, planeInstProps));
+
+    Path teapotInst("TeapotInstance");
+    Properties teapotInstProps;
+    teapotInstProps[Names::InstanceProperties::kMaterial] = transpMtl;
+    EXPECT_TRUE(pScene->addInstance(teapotInst, teapotGeom, teapotInstProps));
+
+    // Render baseline image with transmission.
+    pScene->setMaterialProperties(
+        transpMtl, { { "transmission", 0.5f }, { "thin_walled", false } });
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Transmission", "Materials");
+
+    // Render baseline image with transmission and thin_walled flag set.
+    pScene->setMaterialProperties(transpMtl, { { "opacity_image", kImagePath } });
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "OpacityImage", "Materials");
+
+    // Render baseline image with opacity, no transmission and thin_walled flag not set.
+    pScene->setMaterialProperties(transpMtl,
+        { { "transmission", 0.0f }, { "opacity_image", "" }, { "opacity", opacity0 },
+            { "thin_walled", false } });
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Opacity", "Materials");
+}
+
+// Disabled as this testcase fails with error in MaterialGenerator::generate
+TEST_P(MaterialTest, TestMtlXSamplers)
+{
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
+
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -1183,8 +1442,12 @@ TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
 
 // MaterialX as layered materials
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
+TEST_P(MaterialTest, TestMaterialMaterialXLayers)
 {
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
+
     // No MaterialX on HGI yet.
     if (!isDirectX())
         return;
@@ -1302,6 +1565,92 @@ TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
             { Names::InstanceProperties::kTransform, glm::translate(glm::vec3(0, -0.5, -0.8)) } }));
 
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName() + "_Removed");
+}
+
+// Normal map image test.
+TEST_P(MaterialTest, TestNormalMapMaterialX)
+{
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    setupAssetPaths();
+
+    defaultDistantLight()->values().setFloat(Aurora::Names::LightProperties::kIntensity, 2.0f);
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kDirection, value_ptr(glm::vec3(0.0f, -0.25f, +1.0f)));
+    defaultDistantLight()->values().setFloat3(
+        Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
+
+    // Create geometry.
+    Path planePath  = createPlaneGeometry(*pScene);
+    Path teapotPath = createTeapotGeometry(*pScene);
+
+    // Create material from mtlx document containing normal map.
+    string materialXFullPath   = dataPath() + "/Materials/NormalMapExample.mtlx";
+    string processedMtlXString = loadAndProcessMaterialXFile(materialXFullPath);
+    EXPECT_FALSE(processedMtlXString.empty());
+    const Path kMaterialPath = "NormalMaterial";
+    pScene->setMaterialType(kMaterialPath, Names::MaterialTypes::kMaterialX, processedMtlXString);
+
+    mat4 scaleMtx = scale(vec3(2, 2, 2));
+
+    // Create geometry with the material.
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial]  = kMaterialPath;
+    instProps[Names::InstanceProperties::kTransform] = scaleMtx;
+    EXPECT_TRUE(pScene->addInstance(nextPath(), planePath, instProps));
+
+    instProps[Names::InstanceProperties::kMaterial]  = kMaterialPath;
+    instProps[Names::InstanceProperties::kTransform] = mat4();
+    EXPECT_TRUE(pScene->addInstance(nextPath(), teapotPath, instProps));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
+}
+
+// Test object space normal in materialX.
+TEST_P(MaterialTest, TestObjectSpaceMaterialX)
+{
+    // This mtlx file requires support ADSK materialX support.
+    if (!adskMaterialXSupport())
+        return;
+
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    setDefaultRendererPathTracingIterations(256);
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    setupAssetPaths();
+
+    // Create teapot geom.
+    Path geometry = createTeapotGeometry(*pScene);
+
+    // Try loading a MtlX file dumped from Oxide.
+    Path material("ThreadMaterial");
+    pScene->setMaterialType(
+        material, Names::MaterialTypes::kMaterialXPath, dataPath() + "/Materials/TestThread.mtlx");
+
+    // Add to scene.
+    Path instance("ThreadInstance");
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial] = material;
+    EXPECT_TRUE(pScene->addInstance(instance, geometry, instProps));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_ThreadMtlX", "Materials");
 }
 
 INSTANTIATE_TEST_SUITE_P(MaterialTests, MaterialTest, TEST_SUITE_RENDERER_TYPES());

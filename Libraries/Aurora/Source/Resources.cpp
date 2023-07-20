@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -128,6 +128,13 @@ MaterialResource::MaterialResource(const Aurora::Path& path, const ResourceMap& 
     initializeFloatApplicators(
         { { ResourceStub::kDefaultPropName, [this](string propName, float value) {
                _resource->values().setFloat(propName, value);
+           } } });
+
+    // Setup a default applicator function so all vec2 properties are applied to the underlying
+    // material resource.
+    initializeVec2Applicators(
+        { { ResourceStub::kDefaultPropName, [this](string propName, vec2 value) {
+               _resource->values().setFloat2(propName, (float*)&value);
            } } });
 
     // Setup a default applicator function so all vec3 properties are applied to the underlying

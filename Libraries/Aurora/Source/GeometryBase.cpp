@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ static void copyVertexChannelData(vector<ComponentType>& dst, const AttributeDat
         ComponentType* pDstComp = dst.data();
         for (size_t i = 0; i < vertexCount; i++)
         {
-            // Copy the individual element from the soure buffer to destination.
+            // Copy the individual element from the source buffer to destination.
             const ComponentType* pSrcComp = reinterpret_cast<const ComponentType*>(pSrc);
             for (uint32_t j = 0; j < componentCount; j++)
             {
@@ -101,15 +101,17 @@ GeometryBase::GeometryBase(const std::string& name, const GeometryDescriptor& de
     copyVertexChannelData(
         _normals, vertexBuffers[Names::VertexAttributes::kNormal], _vertexCount, 3);
     copyVertexChannelData(
+        _tangents, vertexBuffers[Names::VertexAttributes::kTangent], _vertexCount, 3);
+    copyVertexChannelData(
         _texCoords, vertexBuffers[Names::VertexAttributes::kTexCoord0], _vertexCount, 2);
     copyVertexChannelData(_indices, vertexBuffers[Names::VertexAttributes::kIndices], _indexCount);
 
-    // Run the optional attributeUpdateComplete functoin to free any buffers being held by the
+    // Run the optional attributeUpdateComplete function to free any buffers being held by the
     // client.
     if (descriptor.attributeUpdateComplete)
         descriptor.attributeUpdateComplete(vertexBuffers, 0, _vertexCount, 0, _indexCount);
 
-    // TODO: We need a better UV generator, esspecially if we need tangents generated from them.
+    // TODO: We need a better UV generator, especially if we need tangents generated from them.
     if (_texCoords.size() == 0)
     {
         _texCoords.resize(_vertexCount * 2);

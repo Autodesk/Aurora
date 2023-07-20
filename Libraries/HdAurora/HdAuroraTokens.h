@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,6 +65,12 @@ static const TfToken kIsSharedHandleOpenGL("aurora:is_shared_handle_opengl");
 /// The settings for the global ground plane, as defined in the Aurora API.
 static const TfToken kGroundPlaneSettings("aurora:ground_plane_settings");
 
+/// Whether to flip the output image.
+static const TfToken kFlipYOutput("aurora:flip_y_output");
+
+/// Whether to flip the output image.
+static const TfToken kFlipLoadedImageY("aurora:flip_loaded_image_y");
+
 //**************************************************************************/
 // Material Tokens
 //**************************************************************************/
@@ -74,6 +80,11 @@ static const TfToken kMaterialXFilePath("aurora:materialx_file_path");
 
 /// The MaterialX document for a material, as XML in memory.
 static const TfToken kMaterialXDocument("aurora:materialx_document");
+
+/// If true the opacity UsdPreviewSurface parameter is mapped to transmission in Standard Surface.
+/// This matches the definition more closely (defaults to true.)
+static const TfToken kMapMaterialOpacityToTransmission(
+    "aurora:map_material_opacity_to_transmission");
 
 //**************************************************************************/
 // Mesh Tokens

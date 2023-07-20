@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,18 +26,33 @@
 #include "Transpiler.h"
 
 // Development flag to enable/disable multithreaded compilation.
-#define AU_DEV_MULTITHREAD_COMPILATION 0
+#define AU_DEV_MULTITHREAD_COMPILATION 1
 
 #if AU_DEV_MULTITHREAD_COMPILATION
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_for_each.h>
+#include <execution>
 #endif
 
 BEGIN_AURORA
+// Input to thread used to compile shaders.
+struct CompileJob
+{
+    CompileJob(int ji) : jobIndex(ji) {}
+
+    string code;
+    string libName;
+    map<string, string> includes;
+    vector<pair<string, string>> entryPoints;
+    int index;
+    int jobIndex;
+};
 
 // Development flag to entire HLSL library to disk.
 // NOTE: This should never be enabled in committed code; it is only for local development.
 #define AU_DEV_DUMP_SHADER_CODE 0
+
+// Development flag to transpiled HLSL library to disk.
+// NOTE: This should never be enabled in committed code; it is only for local development.
+#define AU_DEV_DUMP_TRANSPILED_CODE 0
 
 // Pack four bytes into a single unsigned int.
 // Based on version in DirectX toolkit.
@@ -47,14 +62,21 @@ BEGIN_AURORA
         (static_cast<uint32_t>(static_cast<uint8_t>(ch2)) << 16) |                                 \
         (static_cast<uint32_t>(static_cast<uint8_t>(ch3)) << 24))
 
-// Strings for shader entry points.
-static const wchar_t* gRayGenEntryPoint         = L"RayGenShader";
-static const wchar_t* gBackgroundMissEntryPoint = L"BackgroundMissShader";
-static const wchar_t* gRadianceMissEntryPoint   = L"RadianceMissShader";
-static const wchar_t* gShadowMissEntryPoint     = L"ShadowMissShader";
+// Define the entry point type strings.
+const string EntryPointTypes::kRadianceHit    = "RADIANCE_HIT";
+const string EntryPointTypes::kLayerMiss      = "LAYER_MISS";
+const string EntryPointTypes::kShadowAnyHit   = "SHADOW_ANY_HIT";
+const string EntryPointTypes::kRayGen         = "RAY_GEN";
+const string EntryPointTypes::kBackgroundMiss = "BACKGROUND_MISS";
+const string EntryPointTypes::kRadianceMiss   = "RADIANCE_MISS";
+const string EntryPointTypes::kShadowMiss     = "SHADOW_MISS";
+
+// Array of entry point names.
+const vector<string> PTShaderLibrary::DefaultEntryPoints = { EntryPointTypes::kRadianceHit,
+    EntryPointTypes::kShadowAnyHit, EntryPointTypes::kLayerMiss };
 
 // Combine the source code for the reference and Standard Surface BSDF to produce the default built
-// in material type. Use USE_REFERENCE_BSDF ifdef so that the material's BSDF can be selected via an
+// in shader. Use USE_REFERENCE_BSDF ifdef so that the material's BSDF can be selected via an
 // option.
 
 // DXC include handler, used by PTShaderLibrary::compileLibrary
@@ -114,66 +136,6 @@ private:
     const map<string, const string&>& _includes;
 };
 
-PTMaterialType::PTMaterialType(
-    PTShaderLibrary* pShaderLibrary, int sourceIndex, const string& typeName) :
-    _pShaderLibrary(pShaderLibrary), _sourceIndex(sourceIndex), _name(typeName)
-{
-    // Set the closest hit, any hit, and layer miss hit entry point names, converted to wide string.
-    _closestHitEntryPoint        = Foundation::s2w(typeName + "RadianceHitShader");
-    _shadowAnyHitEntryPoint      = Foundation::s2w(typeName + "ShadowAnyHitShader");
-    _materialLayerMissEntryPoint = Foundation::s2w(typeName + "LayerMissShader");
-
-    // Set the hit group export name from the entry point name, converted to wide string.
-    _exportName = _closestHitEntryPoint + Foundation::s2w("Group");
-
-    // Initialize ref. counts to zero.
-    for (int i = 0; i < EntryPoint::kNumEntryPoints; i++)
-        _entryPointRefCount[i] = 0;
-}
-
-PTMaterialType::~PTMaterialType()
-{
-    // If this material type is valid, when its destroyed (which will happen when no material holds
-    // a shared pointer to it) remove it source code from the library.
-    if (isValid())
-    {
-        _pShaderLibrary->removeSource(_sourceIndex);
-    }
-}
-
-void PTMaterialType::incrementRefCount(EntryPoint entryPoint)
-{
-    // Increment the ref. count and trigger rebuild if this is the flip case (that causes the count
-    // to go from zero to non-zero.) A shader rebuild is required as this will change the HLSL code.
-    _entryPointRefCount[entryPoint]++;
-    if (_pShaderLibrary && _entryPointRefCount[entryPoint] == 1)
-        _pShaderLibrary->triggerRebuild();
-}
-
-void PTMaterialType::decrementRefCount(EntryPoint entryPoint)
-{
-    // Ensure ref. count is non-zero.
-    AU_ASSERT(_entryPointRefCount[entryPoint] > 0, "Invalid ref count");
-
-    // Decrement the ref. count and trigger rebuild if this is the flip case (that causes the count
-    // to go from non-zero to zero). A shader rebuild is required as this will change the HLSL code.
-    _entryPointRefCount[entryPoint]--;
-    if (_pShaderLibrary && _entryPointRefCount[entryPoint] == 0)
-        _pShaderLibrary->triggerRebuild();
-}
-
-DirectXShaderIdentifier PTMaterialType::getShaderID()
-{
-    // Get the shader ID from the library.
-    return _pShaderLibrary->getShaderID(_exportName.c_str());
-}
-
-DirectXShaderIdentifier PTMaterialType::getLayerShaderID()
-{
-    // Get the shader ID from the library.
-    return _pShaderLibrary->getShaderID(_materialLayerMissEntryPoint.c_str());
-}
-
 bool PTShaderOptions::set(const string& name, int val)
 {
     // Find name in lookup map.
@@ -227,19 +189,6 @@ string PTShaderOptions::toHLSL() const
 
     // Return HLSL.
     return hlslStr;
-}
-
-PTShaderLibrary::~PTShaderLibrary()
-{
-    // Invalidate any remaining valid material types, to avoid zombies.
-    for (auto pWeakMaterialType : _materialTypes)
-    {
-        PTMaterialTypePtr pMaterialType = pWeakMaterialType.second.lock();
-        if (pMaterialType)
-        {
-            pMaterialType->invalidate();
-        }
-    }
 }
 
 bool PTShaderLibrary::compileLibrary(const ComPtr<IDxcLibrary>& pDXCLibrary, const string source,
@@ -438,9 +387,9 @@ void PTShaderLibrary::initRootSignatures()
     CD3DX12_DESCRIPTOR_RANGE texRange;
     CD3DX12_DESCRIPTOR_RANGE samplerRange;
 
-    CD3DX12_ROOT_PARAMETER globalRootParameters[8] = {}; // NOLINT(modernize-avoid-c-arrays)
-    globalRootParameters[0].InitAsShaderResourceView(0); // gScene: acceleration structure
-    globalRootParameters[1].InitAsConstants(2, 0);       // sampleIndex + seedOffset
+    array<CD3DX12_ROOT_PARAMETER, 8> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
+    globalRootParameters[0].InitAsShaderResourceView(0);        // gScene: acceleration structure
+    globalRootParameters[1].InitAsConstants(2, 0);              // sampleIndex + seedOffset
     globalRootParameters[2].InitAsConstantBufferView(1); // gFrameData: per-frame constant buffer
     globalRootParameters[3].InitAsConstantBufferView(2); // gEnvironmentConstants
     globalRootParameters[4].InitAsShaderResourceView(1); // gEnvironmentAliasMap
@@ -451,8 +400,8 @@ void PTShaderLibrary::initRootSignatures()
     globalRootParameters[6].InitAsConstantBufferView(3); // gGroundPlane
     globalRootParameters[7].InitAsShaderResourceView(4); // gNullScene: null acceleration structure
     CD3DX12_STATIC_SAMPLER_DESC samplerDesc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR);
-    CD3DX12_ROOT_SIGNATURE_DESC globalDesc(
-        _countof(globalRootParameters), globalRootParameters, 1, &samplerDesc);
+    CD3DX12_ROOT_SIGNATURE_DESC globalDesc(static_cast<UINT>(globalRootParameters.size()),
+        globalRootParameters.data(), 1, &samplerDesc);
     _pGlobalRootSignature = createRootSignature(globalDesc);
     _pGlobalRootSignature->SetName(L"Global Root Signature");
 
@@ -462,62 +411,84 @@ void PTShaderLibrary::initRootSignatures()
     CD3DX12_DESCRIPTOR_RANGE uavRange;
     uavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 7, 0);   // Output images (for AOV data)
     CD3DX12_DESCRIPTOR_RANGE rayGenRanges[] = { uavRange }; // NOLINT(modernize-avoid-c-arrays)
-    CD3DX12_ROOT_PARAMETER rayGenRootParameters[1] = {};    // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 1> rayGenRootParameters = {};
     rayGenRootParameters[0].InitAsDescriptorTable(_countof(rayGenRanges), rayGenRanges);
-    CD3DX12_ROOT_SIGNATURE_DESC rayGenDesc(_countof(rayGenRootParameters), rayGenRootParameters);
+    CD3DX12_ROOT_SIGNATURE_DESC rayGenDesc(
+        static_cast<UINT>(rayGenRootParameters.size()), rayGenRootParameters.data());
     rayGenDesc.Flags      = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
     _pRayGenRootSignature = createRootSignature(rayGenDesc);
     _pRayGenRootSignature->SetName(L"Ray Gen Local Root Signature");
 
-    // Specify a local root signature for the radiance hit group.
+    // Start a local root signature for the radiance hit group.
     // NOTE: All shaders in the hit group must have the same local root signature.
-    CD3DX12_ROOT_PARAMETER radianceHitParameters[9] = {};    // NOLINT(modernize-avoid-c-arrays)
-    radianceHitParameters[0].InitAsShaderResourceView(0, 1); // gIndices: indices
-    radianceHitParameters[1].InitAsShaderResourceView(1, 1); // gPositions: positions
-    radianceHitParameters[2].InitAsShaderResourceView(2, 1); // gNormals: normals
-    radianceHitParameters[3].InitAsShaderResourceView(3, 1); // gTexCoords: texture coordinates
-    radianceHitParameters[4].InitAsConstants(
-        3, 0, 1); // gHasNormals, gHasTexCoords, and gLayerMissShaderIndex
-    radianceHitParameters[5].InitAsConstantBufferView(1, 1); // gMaterial: material data
-    radianceHitParameters[6].InitAsConstantBufferView(
-        2, 1); // gMaterialLayerIDs: indices for layer material shaders
+    array<CD3DX12_ROOT_PARAMETER, 10> radianceHitParameters = {};
 
-    // Texture descriptors starting at register(t4, space1)
-    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 4, 1);
+    // Geometry buffers: indices, positions, normals, tangents, and texture coordinates.
+    const int kGeometryBufferCount = 5;
+    radianceHitParameters[0].InitAsShaderResourceView(0, 1); // gIndices
+    radianceHitParameters[1].InitAsShaderResourceView(1, 1); // gPositions
+    radianceHitParameters[2].InitAsShaderResourceView(2, 1); // gNormals
+    radianceHitParameters[3].InitAsShaderResourceView(3, 1); // gTangents
+    radianceHitParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords
+
+    // Constants: gHasNormals, gHasTangents gHasTexCoords, gLayerMissShaderIndex, and gIsOpaque.
+    radianceHitParameters[5].InitAsConstants(5, 0, 1);
+
+    // gMaterialConstants: material data (stored after geometry data and textures).
+    radianceHitParameters[6].InitAsShaderResourceView(
+        kGeometryBufferCount + PTMaterial::descriptorCount(), 1);
+
+    // gMaterialLayerIDs: indices for layer material shaders.
+    radianceHitParameters[7].InitAsConstantBufferView(2, 1);
+
+    // Texture descriptors starting at register(tX, space1), where X is the number of byte address
+    // buffers for geometry data.
+    texRange.Init(
+        D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), kGeometryBufferCount, 1);
     CD3DX12_DESCRIPTOR_RANGE radianceHitRanges[] = { texRange }; // NOLINT(modernize-avoid-c-arrays)
-    radianceHitParameters[7].InitAsDescriptorTable(_countof(radianceHitRanges), radianceHitRanges);
+    radianceHitParameters[8].InitAsDescriptorTable(_countof(radianceHitRanges), radianceHitRanges);
 
     // Sampler descriptors starting at register(s1)
     samplerRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, PTMaterial::samplerDescriptorCount(), 1);
     CD3DX12_DESCRIPTOR_RANGE radianceHitSamplerRanges[] = {
         samplerRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    radianceHitParameters[8].InitAsDescriptorTable(
+    radianceHitParameters[9].InitAsDescriptorTable(
         _countof(radianceHitSamplerRanges), radianceHitSamplerRanges);
 
     CD3DX12_ROOT_SIGNATURE_DESC radianceHitDesc(
-        _countof(radianceHitParameters), radianceHitParameters);
+        static_cast<UINT>(radianceHitParameters.size()), radianceHitParameters.data());
     radianceHitDesc.Flags      = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
     _pRadianceHitRootSignature = createRootSignature(radianceHitDesc);
     _pRadianceHitRootSignature->SetName(L"Radiance Hit Group Local Root Signature");
 
-    // Specify a local root signature for the layer miss shader.
+    // Start a local root signature for the layer miss shader.
     // NOTE: All shaders in the hit group must have the same local root signature.
-    CD3DX12_ROOT_PARAMETER layerMissParameters[9] = {};    // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 10> layerMissParameters = {};
+
+    // Geometry buffers.
     layerMissParameters[0].InitAsShaderResourceView(0, 1); // gIndices: indices
     layerMissParameters[1].InitAsShaderResourceView(1, 1); // gPositions: positions
     layerMissParameters[2].InitAsShaderResourceView(2, 1); // gNormals: normals
-    layerMissParameters[3].InitAsShaderResourceView(3, 1); // gTexCoords: texture coordinates
-    layerMissParameters[4].InitAsConstants(
-        3, 0, 1); // gHasNormals, gHasTexCoords, and gLayerMissShaderIndex
-    layerMissParameters[5].InitAsConstantBufferView(1, 1); // gMaterial: material data
-    layerMissParameters[6].InitAsConstantBufferView(
-        2, 1); // gMaterialLayerIDs: indices for layer material shaders
+    layerMissParameters[3].InitAsShaderResourceView(3, 1); // gTangents: tangents
+    layerMissParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords: texture coordinates
 
-    // Texture descriptors starting at register(t4, space1)
-    texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), 4, 1); // Textures
+    // Constants: gHasNormals, gHasTangents gHasTexCoords, gLayerMissShaderIndex, and gIsOpaque.
+    layerMissParameters[5].InitAsConstants(5, 0, 1);
+
+    // gMaterialConstants: material data (stored after geometry data and textures).
+    layerMissParameters[6].InitAsShaderResourceView(
+        kGeometryBufferCount + PTMaterial::descriptorCount(), 1);
+
+    // gMaterialLayerIDs: indices for layer material shaders.
+    layerMissParameters[7].InitAsConstantBufferView(2, 1);
+
+    // Texture descriptors starting at register(tX, space1), where X is the number of byte address
+    // buffers for geometry data.
+    texRange.Init(
+        D3D12_DESCRIPTOR_RANGE_TYPE_SRV, PTMaterial::descriptorCount(), kGeometryBufferCount, 1);
     CD3DX12_DESCRIPTOR_RANGE layerMissRanges[] = { texRange }; // NOLINT(modernize-avoid-c-arrays)
-    layerMissParameters[7].InitAsDescriptorTable(_countof(layerMissRanges), layerMissRanges);
+    layerMissParameters[8].InitAsDescriptorTable(_countof(layerMissRanges), layerMissRanges);
 
     // Sampler descriptors starting at register(s1)
     samplerRange.Init(
@@ -525,11 +496,12 @@ void PTShaderLibrary::initRootSignatures()
     CD3DX12_DESCRIPTOR_RANGE layerMissSamplerRanges[] = {
         samplerRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    layerMissParameters[8].InitAsDescriptorTable(
+    layerMissParameters[9].InitAsDescriptorTable(
         _countof(layerMissSamplerRanges), layerMissSamplerRanges);
 
     // Create layer miss root signature.
-    CD3DX12_ROOT_SIGNATURE_DESC layerMissDesc(_countof(layerMissParameters), layerMissParameters);
+    CD3DX12_ROOT_SIGNATURE_DESC layerMissDesc(
+        static_cast<UINT>(layerMissParameters.size()), layerMissParameters.data());
     layerMissDesc.Flags      = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
     _pLayerMissRootSignature = createRootSignature(layerMissDesc);
     _pLayerMissRootSignature->SetName(L"Layer Miss Local Root Signature");
@@ -538,7 +510,7 @@ void PTShaderLibrary::initRootSignatures()
 DirectXShaderIdentifier PTShaderLibrary::getShaderID(const wchar_t* entryPoint)
 {
     // Assert if a rebuild is required, as the pipeline state will be invalid.
-    AU_ASSERT(!_rebuildRequired,
+    AU_ASSERT(!rebuildRequired(),
         "Shader Library rebuild required, call rebuild() before accessing shaders");
 
     // Get the shader ID from the pipeline state.
@@ -547,148 +519,70 @@ DirectXShaderIdentifier PTShaderLibrary::getShaderID(const wchar_t* entryPoint)
     return stateObjectProps->GetShaderIdentifier(entryPoint);
 }
 
-DirectXShaderIdentifier PTShaderLibrary::getBackgroundMissShaderID()
+DirectXShaderIdentifier PTShaderLibrary::getShaderID(MaterialShaderPtr pShader)
 {
-    // Get the shader ID for the HLSL function name.
-    return getShaderID(gBackgroundMissEntryPoint);
+    auto& compiledShader = _compiledShaders[pShader->libraryIndex()];
+
+    return getShaderID(Foundation::s2w(compiledShader.exportName).c_str());
 }
 
-DirectXShaderIdentifier PTShaderLibrary::getRadianceMissShaderID()
+DirectXShaderIdentifier PTShaderLibrary::getLayerShaderID(MaterialShaderPtr pShader)
 {
-    // Get the shader ID for the HLSL function name.
-    return getShaderID(gRadianceMissEntryPoint);
+    auto& compiledShader = _compiledShaders[pShader->libraryIndex()];
+
+    return getShaderID(
+        Foundation::s2w(compiledShader.entryPoints[EntryPointTypes::kLayerMiss]).c_str());
 }
 
-DirectXShaderIdentifier PTShaderLibrary::getShadowMissShaderID()
+DirectXShaderIdentifier PTShaderLibrary::getSharedEntryPointShaderID(const string& entryPoint)
 {
-    // Get the shader ID for the HLSL function name.
-    return getShaderID(gShadowMissEntryPoint);
-}
+    // Get the default compiled shader, which contains all the shared entry points.
+    const auto& defaultCompiledShader = getDefaultShader();
 
-DirectXShaderIdentifier PTShaderLibrary::getRayGenShaderID()
-{
-    // Get the shader ID for the HLSL function name.
-    return getShaderID(gRayGenEntryPoint);
-}
-
-vector<string> PTShaderLibrary::getActiveTypeNames()
-{
-    vector<string> res;
-    for (auto hgIter = _materialTypes.begin(); hgIter != _materialTypes.end(); hgIter++)
-    {
-        // Weak pointer is stored in shader library, ensure it has not been deleted.
-        PTMaterialTypePtr pMtlType = hgIter->second.lock();
-        if (pMtlType)
-        {
-            res.push_back(pMtlType->name());
-        }
-    }
-    return res;
-}
-
-PTMaterialTypePtr PTShaderLibrary::getType(const string& name)
-{
-    return _materialTypes[name].lock();
-}
-
-void PTShaderLibrary::removeSource(int sourceIndex)
-{
-    // Push index in to vector, the actual remove only happens when library rebuilt.
-    _sourceToRemove.push_back(sourceIndex);
-}
-PTMaterialTypePtr PTShaderLibrary::acquireMaterialType(
-    const MaterialTypeSource& source, bool* pCreatedType)
-{
-    // The shared pointer to material type.
-    PTMaterialTypePtr pMtlType;
-
-    // First see if this entry point already exists.
-    map<string, weak_ptr<PTMaterialType>>::iterator hgIter = _materialTypes.find(source.name);
-    if (hgIter != _materialTypes.end())
-    {
-        // Weak pointer is stored in shader library, ensure it has not been deleted.
-        pMtlType = hgIter->second.lock();
-        if (pMtlType)
-        {
-            // If the entry point exists, in debug mode do a string comparison to ensure the source
-            // also matches.
-            AU_ASSERT_DEBUG(
-                source.compareSource(_compiledMaterialTypes[pMtlType->_sourceIndex].source),
-                "Source mis-match for material type %s.", source.name.c_str());
-
-            // No type created.
-            if (pCreatedType)
-                *pCreatedType = false;
-
-            // Return the existing material type.
-            return pMtlType;
-        }
-    }
-
-    // Append the new source to the source vector, and calculate source index.
-    int sourceIdx = static_cast<int>(_compiledMaterialTypes.size());
-    _compiledMaterialTypes.push_back({ source, nullptr });
-
-    // Trigger rebuild.
-    _rebuildRequired = true;
-
-    // Create new material type.
-    pMtlType = make_shared<PTMaterialType>(this, sourceIdx, source.name);
-
-    // Add weak reference to map.
-    _materialTypes[source.name] = weak_ptr<PTMaterialType>(pMtlType);
-
-    // New type created.
-    if (pCreatedType)
-        *pCreatedType = true;
-
-    // Return the new material type.
-    return pMtlType;
-}
-
-PTMaterialTypePtr PTShaderLibrary::getBuiltInMaterialType(const string& name)
-{
-    return _builtInMaterialTypes[name];
+    // Get the shader ID for entry point.
+    return getShaderID(Foundation::s2w(defaultCompiledShader.entryPoints.at(entryPoint)).c_str());
 }
 
 void PTShaderLibrary::initialize()
 {
-    _pTranspiler = make_shared<Transpiler>(CommonShaders::g_sDirectory);
+    // Create an emptry array of Slang transpilers.
+    _transpilerArray = {};
 
-    // Initialize root signatures (these are shared by all material types, and don't change.)
+    // Initialize root signatures (these are shared by all shaders, and don't change.)
     initRootSignatures();
 
     // Clear the source and built ins vector. Not strictly needed, but this function could be called
     // repeatedly in the future.
-    _compiledMaterialTypes.clear();
+    _compiledShaders.clear();
     _builtInMaterialNames = {};
 
-    // Create the default material type.
-    MaterialTypeSource defaultMaterialSource(
+    // Create source code for the default shader.
+    MaterialShaderSource defaultMaterialSource(
         "Default", CommonShaders::g_sInitializeDefaultMaterialType);
-    PTMaterialTypePtr pDefaultMaterialType = acquireMaterialType(defaultMaterialSource);
 
-    // Ensure the radiance hit entry point is compiled for default material type.
-    pDefaultMaterialType->incrementRefCount(PTMaterialType::EntryPoint::kRadianceHit);
+    // Add the shared entry points to the default shader's definitions source.
+    defaultMaterialSource.definitions = "#include \"BackgroundMissShader.slang\"\n";
+    defaultMaterialSource.definitions += "#include \"RadianceMissShader.slang\"\n";
+    defaultMaterialSource.definitions += "#include \"ShadowMissShader.slang\"\n";
+    defaultMaterialSource.definitions += "#include \"RayGenShader.slang\"\n";
 
-    // Add default material type to the built-in array.
-    _builtInMaterialNames.push_back(defaultMaterialSource.name);
-    _builtInMaterialTypes[defaultMaterialSource.name] =
-        pDefaultMaterialType; // Stores strong reference to the built-in's material type.
-}
+    // Create the material definition for default shader.
+    _builtInMaterialDefinitions[defaultMaterialSource.uniqueId] =
+        make_shared<MaterialDefinition>(defaultMaterialSource,
+            MaterialBase::StandardSurfaceDefaults, MaterialBase::updateBuiltInMaterial, false);
 
-bool PTShaderLibrary::setDefinitionsHLSL(const string& definitions)
-{
-    // If the MaterialX definitions HLSL has not changed do nothing.
-    if (_materialXDefinitionsSource.compare(definitions) == 0)
-    {
-        return false;
-    }
+    // Create shader from the definition.
+    MaterialShaderDefinition shaderDef;
+    _builtInMaterialDefinitions[defaultMaterialSource.uniqueId]->getShaderDefinition(shaderDef);
+    MaterialShaderPtr pDefaultShader = _shaderLibrary.acquire(shaderDef);
 
-    // Otherwise set definitions and trigger rebuild.
-    _materialXDefinitionsSource = definitions;
-    _rebuildRequired            = true;
-    return true;
+    // Ensure the radiance hit entry point is compiled for default shader.
+    pDefaultShader->incrementRefCount(EntryPointTypes::kRadianceHit);
+
+    // Add default shader to the built-in array.
+    _builtInMaterialNames.push_back(defaultMaterialSource.uniqueId);
+    _builtInShaders[defaultMaterialSource.uniqueId] =
+        pDefaultShader; // Stores strong reference to the built-in's shader.
 }
 
 bool PTShaderLibrary::setOption(const string& name, int value)
@@ -699,58 +593,66 @@ bool PTShaderLibrary::setOption(const string& name, int value)
     // If the option changed set the HLSL and trigger rebuild.
     if (changed)
     {
-        _optionsSource   = _options.toHLSL();
-        _rebuildRequired = true;
+        _optionsSource = _options.toHLSL();
+        _shaderLibrary.forceRebuildAll();
     }
 
     return changed;
 }
 
-void PTShaderLibrary::assembleShadersForMaterialType(const MaterialTypeSource& source,
-    const map<string, bool>& entryPoints, vector<string>& shadersOut)
+MaterialShaderPtr PTShaderLibrary::getBuiltInShader(const string& name)
 {
-    // Add shared common code.
-    string shaderSource = _optionsSource;
-    shaderSource += CommonShaders::g_sGLSLToHLSL;
-    shaderSource += CommonShaders::g_sMaterialXCommon;
-    shaderSource += _materialXDefinitionsSource;
-
-    // Clear the output shaders vector.
-    shadersOut.clear();
-
-    // Add the shaders for the radiance hit entry point, if needed.
-    if (entryPoints.at("RADIANCE_HIT"))
-    {
-
-        // Create radiance hit entry point, by replacing template tags with the material type name.
-        string radianceHitEntryPointSource = regex_replace(
-            CommonShaders::g_sClosestHitEntryPointTemplate, regex("@MATERIAL_TYPE@"), source.name);
-        shadersOut.push_back(shaderSource + radianceHitEntryPointSource);
-
-        // Create shadow hit entry point, by replacing template tags with the material type name.
-        string shadowHitEntryPointSource = regex_replace(
-            CommonShaders::g_sShadowHitEntryPointTemplate, regex("@MATERIAL_TYPE@"), source.name);
-        shadersOut.push_back(shaderSource + shadowHitEntryPointSource);
-    }
-
-    // Add the shaders for the layer miss entry point, if needed.
-    if (entryPoints.at("LAYER_MISS"))
-    {
-        // Create layer miss entry point, by replacing template tags with the material type name.
-        string layerMissShaderSource = regex_replace(
-            CommonShaders::g_sLayerShaderEntryPointTemplate, regex("@MATERIAL_TYPE@"), source.name);
-        shadersOut.push_back(shaderSource + layerMissShaderSource);
-    }
+    return _builtInShaders[name];
 }
 
-// Input to thread used to compile shaders.
-struct CompileJob
+shared_ptr<MaterialDefinition> PTShaderLibrary::getBuiltInMaterialDefinition(const string& name)
 {
-    string code;
-    string libName;
-    ComPtr<IDxcBlob> pBlob;
-    map<string, string> includes;
-};
+    return _builtInMaterialDefinitions[name];
+}
+
+void PTShaderLibrary::setupCompileJobForShader(const MaterialShader& shader, CompileJob& jobOut)
+{
+    // Add shared common code.
+    auto& source = shader.definition().source;
+
+    // Setup the preprocessor defines to enable the entry points in the source code, based on shader
+    // ref-counts.
+    jobOut.code = "#define RADIANCE_HIT " +
+        to_string(shader.hasEntryPoint(EntryPointTypes::kRadianceHit)) + "\n";
+    jobOut.code += "#define LAYER_MISS " +
+        to_string(shader.hasEntryPoint(EntryPointTypes::kLayerMiss)) + "\n\n";
+    jobOut.code += "#define SHADOW_ANYHIT " +
+        to_string(shader.hasEntryPoint(EntryPointTypes::kShadowAnyHit)) + "\n\n";
+    jobOut.code += "#define SHADOW_ANYHIT_ALWAYS_OPAQUE " +
+        to_string(shader.definition().isAlwaysOpaque) + "\n\n";
+
+    // Create the shader entry points, by replacing template tags with the shader name.
+    string entryPointSource =
+        regex_replace(CommonShaders::g_sMainEntryPoints, regex("___Material___"), source.uniqueId);
+    jobOut.code += entryPointSource;
+
+    // Get the compiled shader for this material shader.
+    auto& compiledShader = _compiledShaders[shader.libraryIndex()];
+
+    // Set the library name to the shader name.
+    jobOut.libName = compiledShader.hlslFilename;
+
+    // Set the includes from the shader's source code and the options source.
+    jobOut.includes = {
+        { "InitializeMaterial.slang", source.setup },
+        { "Options.slang", _optionsSource },
+        { "Definitions.slang", source.definitions },
+    };
+
+    // Set the entry points to be post-processed (Slang will remove the [shader] tags).
+    jobOut.entryPoints = { { "closesthit",
+                               compiledShader.entryPoints[EntryPointTypes::kRadianceHit] },
+        { "anyhit", compiledShader.entryPoints[EntryPointTypes::kShadowAnyHit] },
+        { "miss", compiledShader.entryPoints[EntryPointTypes::kLayerMiss] } };
+
+    // Set the index to map back to the compiled shader array.
+    jobOut.index = shader.libraryIndex();
+}
 
 void PTShaderLibrary::rebuild()
 {
@@ -758,9 +660,92 @@ void PTShaderLibrary::rebuild()
     _timer.reset();
 
     // Should only be called if required (rebuilding requires stalling the GPU pipeline.)
-    AU_ASSERT(_rebuildRequired, "Rebuild not needed");
+    AU_ASSERT(rebuildRequired(), "Rebuild not needed");
 
-    // This creates the following subjects for a pipeline state object:
+    // Build vector of compile jobs to execute in parallel.
+    vector<CompileJob> compileJobs;
+
+    // Compile function is executed by MaterialShaderLibrary::update for any shaders that need
+    // recompiling.
+    auto compileShaderFunction = [this, &compileJobs](const MaterialShader& shader) {
+        // If there is no compiled shader object in the array for this shader, then create one.
+        if (_compiledShaders.size() <= shader.libraryIndex())
+        {
+            // Resize array of compiled shaders.
+            _compiledShaders.resize(shader.libraryIndex() + 1);
+        }
+
+        // Get the compiled shader object for this shader, and destroy any existing compiled shader
+        // binary.
+        auto& compiledShader = _compiledShaders[shader.libraryIndex()];
+
+        // If the compiled shader object is empty, fill in the entry points, etc.
+        if (compiledShader.id.empty())
+        {
+            // Create entry points
+            _compiledShaders[shader.libraryIndex()].entryPoints = {
+                { EntryPointTypes::kRadianceHit, shader.id() + "RadianceHitShader" },
+                { EntryPointTypes::kLayerMiss, shader.id() + "LayerMissShader" },
+                { EntryPointTypes::kShadowAnyHit, shader.id() + "ShadowAnyHitShader" },
+            };
+
+            // Default shader (at index 0) has all the shared entry points.
+            if (shader.libraryIndex() == 0)
+            {
+                _compiledShaders[shader.libraryIndex()]
+                    .entryPoints[EntryPointTypes::kRadianceMiss] = "RadianceMissShader";
+                _compiledShaders[shader.libraryIndex()].entryPoints[EntryPointTypes::kRayGen] =
+                    "RayGenShader";
+                _compiledShaders[shader.libraryIndex()].entryPoints[EntryPointTypes::kShadowMiss] =
+                    "ShadowMissShader";
+                _compiledShaders[shader.libraryIndex()]
+                    .entryPoints[EntryPointTypes::kBackgroundMiss] = "BackgroundMissShader";
+            }
+
+            // Set the hit group export name from the entry point name.
+            _compiledShaders[shader.libraryIndex()].exportName =
+                _compiledShaders[shader.libraryIndex()].entryPoints[EntryPointTypes::kRadianceHit] +
+                "Group";
+
+            // Set the ID from the shader ID.
+            _compiledShaders[shader.libraryIndex()].id           = shader.id();
+            _compiledShaders[shader.libraryIndex()].hlslFilename = shader.id() + ".hlsl";
+            Foundation::sanitizeFileName(_compiledShaders[shader.libraryIndex()].hlslFilename);
+        }
+
+        // Destroy any existing compiled binary.
+        compiledShader.destroyBinary();
+
+        // Ensure ID matches shader.
+        AU_ASSERT(compiledShader.id.compare(shader.id()) == 0, "Compiled shader mismatch");
+
+        // Setup the compile job for this shader.
+        compileJobs.push_back(CompileJob(int(compileJobs.size())));
+        setupCompileJobForShader(shader, compileJobs.back());
+
+        // If this is the default shader (which always library index 0), add the shared entry points
+        // (used by all shaders)
+        if (shader.libraryIndex() == 0)
+        {
+            compileJobs.back().entryPoints.push_back({ "miss", "BackgroundMissShader" });
+            compileJobs.back().entryPoints.push_back({ "miss", "RadianceMissShader" });
+            compileJobs.back().entryPoints.push_back({ "miss", "ShadowMissShader" });
+            compileJobs.back().entryPoints.push_back({ "raygeneration", "RayGenShader" });
+        }
+
+        return true;
+    };
+
+    // Destroy function is executed by MaterialShaderLibrary::update for any shaders that need
+    // releasing.
+    auto destroyShaderFunction = [this](int index) { _compiledShaders[index].reset(); };
+
+    // Run the MaterialShaderLibrary update function and return if shaders were compiled.
+    if (!_shaderLibrary.update(compileShaderFunction, destroyShaderFunction))
+        return;
+
+    // If shaders were rebuild we must completely rebuild the pipeline state with the following
+    // subjects:
     // - Pipeline configuration: the max trace recursion depth.
     // - DXIL library: the compiled shaders in a bundle.
     // - Shader configurations: the ray payload and intersection attributes sizes.
@@ -794,74 +779,38 @@ void PTShaderLibrary::rebuild()
     // exported, then DefineExport() on the subobject should be used.
     auto* pLibrarySubObject = pipelineStateDesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
 
-    // Clear any source that has been removed.
-    // TODO: Allow re-use of source indices.
-    for (auto sourceIndex : _sourceToRemove)
+    // As the transpiler is not thread safe we must create one for each thread.
+    // TODO: These are around 30-40Mb each so we could look at cleaning them up once a certain
+    // number are allocated.
+    for (size_t i = _transpilerArray.size(); i < compileJobs.size(); i++)
     {
-        _compiledMaterialTypes[sourceIndex].reset();
-    }
-    _sourceToRemove.clear();
-
-    // Build vector of compile jobs to execute in paralell.
-    vector<CompileJob> compileJobs;
-
-    // Add code to be compiled for the common shared entry points.
-    // TODO: Just compile once at the start of day.
-    compileJobs.push_back({ CommonShaders::g_sBackgroundMissShader, "BackgroundMiss", nullptr });
-    compileJobs.push_back({ CommonShaders::g_sRadianceMissShader, "RadianceMiss", nullptr });
-    compileJobs.push_back({ CommonShaders::g_sShadowMissShader, "ShadowMiss", nullptr });
-    compileJobs.push_back({ CommonShaders::g_sRayGenShader, "RayGen", nullptr });
-
-    // Assemble the shader code for for each material type.
-    for (int i = 0; i < _compiledMaterialTypes.size(); i++)
-    {
-        auto& compiledMtlType = _compiledMaterialTypes[i];
-        if (!compiledMtlType.source.empty() && !compiledMtlType.binary)
-        {
-            // Get the material type.
-            PTMaterialType* pMtlType = _materialTypes[compiledMtlType.source.name].lock().get();
-
-            // Get entry points for material type (this may have changed since last rebuild)
-            map<string, bool> entryPoints;
-            pMtlType->getEntryPoints(entryPoints);
-
-            // Assemble the shaders for all the entry points.
-            vector<string> shaderCode;
-            assembleShadersForMaterialType(compiledMtlType.source, entryPoints, shaderCode);
-
-            // Add a compile job for each entry point.
-            for (int j = 0; j < shaderCode.size(); j++)
-            {
-                // Add to compile jobs to be built, adding the material type source as includes map.
-                compileJobs.push_back({ shaderCode[j], compiledMtlType.source.name + to_string(j),
-                    nullptr, { { "InitializeMaterial.slang", compiledMtlType.source.setup } } });
-            }
-        }
+        _transpilerArray.push_back(make_shared<Transpiler>(CommonShaders::g_sDirectory));
     }
 
-    // Compile function called from parallel thread.
+    // Transpilation and DXC Compile function is called from parallel threads.
     auto compileFunc = [this](CompileJob& job) {
+        // Get the transpiler for this thread
+        auto pTranspiler = _transpilerArray[job.jobIndex];
+
         // If development flag set dump HLSL library to a file.
         if (AU_DEV_DUMP_SHADER_CODE)
         {
-            string entryPointPath = Foundation::getModulePath() + job.libName + ".txt";
-            AU_INFO("Dumping shader code to:%s", entryPointPath.c_str());
-            ofstream outputFile;
-            outputFile.open(entryPointPath);
-            outputFile << job.code;
-            outputFile.close();
+            if (Foundation::writeStringToFile(job.code, job.libName))
+                AU_INFO("Dumping shader code to:%s", job.libName.c_str());
+            else
+                AU_WARN("Failed to write shader code to:%s", job.libName.c_str());
         }
 
-        // Set the material type source as source code available as via #include in the compiler.
+        // Set the shader source as source code available as via #include in the compiler.
         for (auto iter = job.includes.begin(); iter != job.includes.end(); iter++)
         {
-            _pTranspiler->setSource(iter->first, iter->second);
+            pTranspiler->setSource(iter->first, iter->second);
         }
 
-        // Transpile the source.
-        string transpiledHLSL;
+        // Run the transpiler
         string transpilerErrors;
-        if (!_pTranspiler->transpileCode(
+        string transpiledHLSL;
+        if (!pTranspiler->transpileCode(
                 job.code, transpiledHLSL, transpilerErrors, Transpiler::Language::HLSL))
         {
             AU_ERROR("Slang transpiling error log:\n%s", transpilerErrors.c_str());
@@ -869,13 +818,36 @@ void PTShaderLibrary::rebuild()
             AU_FAIL("Slang transpiling failed, see log in console for details.");
         }
 
-        // Compile the HLSL source containing all the material types.
+        // Fix up the entry points (Slang will remove all the [shader] tags except one. So we need
+        // to re-add them.
+        for (int i = 0; i < job.entryPoints.size(); i++)
+        {
+            // Build the code to search for and version with [shader] prefixed.
+            string entryPointCode = "void " + job.entryPoints[i].second;
+            string entryPointCodeWithTag =
+                "[shader(\"" + job.entryPoints[i].first + "\")] " + entryPointCode;
+
+            // Run the regex to replace add the tag to the transpiled HLSL source.
+            transpiledHLSL = regex_replace(
+                transpiledHLSL, regex("\n" + entryPointCode), "\n" + entryPointCodeWithTag);
+        }
+
+        // If development flag set dump transpiled library to a file.
+        if (AU_DEV_DUMP_TRANSPILED_CODE)
+        {
+            if (Foundation::writeStringToFile(transpiledHLSL, job.libName))
+                AU_INFO("Dumping transpiled code to:%s", job.libName.c_str());
+            else
+                AU_WARN("Failed to write transpiled code to:%s", job.libName.c_str());
+        }
+
+        // Compile the HLSL source for this shader.
         ComPtr<IDxcBlob> compiledShader;
         vector<pair<wstring, string>> defines = { { L"DIRECTX", "1" } };
         string errorMessage;
         if (!compileLibrary(_pDXCLibrary,
                 transpiledHLSL.c_str(), // Source code string.
-                "AuroraShaderLibrary",  // Arbitrary shader name
+                job.libName,            // Arbitrary shader name
                 "lib_6_3",              // Used DXIL 6.3 shader target
                 "",                     // DXIL has empty entry point.
                 defines,                // Defines (currently empty vector).
@@ -888,40 +860,45 @@ void PTShaderLibrary::rebuild()
             // developer a chance to handle HLSL programming errors as early as possible.
             AU_ERROR("HLSL compilation error log:\n%s", errorMessage.c_str());
             AU_DEBUG_BREAK();
-            AU_FAIL("HLSL compilation failed, see log in console for details.");
+            AU_FAIL("HLSL compilation failed for %s, see log in console for details.",
+                job.libName.c_str());
         }
-        job.pBlob = compiledShader;
+
+        // Set the compiled binary in the compiled shader obect for this shader.
+        _compiledShaders[job.index].binary = compiledShader;
     };
 
-    // Compile all the material types.
-    vector<ComPtr<IDxcBlob>> compiledShaders;
-    vector<string> compiledShaderNames;
+    // Compile all the shaders in parallel (if AU_DEV_MULTITHREAD_COMPILATION is set.)
     float compStart = _timer.elapsed();
-#if AU_DEV_MULTITHREAD_COMPILATION // Set to 1 to force single threaded.
-    tbb::parallel_for(tbb::blocked_range<int>(0, (int)compileJobs.size()),
-        [&compileJobs, compileFunc](tbb::blocked_range<int> r) {
-            for (int i = r.begin(); i < r.end(); ++i)
-            {
-                compileFunc(compileJobs[i]);
-            }
-        });
+#if AU_DEV_MULTITHREAD_COMPILATION // Set to 0 to force single threaded.
+    for_each(execution::par, compileJobs.begin(), compileJobs.end(),
+        [compileFunc](CompileJob& job) { compileFunc(job); });
 #else
+    // Otherwise run in single thread.
     for (auto& job : compileJobs)
     {
         compileFunc(job);
     }
 #endif
-
     float compEnd = _timer.elapsed();
 
-    // Build array of shader binaries and names for linking.
-    for (auto& job : compileJobs)
+    // Build array of all the shader binaries (not just the ones compiled this frame) and names for
+    // linking.
+    vector<ComPtr<IDxcBlob>> compiledShaders;
+    vector<string> compiledShaderNames;
+    for (int i = 0; i < _compiledShaders.size(); i++)
     {
-        compiledShaders.push_back(job.pBlob);
-        compiledShaderNames.push_back(job.libName);
+        auto& compiledShader = _compiledShaders[i];
+        if (compiledShader.binary)
+        {
+            compiledShaders.push_back(compiledShader.binary);
+            string libName = compiledShader.id + ".hlsl";
+            Foundation::sanitizeFileName(libName);
+            compiledShaderNames.push_back(libName);
+        }
     }
 
-    // Link the compiled shaders into single library.
+    // Link the compiled shaders into a single library blob.
     float linkStart = _timer.elapsed();
     ComPtr<IDxcBlob> linkedShader;
     string linkErrorMessage;
@@ -981,37 +958,44 @@ void PTShaderLibrary::rebuild()
         pipelineStateDesc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
     pGlobalRootSignatureSubobject->SetRootSignature(_pGlobalRootSignature.Get());
 
-    // Create the local root signature subobject associated with the ray generation shader.
+    // Create the local root signature subobject associated with the ray generation shader (which is
+    // compiled with the default builtin shader)
     auto* pRayGenRootSignatureSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
     pRayGenRootSignatureSubobject->SetRootSignature(_pRayGenRootSignature.Get());
     auto* pAssociationSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
     pAssociationSubobject->SetSubobjectToAssociate(*pRayGenRootSignatureSubobject);
-    pAssociationSubobject->AddExport(gRayGenEntryPoint);
+    pAssociationSubobject->AddExport(
+        Foundation::s2w(getDefaultShader().entryPoints[EntryPointTypes::kRayGen]).c_str());
 
-    // Keep track of number of active material types.
-    int activeMaterialTypes = 0;
+    // Keep track of number of active shaders.
+    int activeShaders = 0;
 
-    // Create a DXR hit group for each material type.
-    for (auto pWeakMaterialType : _materialTypes)
+    // Create a DXR hit group for each shader.
+    for (int i = 0; i < _compiledShaders.size(); i++)
     {
-        PTMaterialTypePtr pMaterialType = pWeakMaterialType.second.lock();
-        if (pMaterialType)
+        // Get the shader.
+        MaterialShaderPtr pShader = _shaderLibrary.get(i);
+        if (pShader)
         {
+            // Get the compiled shader object for this shader.
+            auto& compiledShader = _compiledShaders[i];
 
-            if (pMaterialType->refCount(PTMaterialType::EntryPoint::kRadianceHit) == 0 &&
-                pMaterialType->refCount(PTMaterialType::EntryPoint::kLayerMiss) == 0)
+            // Ensure some of the hit points are active.
+            if (!pShader->hasEntryPoint(EntryPointTypes::kRadianceHit) &&
+                !pShader->hasEntryPoint(EntryPointTypes::kShadowAnyHit) &&
+                !pShader->hasEntryPoint(EntryPointTypes::kLayerMiss))
             {
-                AU_WARN("Invalid material type %s: all entry point reference counts are zero!",
-                    pMaterialType->name().c_str());
+                AU_WARN("Invalid shader %s: all entry point reference counts are zero!",
+                    pShader->id().c_str());
             }
 
-            // Increment active material type.
-            activeMaterialTypes++;
+            // Increment active shader.
+            activeShaders++;
 
             // Create the local root signature subobject associated with the hit group.
-            // All material types are based on the same radiance hit root signature currently.
+            // All shaders are based on the same radiance hit root signature currently.
             auto* pRadianceHitRootSignatureSubobject =
                 pipelineStateDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
             pRadianceHitRootSignatureSubobject->SetRootSignature(_pRadianceHitRootSignature.Get());
@@ -1028,27 +1012,36 @@ void PTShaderLibrary::rebuild()
             // an any hit shader for radiance rays, then a separate hit group for shadow rays would
             // have to be created, and referenced with an offset in the related TraceRay() calls.
 
-            // Create hit group (required even if only has miss shader.)
-            auto* pMaterialTypeSubobject =
+            // Create hit group (required even if only  has miss shader.)
+            auto* pShaderSubobject =
                 pipelineStateDesc.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
-            pMaterialTypeSubobject->SetHitGroupExport(pMaterialType->exportName().c_str());
-            pAssociationSubobject->AddExport(pMaterialType->exportName().c_str());
+            pShaderSubobject->SetHitGroupExport(Foundation::s2w(compiledShader.exportName).c_str());
+            pAssociationSubobject->AddExport(Foundation::s2w(compiledShader.exportName).c_str());
 
-            if (pMaterialType->refCount(PTMaterialType::EntryPoint::kRadianceHit) > 0)
+            // Setup the ClosestHitShaderImport (for radiance hit entry point) and, if needed,
+            // AnyHitShaderImport (for shadow hit entry point) on the hit group if
+            // the radiance hit reference count is non-zero.
+            if (pShader->refCount(EntryPointTypes::kRadianceHit) > 0)
             {
+                pShaderSubobject->SetClosestHitShaderImport(
+                    Foundation::s2w(compiledShader.entryPoints[EntryPointTypes::kRadianceHit])
+                        .c_str());
+                // Only add the shadow anyhit sub-object if needed (as indicated by refcount)
+                if (pShader->refCount(EntryPointTypes::kShadowAnyHit) > 0)
+                {
+                    pShaderSubobject->SetAnyHitShaderImport(
+                        Foundation::s2w(compiledShader.entryPoints[EntryPointTypes::kShadowAnyHit])
+                            .c_str());
+                }
+                pShaderSubobject->SetHitGroupType(D3D12_HIT_GROUP_TYPE_TRIANGLES);
 
-                pMaterialTypeSubobject->SetClosestHitShaderImport(
-                    pMaterialType->closestHitEntryPoint().c_str());
-                pMaterialTypeSubobject->SetAnyHitShaderImport(
-                    pMaterialType->shadowAnyHitEntryPoint().c_str());
-                pMaterialTypeSubobject->SetHitGroupType(D3D12_HIT_GROUP_TYPE_TRIANGLES);
-
-                pAssociationSubobject->AddExport(pMaterialType->exportName().c_str());
+                pAssociationSubobject->AddExport(
+                    Foundation::s2w(compiledShader.exportName).c_str());
             }
 
-            if (pMaterialType->refCount(PTMaterialType::EntryPoint::kLayerMiss) > 0)
+            // Setup layer miss subobject is the layer miss reference count is non-zero.
+            if (pShader->refCount(EntryPointTypes::kLayerMiss) > 0)
             {
-
                 auto* pLayerMissRootSignatureSubobject =
                     pipelineStateDesc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
                 pLayerMissRootSignatureSubobject->SetRootSignature(_pLayerMissRootSignature.Get());
@@ -1057,7 +1050,8 @@ void PTShaderLibrary::rebuild()
                         .CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
                 pAssociationSubobject->SetSubobjectToAssociate(*pLayerMissRootSignatureSubobject);
                 pAssociationSubobject->AddExport(
-                    pMaterialType->materialLayerMissEntryPoint().c_str());
+                    Foundation::s2w(compiledShader.entryPoints[EntryPointTypes::kLayerMiss])
+                        .c_str());
             }
         }
     }
@@ -1071,16 +1065,14 @@ void PTShaderLibrary::rebuild()
     AU_ASSERT(
         PTMaterial::validateOffsets(*this), "Mismatch between GPU and CPU material structure");
 
-    // Rebuild is no longer required.
-    _rebuildRequired = false;
-
-    // Get time taken to rebuild.
+    // Get the total time taken to rebuild.
     // TODO: This should go into a stats property set and exposed to client properly.
     float elapsedMillisec = _timer.elapsed();
 
-    AU_INFO("Compiled %d material types in %d ms", activeMaterialTypes,
+    // Dump breakdown of rebuild timing.
+    AU_INFO("Compiled %d shaders and linked %d in %d ms", compileJobs.size(), activeShaders,
         static_cast<int>(elapsedMillisec));
-    AU_INFO("  - DXC compile took %d ms", static_cast<int>(compEnd - compStart));
+    AU_INFO("  - Transpilation and DXC compile took %d ms", static_cast<int>(compEnd - compStart));
     AU_INFO("  - DXC link took %d ms", static_cast<int>(linkEnd - linkStart));
     AU_INFO("  - Pipeline creation took %d ms", static_cast<int>(plEnd - plStart));
 }

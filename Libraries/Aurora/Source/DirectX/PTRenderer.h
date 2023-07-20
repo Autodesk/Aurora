@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,10 +37,11 @@ class MaterialGenerator;
 // Forward references.
 class AssetManager;
 class PTDevice;
-class PTMaterialType;
+class MaterialShader;
 class PTShaderLibrary;
 class ScratchBufferPool;
 class VertexBufferPool;
+struct TransferBuffer;
 
 // An path tracing (PT) implementation for IRenderer.
 class PTRenderer : public RendererBase
@@ -85,17 +86,27 @@ public:
     ID3D12Device5* dxDevice() const { return _pDXDevice.Get(); }
     IDXGIFactory4* dxFactory() const { return _pDXFactory.Get(); }
     ID3D12CommandQueue* commandQueue() const { return _pCommandQueue.Get(); }
+    // Create a transfer buffer.  GPU buffer state defaults to D3D12_RESOURCE_STATE_COPY_DEST as it
+    // is used as a target for a resource copy command. The final GPU buffer state defaults to
+    // D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE.
+    TransferBuffer createTransferBuffer(size_t sz, const string& name = "",
+        D3D12_RESOURCE_FLAGS gpuBufferFlags       = D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATES gpuBufferState      = D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATES gpuBufferFinalState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     ID3D12ResourcePtr createBuffer(size_t size, const string& name = "",
         D3D12_HEAP_TYPE heapType    = D3D12_HEAP_TYPE_UPLOAD,
         D3D12_RESOURCE_FLAGS flags  = D3D12_RESOURCE_FLAG_NONE,
         D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_GENERIC_READ);
     template <typename DataType>
-    void updateBuffer(ID3D12ResourcePtr& pBuffer, FillDataFunction<DataType> fillDataFunction);
+    void updateBuffer(TransferBuffer& bufferOut, FillDataFunction<DataType> fillDataFunction);
     ID3D12ResourcePtr createTexture(uvec2 dimensions, DXGI_FORMAT format, const string& name = "",
         bool isUnorderedAccess = false, bool shareable = false);
     D3D12_GPU_VIRTUAL_ADDRESS getScratchBuffer(size_t size);
-    void getVertexBuffer(VertexBuffer& vertexBuffer, void* pData);
+    void getVertexBuffer(VertexBuffer& vertexBuffer, void* pData, size_t size);
+    void transferBufferUpdated(const TransferBuffer& buffer);
     void flushVertexBufferPool();
+    void uploadTransferBuffers();
+    void deleteUploadedTransferBuffers();
     ID3D12CommandAllocator* getCommandAllocator();
     ID3D12GraphicsCommandList4* beginCommandList();
     void submitCommandList();
@@ -134,15 +145,15 @@ private:
     void createUAV(ID3D12Resource* pTexture, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle);
     void copyTextureToTarget(ID3D12Resource* pTexture, PTTarget* pTarget);
     bool isDenoisingAOVsEnabled() const;
-    shared_ptr<PTMaterialType> generateMaterialX(
-        const string& document, map<string, Value>* pDefaultValuesOut);
+    shared_ptr<MaterialShader> generateMaterialX(
+        const string& document, shared_ptr<MaterialDefinition>* pDefOut);
     PTScenePtr dxScene() { return static_pointer_cast<PTScene>(_pScene); }
 
     /*** Private Variables ***/
 
     unique_ptr<PTDevice> _pDevice;
     bool _isCommandListOpen = false;
-    ID3D12ResourcePtr _pFrameDataBuffer;
+    TransferBuffer _frameDataBuffer;
     PTEnvironmentPtr _pEnvironment;
     uvec2 _outputDimensions;
     bool _isDimensionsChanged = true;
@@ -166,6 +177,8 @@ private:
     ID3D12Device5Ptr _pDXDevice;
     IDXGIFactory4Ptr _pDXFactory;
     ID3D12CommandQueuePtr _pCommandQueue;
+    map<ID3D12Resource*, TransferBuffer> _pendingTransferBuffers;
+    map<ID3D12Resource*, TransferBuffer> _transferBuffersToDelete;
     vector<ID3D12CommandAllocatorPtr> _commandAllocators;
     ID3D12GraphicsCommandList4Ptr _pCommandList;
     ID3D12FencePtr _pTaskFence;
@@ -182,7 +195,7 @@ private:
     ID3D12ResourcePtr _pTexAccumulation; // for accumulation (HDR)
     ID3D12ResourcePtr _pTexDirect;       // for path tracing or direct lighting (HDR)
     DXGI_FORMAT _finalFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-    ID3D12ResourcePtr _pRayGenShaderTable;
+    TransferBuffer _rayGenShaderTable;
     size_t _rayGenShaderTableSize = 0;
     unique_ptr<ScratchBufferPool> _pScratchBufferCache;
     unique_ptr<VertexBufferPool> _pVertexBufferPool;
@@ -205,14 +218,14 @@ private:
 
 // Creates (if needed) and an updates a GPU constant buffer with data supplied by the caller.
 template <typename DataType>
-void PTRenderer::updateBuffer(
-    ID3D12ResourcePtr& pBuffer, FillDataFunction<DataType> fillDataFunction)
+void PTRenderer::updateBuffer(TransferBuffer& buffer, FillDataFunction<DataType> fillDataFunction)
 {
-    // Create a constant buffer for the data if it doesn't already exist.
+    // Create a transfer buffer for the data if it doesn't already exist.
     static const size_t BUFFER_SIZE = sizeof(DataType);
-    if (!pBuffer)
+    if (!buffer.valid())
     {
-        pBuffer = createBuffer(BUFFER_SIZE);
+        buffer = createTransferBuffer(
+            BUFFER_SIZE, "updateBuffer:" + to_string(uint64(&fillDataFunction)));
     }
 
     // Fill the data using the callback function.
@@ -220,10 +233,9 @@ void PTRenderer::updateBuffer(
     fillDataFunction(data);
 
     // Copy the data to the constant buffer.
-    void* pMappedData = nullptr;
-    checkHR(pBuffer->Map(0, nullptr, &pMappedData));
+    void* pMappedData = buffer.map();
     ::memcpy_s(pMappedData, BUFFER_SIZE, &data, BUFFER_SIZE);
-    pBuffer->Unmap(0, nullptr); // no HRESULT
+    buffer.unmap();
 }
 
 MAKE_AURORA_PTR(PTRenderer);

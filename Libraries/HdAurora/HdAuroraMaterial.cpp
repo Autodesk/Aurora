@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 
 #include <Aurora/Foundation/Utilities.h>
 
+#include <MaterialXFormat/Util.h>
+#include <MaterialXFormat/XmlIo.h>
+
 #include "HdAuroraImageCache.h"
 #include "HdAuroraMesh.h"
 #include "HdAuroraRenderDelegate.h"
@@ -24,8 +27,21 @@
 
 #include <functional>
 #include <list>
+#include <regex>
 
 #pragma warning(disable : 4506) // inline function warning (from USD but appears in this file)
+
+// Developer flag to disable separating the MaterialX document into a MaterialX document with
+// default values and a separate set of name-value pairs. Should always be 1 in production code.
+#define HD_AURORA_SEPARATE_MTLX_DOC 1
+
+// Computes the perceived luminance of a color.
+static float luminance(const pxr::GfVec3f& value)
+{
+    static constexpr pxr::GfVec3f kLuminanceFactors = pxr::GfVec3f(0.2125f, 0.7154f, 0.0721f);
+
+    return pxr::GfDot(value, kLuminanceFactors);
+}
 
 // Processed Hydra material network.
 // TODO: These should be cached to avoid recalculating each time.
@@ -43,7 +59,7 @@ struct ProcessedMaterialNetwork
 
 // Properties require a value to be added to a Uniform block.
 static const string paramBindingTemplate = R"(
-      <input name="%s" type="%s" />)";
+      <input name="%s" type="%s" value="%s" />)";
 
 static const string nodeGraphBindingTemplate = R"(
       <input name="%s" type="%s" nodegraph="NG%s" output="out1" />)";
@@ -95,7 +111,187 @@ HdDirtyBits HdAuroraMaterial::GetInitialDirtyBitsMask() const
 {
     return HdChangeTracker::AllSceneDirtyBits;
 }
+void HdAuroraMaterial::InitToDefaultValue(
+    MaterialX::NodePtr& pNode, Aurora::Properties& materialProperties, bool& isNodegraph)
+{
+    if (!pNode || !pNode->getInputCount())
+    {
+        return;
+    }
+    std::pair<std::string, std::string> inputValue;
+    for (MaterialX::InputPtr input : pNode->getInputs())
+    {
+        std::string namePath;
 
+        // Input is part of standard_surface, directly store its name
+        // Otherwise store the namepath to know the hierarchical nodegraph name
+        if (isNodegraph)
+        {
+            string ngNamepath            = input->getNamePath();
+            const size_t first_slash_idx = ngNamepath.find('/');
+            if (0 != first_slash_idx)
+            {
+                // Get rid of the first path of namepath, namely the name of nodegraph
+                namePath = ngNamepath.substr(first_slash_idx + 1, ngNamepath.length());
+            }
+        }
+        else
+        {
+            namePath = input->getName();
+        }
+        const std::string type          = input->getType();
+        const MaterialX::ValuePtr value = input->getValue();
+
+        // Skip invalid input type and value
+        if (type.empty() || !value)
+            continue;
+
+        // Reset all non-zero value to zero according to their types
+        if (type == MaterialX::getTypeString<float>())
+        {
+            if (value->asA<float>() != 0.0f)
+            {
+                materialProperties[namePath] = value->asA<float>();
+                input->setValue(0.0f);
+            }
+        }
+        else if (type == MaterialX::getTypeString<int>())
+        {
+            if (value->asA<int>() != 0)
+            {
+                // TODO: The "which" value of "switch" node is kept for now, as it is not currently
+                // supported by the data-driven mechanism.
+                auto pParent = input->getParent();
+                if (pParent && pParent->getCategory() == "switch")
+                {
+                    const size_t last_slash_idx = namePath.find_last_of('/');
+                    if (string::npos != last_slash_idx)
+                    {
+                        auto parameterName = namePath.substr(last_slash_idx + 1, namePath.length());
+                        if ("which" == parameterName)
+                            continue;
+                    }
+                }
+
+                materialProperties[namePath] = value->asA<int>();
+                input->setValue(0);
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Vector2>())
+        {
+            if (value->asA<MaterialX::Vector2>() != MaterialX::Vector2(0.0f, 0.0f))
+            {
+                glm::vec2 val;
+                val[0]                       = value->asA<MaterialX::Vector2>()[0];
+                val[1]                       = value->asA<MaterialX::Vector2>()[1];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Vector2(0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Vector3>())
+        {
+            if (value->asA<MaterialX::Vector3>() != MaterialX::Vector3(0.0f, 0.0f, 0.0f))
+            {
+                glm::vec3 val;
+                val[0]                       = value->asA<MaterialX::Vector3>()[0];
+                val[1]                       = value->asA<MaterialX::Vector3>()[1];
+                val[2]                       = value->asA<MaterialX::Vector3>()[2];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Vector3(0.0f, 0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Vector4>())
+        {
+            if (value->asA<MaterialX::Vector4>() != MaterialX::Vector4(0.0f, 0.0f, 0.0f, 0.0f))
+            {
+                glm::vec4 val;
+                val[0]                       = value->asA<MaterialX::Vector4>()[0];
+                val[1]                       = value->asA<MaterialX::Vector4>()[1];
+                val[2]                       = value->asA<MaterialX::Vector4>()[2];
+                val[3]                       = value->asA<MaterialX::Vector4>()[3];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Vector4(0.0f, 0.0f, 0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<MaterialX::Color3>())
+        {
+            if (value->asA<MaterialX::Color3>() != MaterialX::Color3(0.0f, 0.0f, 0.0f))
+            {
+                glm::vec3 val;
+                val[0]                       = value->asA<MaterialX::Color3>()[0];
+                val[1]                       = value->asA<MaterialX::Color3>()[1];
+                val[2]                       = value->asA<MaterialX::Color3>()[2];
+                materialProperties[namePath] = val;
+                input->setValue(MaterialX::Color3(0.0f, 0.0f, 0.0f));
+            }
+        }
+        else if (type == MaterialX::getTypeString<bool>())
+        {
+            if (value->asA<bool>() != false)
+            {
+                materialProperties[namePath] = value->asA<bool>();
+                input->setValue(false);
+            }
+        }
+    }
+}
+void HdAuroraMaterial::ReplaceMaterialName(string& materialDocument, const string& targetName)
+{
+    std::string originalMaterialName;
+    MaterialX::DocumentPtr originalDoc = MaterialX::createDocument();
+    MaterialX::readFromXmlString(originalDoc, materialDocument);
+    for (MaterialX::ElementPtr elem : originalDoc->traverseTree())
+    {
+        if (elem->isA<MaterialX::Node>())
+        {
+            MaterialX::NodePtr pNode = elem->asA<MaterialX::Node>();
+            if (pNode->getType() == MaterialX::SURFACE_SHADER_TYPE_STRING)
+            {
+                originalMaterialName = pNode->getName();
+                break;
+            }
+        }
+    }
+    if (!originalMaterialName.empty())
+    {
+        std::regex srcNodegraphName("nodegraph=\"" + originalMaterialName);
+        std::regex srcNodeName("name=\"" + originalMaterialName);
+        string processedMtlXString =
+            regex_replace(materialDocument, srcNodegraphName, "nodegraph=\"" + targetName);
+        materialDocument = regex_replace(processedMtlXString, srcNodeName, "name=\"" + targetName);
+    }
+}
+string HdAuroraMaterial::SeparateHDMaterialXDocument(
+    string& materialDocument, Aurora::Properties& materialProperties)
+{
+    // Step1: Unified naming
+    std::string targetName = "HdAuroraMaterialX";
+    ReplaceMaterialName(materialDocument, targetName);
+
+    // Step2: Collect name-value pair
+    MaterialX::DocumentPtr hdMaterialXDoc = MaterialX::createDocument();
+    MaterialX::readFromXmlString(hdMaterialXDoc, materialDocument);
+    bool isNodeGraph = false;
+    for (MaterialX::ElementPtr elem : hdMaterialXDoc->traverseTree())
+    {
+        if (elem->isA<MaterialX::Node>())
+        {
+            MaterialX::NodePtr pNode = elem->asA<MaterialX::Node>();
+            InitToDefaultValue(pNode, materialProperties, isNodeGraph);
+        }
+        else if (elem->isA<MaterialX::NodeGraph>())
+        {
+            MaterialX::NodeGraphPtr pNodeGraph = elem->asA<MaterialX::NodeGraph>();
+            isNodeGraph                        = true;
+            for (MaterialX::ElementPtr subElem : pNodeGraph->traverseTree())
+            {
+                MaterialX::NodePtr pNode = subElem->asA<MaterialX::Node>();
+                InitToDefaultValue(pNode, materialProperties, isNodeGraph);
+            }
+        }
+    }
+    return MaterialX::writeToXmlString(hdMaterialXDoc);
+}
 bool HdAuroraMaterial::SetupAuroraMaterial(
     const string& materialType, const string& materialDocument)
 {
@@ -136,8 +332,22 @@ void HdAuroraMaterial::ProcessHDMaterial(HdSceneDelegate* delegate)
     string hdMaterialXDocument;
     if (GetHDMaterialXDocument(delegate, hdMaterialXType, hdMaterialXDocument))
     {
-        // If we have Hydra materialX document or filename, just use that.
+        Aurora::Properties materialProperties;
+
+#if HD_AURORA_SEPARATE_MTLX_DOC
+        if (!hdMaterialXDocument.empty())
+        {
+            // Separate hdMaterialXDocument into default doc and name-value pair
+            hdMaterialXDocument =
+                SeparateHDMaterialXDocument(hdMaterialXDocument, materialProperties);
+        }
+#endif
+
+        // Send the document to Aurora (with the parameters reset.)
         SetupAuroraMaterial(hdMaterialXType, hdMaterialXDocument);
+
+        // Send the name-value pair by IScene::setMaterialProperties
+        _owner->GetScene()->setMaterialProperties(_auroraMaterialPath, materialProperties);
     }
     else if (!ProcessHDMaterialNetwork(hdMatVal))
     {
@@ -301,9 +511,10 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         if (vtVal.IsHolding<GfVec3f>())
         {
             // Add the input binding for input to the dynamically built materialX document.
-            // Note: Values are applied seperately and not built into the document.
-            parameterBindingStr +=
-                Aurora::Foundation::sFormat(paramBindingTemplate, auroraName.c_str(), "color3");
+            // Note: Values are applied separately and not built into the document, so value is all
+            // zeros here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "color3", "0.0,0.0,0.0");
         }
     };
 
@@ -313,9 +524,30 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         if (vtVal.IsHolding<float>())
         {
             // Add the input binding for input to the dynamically built materialX document.
-            // Note: Values are applied seperately and not built into the document.
-            parameterBindingStr +=
-                Aurora::Foundation::sFormat(paramBindingTemplate, auroraName.c_str(), "float");
+            // Note: Values are applied separately and not built into the document, so value is zero
+            // here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "float", "0.0");
+        }
+    };
+
+    // Float setter function to convert Hydra float values to Aurora values
+    static auto setOpacityValue = [](string& parameterBindingStr, const VtValue& vtVal,
+                                      const std::string& auroraName) {
+        if (vtVal.IsHolding<float>())
+        {
+            // Add the input binding for input to the dynamically built materialX document.
+            // Note: Values are applied separately and not built into the document, so value is zero
+            // here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "float", "0.0");
+        }
+        else if (vtVal.IsHolding<GfVec3f>())
+        {
+            // The opacity value can also be passed as a GfVec3f, which must be converted to float.
+            // all zeros here.
+            parameterBindingStr += Aurora::Foundation::sFormat(
+                paramBindingTemplate, auroraName.c_str(), "float", "0.0");
         }
     };
 
@@ -411,6 +643,19 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         }
     };
 
+    // Get setting for mapping opacity to transmission (default to true if not set.)
+    VtValue mapOpacityToTransmissionVal =
+        _owner->GetRenderSetting(HdAuroraTokens::kMapMaterialOpacityToTransmission);
+    bool mapOpacityToTransmission = mapOpacityToTransmissionVal.IsHolding<bool>()
+        ? mapOpacityToTransmissionVal.Get<bool>()
+        : true;
+
+    // Setup the opacity parameter to map UsdPreviewSurface opacity to Standard Surface
+    // transmission, as required by kMapMaterialOpacityToTransmission setting.
+    ParameterInfo opacityParameterInfo = { TfToken("opacity"), "transmission", setOpacityValue };
+    if (!mapOpacityToTransmission)
+        opacityParameterInfo = { TfToken("opacity"), "opacity", setF3Value };
+
     // Specify the named pair of parameters to translate from Hydra to Aurora
     // and the translation function to use for the parameter.
     // { Hydra token, Aurora name (standard_surface), translation function }
@@ -422,12 +667,12 @@ bool HdAuroraMaterial::BuildMaterialXDocumentFromHDNetwork(
         { TfToken("roughness"),             "specular_roughness", setF1Value },
         { TfToken("ior"),                   "specular_IOR",       setF1Value },
         { TfToken("emissiveColor"),         "emission_color",     setF3Value },
-        { TfToken("opacity"),               "transmission",       setF1Value },// Map UsdPreviewSurface opacity to Standard Surface transmission.
+        opacityParameterInfo,
         { TfToken("clearcoat"),             "coat",               setF1Value },
         { TfToken("clearcoatColor"),        "coat_color",         setF3Value },
         { TfToken("clearcoatRoughness"),    "coat_roughness",     setF1Value },
         { TfToken("metallic"),              "metalness",          setF1Value },
-        { TfToken("normal"),                "normal",             nullptr } // No converter funciton, can only be a texture.
+        { TfToken("normal"),                "normal",             nullptr } // No converter function, can only be a texture.
     };
     // clang-format on
 
@@ -465,13 +710,20 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         }
     };
 
-    // Setter to apply UsdPreviewSurface opacity to statndard surface transmission.
+    // Setter to apply UsdPreviewSurface opacity to standard surface transmission.
     auto setTransmissionFromOpacity = [](Aurora::Properties& materialProperties,
                                           const VtValue& vtVal, const std::string& auroraName) {
         if (vtVal.IsHolding<float>())
         {
             float val                      = vtVal.UncheckedGet<float>();
-            materialProperties[auroraName] = 1.0f - val; // Transmission is one minux opacity.
+            materialProperties[auroraName] = 1.0f - val; // Transmission is one minus opacity.
+        }
+        else if (vtVal.IsHolding<GfVec3f>())
+        {
+            // Opacity can be passed as GfVec3f, in which case it should be converted to float.
+            GfVec3f val                    = vtVal.UncheckedGet<GfVec3f>();
+            float floatVal                 = luminance(val);
+            materialProperties[auroraName] = 1.0f - floatVal; // Transmission is one minus opacity.
         }
     };
 
@@ -561,6 +813,20 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         }
     };
 
+    // Get setting for mapping opacity to transmission (default to true if not set.)
+    VtValue mapOpacityToTransmissionVal =
+        _owner->GetRenderSetting(HdAuroraTokens::kMapMaterialOpacityToTransmission);
+    bool mapOpacityToTransmission = mapOpacityToTransmissionVal.IsHolding<bool>()
+        ? mapOpacityToTransmissionVal.Get<bool>()
+        : true;
+
+    // Setup the opacity parameter to map UsdPreviewSurface opacity to Standard Surface
+    // transmission, as required by kMapMaterialOpacityToTransmission setting.
+    ParameterInfo opacityParameterInfo = { TfToken("opacity"), "transmission",
+        setTransmissionFromOpacity };
+    if (!mapOpacityToTransmission)
+        opacityParameterInfo = { TfToken("opacity"), "opacity", setF3Value };
+
     // Specify the named pair of parameters to translate from Hydra to Aurora
     // and the translation function to use for the parameter.
     // { Hydra token, Aurora name (standard_surface), translation function }
@@ -572,7 +838,7 @@ bool HdAuroraMaterial::ApplyHDNetwork(const ProcessedMaterialNetwork& network)
         { TfToken("roughness"),             "specular_roughness", setF1Value },
         { TfToken("ior"),                   "specular_IOR",       setF1Value },
         { TfToken("emissiveColor"),         "emission_color",     setF3Value },
-        { TfToken("opacity"),               "transmission",       setTransmissionFromOpacity },// Map UsdPreviewSurface opacity to Standard Surface transmission.
+        opacityParameterInfo,
         { TfToken("clearcoat"),             "coat",               setF1Value },
         { TfToken("clearcoatColor"),        "coat_color",         setF3Value },
         { TfToken("clearcoatRoughness"),    "coat_roughness",     setF1Value },
@@ -615,7 +881,7 @@ bool HdAuroraMaterial::ProcessHDMaterialNetwork(VtValue& materialValue)
     auto networkIter = networkMap.map.find(pxr::HdMaterialTerminalTokens->surface);
     if (networkIter == networkMap.map.end())
     {
-        TF_WARN("No surface network in materal network map for material " + GetId().GetString());
+        TF_WARN("No surface network in material network map for material " + GetId().GetString());
         return false;
     }
     auto network = networkIter->second;

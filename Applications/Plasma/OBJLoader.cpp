@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,10 +13,13 @@
 // limitations under the License.
 #include "pch.h"
 
+#include "Aurora/Foundation/Geometry.h"
 #include "Loaders.h"
 #include "SceneContents.h"
 
 uint32_t ImageCache::whitePixels[1] = { 0xFFFFFFFF };
+
+#define PLASMA_HAS_TANGENTS 0
 
 // A simple structure describing an OBJ index, which has sub-indices for vertex channels: position,
 // normal, and texture coordinates.
@@ -120,7 +123,8 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         {
             transmissionColor = vec3(1.0f);
         }
-        vec3 opacity = vec3(1.0f); // objMaterial.dissolve (see NOTE above)
+        vec3 emissionColor = ::sRGBToLinear(make_vec3(objMaterial.emission));
+        vec3 opacity       = vec3(1.0f); // objMaterial.dissolve (see NOTE above)
 
         // Load the base color image file from the "map_Kd" file path.
         // NOTE: Set the linearize flag, as these images typically use the sRGB color space.
@@ -131,6 +135,11 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         // NOTE: Don't set the linearize flag, as these images typically use the linear color space.
         Aurora::Path specularRoughnessImage =
             imageCache.getImage(objMaterial.roughness_texname, pScene, false);
+
+        // Load the emission color image file from the "map_Ke" file path.
+        // NOTE: Set the linearize flag, as these images typically use the sRGB color space.
+        Aurora::Path emissionColorImage =
+            imageCache.getImage(objMaterial.emissive_texname, pScene, true);
 
         // Load the opacity image file from the "map_d" file path.
         // NOTE: Don't set the linearize flag, as these images typically use the linear color space.
@@ -144,17 +153,33 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
                                                                       : objMaterial.normal_texname;
         Aurora::Path normalImage = imageCache.getImage(normalFilePath, pScene, false);
 
-        Aurora::Path materialPath = filePath + ":OBJFileMaterial-" + to_string(mtlCount++);
+        // Set emission (the actual light emitted) to 1.0 if there is an emission color image or the
+        // emission color has any positive components.
+        float emission = (!emissionColorImage.empty() || emissionColor.length()) ? 1.0f : 0.0f;
 
         // Create an Aurora material, assign the properties, and add the material to the list.
-        pScene->setMaterialProperties(materialPath,
-            { { "base_color", (baseColor) }, { "metalness", metalness },
-                { "specular_color", (specularColor) }, { "specular_roughness", specularRoughness },
-                { "specular_IOR", specularIOR }, { "transmission", transmission },
-                { "transmission_color", (transmissionColor) }, { "opacity", (opacity) },
-                { "base_color_image", baseColorImage },
-                { "specular_roughness_image", specularRoughnessImage },
-                { "opacity_image", opacityImage }, { "normal_image", normalImage } });
+        // clang-format off
+        Aurora::Properties properties =
+        {
+            { "base_color",               baseColor },
+            { "metalness",                metalness },
+            { "specular_color",           specularColor },
+            { "specular_roughness",       specularRoughness },
+            { "specular_IOR",             specularIOR },
+            { "transmission",             transmission },
+            { "transmission_color",       transmissionColor },
+            { "emission",                 emission },
+            { "emission_color",           emissionColor },
+            { "opacity",                  opacity },
+            { "base_color_image",         baseColorImage },
+            { "specular_roughness_image", specularRoughnessImage },
+            { "emission_color_image",     emissionColorImage },
+            { "opacity_image",            opacityImage },
+            { "normal_image",             normalImage }
+        };
+        // clang-format on
+        Aurora::Path materialPath = filePath + ":OBJFileMaterial-" + to_string(mtlCount++);
+        pScene->setMaterialProperties(materialPath, properties);
         lstMaterials.push_back(materialPath);
     };
 
@@ -178,8 +203,10 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
         }
         hasMesh = true;
 
-        Aurora::Path sceneInstancePath = filePath + ":OBJFileInstance-" + to_string(objectCount);
-        Aurora::Path geomPath          = filePath + ":OBJFileGeom-" + to_string(objectCount);
+        Aurora::Path sceneInstancePath =
+            filePath + "-" + shape.name + ":OBJFileInstance-" + to_string(objectCount);
+        Aurora::Path geomPath =
+            filePath + "-" + shape.name + ":OBJFileGeom-" + to_string(objectCount);
         objectCount++;
 
         SceneGeometryData& geometryData = sceneContents.addGeometry(geomPath);
@@ -247,6 +274,32 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
             }
         }
 
+        // Calculate the vertex count.
+        uint32_t vertexCount = static_cast<uint32_t>(positions.size()) / 3;
+
+        // Do we have tangents ? Default to false.
+        bool bHasTangents = false;
+
+        // Create normals if they are not available.
+        if (!bHasNormals)
+        {
+            normals.resize(positions.size());
+            Foundation::calculateNormals(
+                vertexCount, positions.data(), indexCount / 3, indices.data(), normals.data());
+        }
+
+        // Create tangents if texture coordinates are available.
+#if PLASMA_HAS_TANGENTS
+        auto& tangents = geometryData.tangents;
+        if (bHasTexCoords)
+        {
+            tangents.resize(normals.size());
+            Foundation::calculateTangents(vertexCount, positions.data(), normals.data(),
+                tex_coords.data(), indexCount / 3, indices.data(), tangents.data());
+            bHasTangents = true;
+        }
+#endif
+
         Aurora::GeometryDescriptor& geomDesc = geometryData.descriptor;
         geomDesc.type                        = Aurora::PrimitiveType::Triangles;
         geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kPosition] =
@@ -255,11 +308,15 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
             Aurora::AttributeFormat::Float3;
         geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTexCoord0] =
             Aurora::AttributeFormat::Float2;
-        geomDesc.vertexDesc.count = static_cast<uint32_t>(positions.size()) / 3;
+        if (bHasTangents)
+            geomDesc.vertexDesc.attributes[Aurora::Names::VertexAttributes::kTangent] =
+                Aurora::AttributeFormat::Float3;
+        geomDesc.vertexDesc.count = vertexCount;
         geomDesc.indexCount       = indexCount;
-        geomDesc.getAttributeData = [geomPath, &sceneContents](Aurora::AttributeDataMap& buffers,
-                                        size_t /* firstVertex*/, size_t /* vertexCount*/,
-                                        size_t /* firstIndex*/, size_t /* indexCount*/) {
+        geomDesc.getAttributeData = [geomPath, bHasTangents, &sceneContents](
+                                        Aurora::AttributeDataMap& buffers, size_t /* firstVertex*/,
+                                        size_t /* vertexCount*/, size_t /* firstIndex*/,
+                                        size_t /* indexCount*/) {
             SceneGeometryData& geometryData = sceneContents.geometry[geomPath];
 
             buffers[Aurora::Names::VertexAttributes::kPosition].address =
@@ -276,6 +333,17 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
             buffers[Aurora::Names::VertexAttributes::kTexCoord0].size =
                 geometryData.texCoords.size() * sizeof(float);
             buffers[Aurora::Names::VertexAttributes::kTexCoord0].stride = sizeof(vec2);
+
+            // Fill in the tangent data, if we have them.
+            if (bHasTangents)
+            {
+                buffers[Aurora::Names::VertexAttributes::kTangent].address =
+                    geometryData.tangents.data();
+                buffers[Aurora::Names::VertexAttributes::kTangent].size =
+                    geometryData.tangents.size() * sizeof(float);
+                buffers[Aurora::Names::VertexAttributes::kTangent].stride = sizeof(vec3);
+            }
+
             buffers[Aurora::Names::VertexAttributes::kIndices].address =
                 geometryData.indices.data();
             buffers[Aurora::Names::VertexAttributes::kIndices].size =

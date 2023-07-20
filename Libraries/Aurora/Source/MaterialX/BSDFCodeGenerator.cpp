@@ -1,16 +1,12 @@
-// Copyright 2022 Autodesk, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Copyright 2023 by Autodesk, Inc.  All rights reserved.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+// This computer source code and related instructions and comments
+// are the unpublished confidential and proprietary information of
+// Autodesk, Inc. and are protected under applicable copyright and
+// trade secret law.  They may not be disclosed to, copied or used
+// by any third party without the prior written consent of Autodesk, Inc.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 #include "pch.h"
 
 #include <fstream>
@@ -67,13 +63,14 @@ public:
         // TODO: These are just educated guesses. How do we work out which attributes are used?
         auto tc0 = vd->add(MaterialX::TypeDesc::get("vector2"), MaterialX::HW::T_TEXCOORD + "_0");
         tc0->setVariable("texCoord");
+        auto no = vd->add(MaterialX::TypeDesc::get("vector3"), MaterialX::HW::T_NORMAL_OBJECT);
+        no->setVariable("objectNormal");
         auto nw = vd->add(MaterialX::TypeDesc::get("vector3"), MaterialX::HW::T_NORMAL_WORLD);
         nw->setVariable("normal");
         auto tw = vd->add(MaterialX::TypeDesc::get("vector3"), MaterialX::HW::T_TANGENT_WORLD);
         tw->setVariable("tangent");
-        // TODO: Should absolutely not just map world position to object position.
         auto po = vd->add(MaterialX::TypeDesc::get("vector3"), MaterialX::HW::T_POSITION_OBJECT);
-        po->setVariable("position");
+        po->setVariable("objectPosition");
         auto pw = vd->add(MaterialX::TypeDesc::get("vector3"), MaterialX::HW::T_POSITION_WORLD);
         pw->setVariable("position");
     }
@@ -217,6 +214,13 @@ public:
     // Clear all the temp variables.
     void clearTempVariables() { _tempVariables.clear(); }
 
+    // Clear the generated definitions and includes.
+    void clearGeneratedDefinitions()
+    {
+        _pGeneratedDefinitions->clear();
+        _pGeneratedIncludes->clear();
+    }
+
 protected:
     map<string, string> _tempVariables;
     unique_ptr<map<size_t, string>> _pGeneratedDefinitions;
@@ -224,7 +228,7 @@ protected:
     string _mtlxLibPath;
 
     // Map of include paths.
-    // TOOO: How to know which of these we should have?
+    // TODO: How to know which of these we should have?
     map<string, string> _includeFilePaths = { { "lib/$fileTransformUv",
         "stdlib/genglsl/lib/mx_transform_uv.glsl" } };
 };
@@ -302,26 +306,87 @@ BSDFCodeGenerator::BSDFCodeGenerator(
     MaterialX::FileSearchPath searchPath;
     searchPath.append(_mtlxLibPath.c_str());
     _pGeneratorContext->registerSourceCodeSearchPath(searchPath);
+}
 
-    _defaultOutputParamMapping = { { "base", "base" }, { "base_color", "baseColor" },
-        { "diffuse_roughness", "diffuseRoughness" }, { "specular_roughness", "specularRoughness" },
-        { "specular", "specular" }, { "sheen", "sheen" }, { "sheen_roughness", "sheenRoughness" },
-        { "sheen_color", "sheenColor" }, { "specular_color", "specularColor" },
-        { "metalness", "metalness" } };
-    _defaultOutputMapper       = [&](const string& name, Aurora::IValues::Type /*type*/,
-                               const string& /*topLevelShaderName*/) {
-        auto iter = _defaultOutputParamMapping.find(name);
-        if (iter != _defaultOutputParamMapping.end())
-            return iter->second;
-        return string("");
-    };
+// Convert path name (e.g. foo/bar/value) to a C-like variable name (e.g. foo_bar_value).
+string pathToVariableName(const string& propPath)
+{
+
+    string invalidChars = " .\\/:~()*+$#@";
+    string varName;
+
+    varName.reserve(propPath.length());
+
+    for (size_t i = 0; i < propPath.length(); i++)
+    {
+        bool valid = true;
+        for (size_t j = 0; j < invalidChars.length(); j++)
+        {
+            if (propPath[i] == invalidChars[j])
+            {
+                valid = false;
+                break;
+            }
+        }
+        if (valid)
+            varName += propPath[i];
+        else
+            varName += "_";
+    }
+
+    return varName;
+}
+
+// Process path and remove first (and, optionally, last) section.
+string processPath(const string& propPath, bool removeLastSection)
+{
+    string res;
+    size_t firstSlash = propPath.find("/");
+    if (firstSlash == string::npos)
+        res = propPath;
+    else
+        res = propPath.substr(firstSlash + 1);
+
+    if (removeLastSection)
+    {
+        size_t lastSlash = res.rfind("/");
+        if (lastSlash != string::npos)
+            res = res.substr(0, lastSlash);
+    }
+
+    return res;
+}
+
+// Convert property type to GLSL string type name.
+string getGLSLStringFromType(PropertyValue::Type type)
+{
+    switch (type)
+    {
+    case PropertyValue::Type::Bool:
+        return "int";
+    case PropertyValue::Type::Int:
+        return "int";
+    case PropertyValue::Type::Float:
+        return "float";
+    case PropertyValue::Type::Float2:
+        return "vec2";
+    case PropertyValue::Type::Float3:
+        return "vec3";
+    case PropertyValue::Type::Float4:
+        return "vec4";
+    case PropertyValue::Type::Matrix4:
+        return "mat4";
+    default:
+        AU_FAIL("Unsupported type for uniform block:%x", type);
+        return 0;
+    }
 }
 
 // Empty dtor in C++ file, to avoid issues with forward declaring MaterialX types.
 BSDFCodeGenerator::~BSDFCodeGenerator() {}
 
 void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
-    shared_ptr<BSDFCodeGeneratorShader> pBSDFGenShader, const string& outputVariable,
+    shared_ptr<BSDFCodeGeneratorShader> pBSDFGenShader, const string& bsdfInputVariable,
     string* pSourceOut)
 {
     // Do we need local scope to avoid name collisions?
@@ -347,39 +412,55 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
     {
         // If this a connection from the high-level shader graph, its a material input.
         auto inputName = input->getFullName();
+        string path    = input->getPath();
 
-        IValues::Type auroraInputType =
-            glslTypeToAuroraType(pBSDFGenShader->syntax()->getTypeName(input->getType()));
+        // Special case for inputs that are units, represent as built-in "distance_unit" parameter.
+        // TODO: Can we infer this from the mtlx API?  If not we should add this, to avoid
+        // hard-coded string searches.
+        bool isUnit = false;
+        if (inputName.find("unit_unit_to") != string::npos)
+        {
+            _hasUnits = true;
+            isUnit    = true;
+            if (_builtInIndexLookup.find("distance_unit") == _builtInIndexLookup.end())
+            {
+                _builtInIndexLookup["distance_unit"] = (int)_builtIns.size();
+                _builtIns                            = { { "int", "distance_unit" } };
+            }
+        }
 
-        string mappedName =
-            _currentInputParameterMapper(inputName, auroraInputType, _topLevelShaderNodeName);
-        pSourceOut->append("\t// Graph input " + inputName + "\n");
-        if (mappedName.empty())
+        // Process the graph input.
+        pSourceOut->append("\t// Graph input " + path + "\n");
+        auto paramIter = _parameterIndexLookup.find(path);
+        if (!isUnit && paramIter == _parameterIndexLookup.end())
         {
             // MtlX code gen requires a scope, but we comment it out so variable scope not effected.
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL).addValue("//");
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL)
                 .beginScope(MaterialX::Syntax::CURLY_BRACKETS);
 
-            // If this is not one of the material inputs from _materialInputs emit with hard-coded
-            // default value.
+            // If this is not one of the parameters to the setup function write the default value as
+            // GLSL.
             _pGenerator->emitVariableDeclaration(input, "", *_pGeneratorContext, ps, true);
 
             // End the scope for declaration.
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL).addValue("//");
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL)
                 .endScope(MaterialX::Syntax::CURLY_BRACKETS);
+
+            // Append source for this input.
             pSourceOut->append("\t" + pBSDFGenShader->getNewSource() + ";\n");
         }
         else
         {
+
             // MtlX code gen requires a scope, but we comment it out so variable scope not effected.
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL).addValue("//");
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL)
                 .beginScope(MaterialX::Syntax::CURLY_BRACKETS);
 
-            // If this is one of the material inputs from _materialInputs, set it using the function
-            // parameter for that input.
+            // If this is one of the parameters to the setup function don't write the default value
+            // in GLSL.
             _pGenerator->emitVariableDeclaration(input, "", *_pGeneratorContext, ps, false);
 
             // End the declaration scope.
@@ -387,15 +468,24 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
             pBSDFGenShader->getStage(MaterialX::Stage::PIXEL)
                 .endScope(MaterialX::Syntax::CURLY_BRACKETS);
 
+            // Append declaration to source.
             pSourceOut->append("\t" + pBSDFGenShader->getNewSource());
-            pSourceOut->append(" = " + mappedName + _materialInputSuffix + ";\n");
 
-            // Mark this input as active.
-            if (_activeInputs.find(mappedName) == _activeInputs.end())
-                _activeInputNames.push_back(mappedName);
-
-            _activeInputs[mappedName] = make_pair(
-                pBSDFGenShader->syntax()->getTypeName(input->getType()), input->getValue());
+            if (isUnit)
+            {
+                // the unit parameter is always first built-in.
+                pSourceOut->append(" = " + _builtIns[0].second + ";\n");
+            }
+            else
+            {
+                // Append the parameter name.
+                auto& param = _parameters[paramIter->second];
+                if (param.paramType == ParameterType::MaterialProperty)
+                    pSourceOut->append(" = material." + param.variableName + ";\n");
+                else if (param.paramType == ParameterType::Texture)
+                    pSourceOut->append(" = " + param.variableName + "_image_parameter;\n");
+                param.glslType = pBSDFGenShader->syntax()->getTypeName(input->getType());
+            }
         }
 
         // Set the variable name that will used to generate the output.result.
@@ -407,7 +497,7 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
         auto node       = connection->getNode();
         string implName = node->getImplementation().getName();
 
-        // Create a temp variable to store the node ouput, if this node has already been generated
+        // Create a temp variable to store the node output, if this node has already been generated
         // then this will be reused without generating again.
         // TODO: Handle multiple outputs.
         string outputTempVariable =
@@ -516,7 +606,6 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
 
             pSourceOut->append("\t" + pBSDFGenShader->getNewSource());
 
-            //
             pSourceOut->append("\t" + outputTempVariable);
             pSourceOut->append(" = " + variableName + ";// Output connection\n");
         }
@@ -527,9 +616,9 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
     }
 
     // Copy this output to the provided
-    if (outputVariable.size())
+    if (bsdfInputVariable.size())
     {
-        pSourceOut->append("\t" + outputVariable);
+        pSourceOut->append("\t" + bsdfInputVariable);
         pSourceOut->append(" = " + variableName + ";// Output connection\n");
     }
 
@@ -545,6 +634,9 @@ void BSDFCodeGenerator::clearDefinitions()
     // Clear the definitions, which are accumulated after each generate call.
     _definitions.clear();
     _definitionMap.clear();
+
+    // Clear the includes and defs in the shader generator.
+    _pGenerator->clearGeneratedDefinitions();
 }
 
 int BSDFCodeGenerator::generateDefinitions(string* pResultOut)
@@ -606,30 +698,85 @@ bool BSDFCodeGenerator::materialXValueToAuroraValue(
     return false;
 }
 
-IValues::Type BSDFCodeGenerator::glslTypeToAuroraType(const string glslType)
+bool BSDFCodeGenerator::materialXValueToAuroraPropertyValue(
+    PropertyValue* pValueOut, shared_ptr<MaterialX::Value> pMtlXValue)
 {
-    // Set the aurora type based on GLSL type string.
-    if (glslType.compare("vec3") == 0)
-        return IValues::Type::Float3;
-    if (glslType.compare("vec2") == 0)
-        return IValues::Type::Float2;
+    *pValueOut = PropertyValue();
+
+    string glslType = pMtlXValue->getTypeString();
+    if (glslType.compare("color3") == 0)
+    {
+        MaterialX::Color3 valData = pMtlXValue->asA<MaterialX::Color3>();
+        *pValueOut                = glm::vec3(valData[0], valData[1], valData[2]);
+        return true;
+    }
+    if (glslType.compare("vector2") == 0)
+    {
+        MaterialX::Vector2 valData = pMtlXValue->asA<MaterialX::Vector2>();
+        *pValueOut                 = glm::vec2(valData[0], valData[1]);
+        return true;
+    }
+    if (glslType.compare("vector3") == 0)
+    {
+        MaterialX::Vector3 valData = pMtlXValue->asA<MaterialX::Vector3>();
+        *pValueOut                 = glm::vec3(valData[0], valData[1], valData[2]);
+        return true;
+    }
+    if (glslType.compare("vector4") == 0)
+    {
+        MaterialX::Vector4 valData = pMtlXValue->asA<MaterialX::Vector4>();
+        *pValueOut                 = glm::vec4(valData[0], valData[1], valData[2], valData[3]);
+        return true;
+    }
+    if (glslType.compare("boolean") == 0)
+    {
+        bool valData = pMtlXValue->asA<bool>();
+        *pValueOut   = valData;
+        return true;
+    }
+    if (glslType.compare("integer") == 0)
+    {
+        int valData = pMtlXValue->asA<int>();
+        *pValueOut  = valData;
+        return true;
+    }
     if (glslType.compare("float") == 0)
-        return IValues::Type::Float;
-    if (glslType.compare("sampler2D") == 0)
-        return IValues::Type::Image;
+    {
+        float valData = pMtlXValue->asA<float>();
+        *pValueOut    = valData;
+        return true;
+    }
+    if (glslType.compare("string") == 0)
+    {
+        string valData = pMtlXValue->asA<string>();
+        *pValueOut     = valData;
+        return true;
+    }
+    AU_FAIL("Unrecognized MateriaLX value type:%s", glslType.c_str());
+    return false;
+}
+
+PropertyValue::Type BSDFCodeGenerator::glslTypeToAuroraType(const string glslType)
+{
+    // Set the Aurora type based on GLSL type string.
+    if (glslType.compare("vec3") == 0)
+        return PropertyValue::Type::Float3;
+    if (glslType.compare("vec2") == 0)
+        return PropertyValue::Type::Float2;
+    if (glslType.compare("float") == 0)
+        return PropertyValue::Type::Float;
     if (glslType.compare("int") == 0)
-        return IValues::Type::Int;
+        return PropertyValue::Type::Int;
     if (glslType.compare("bool") == 0)
-        return IValues::Type::Boolean;
+        return PropertyValue::Type::Bool;
 
     // Fail if no valid mapping found.
     AU_FAIL("Unsupported GLSL type %s", glslType.c_str());
-    return IValues::Type::Undefined;
+    return PropertyValue::Type::Undefined;
 }
 
 bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Result* pResultOut,
-    ParameterMappingFunction inputParameterMapper, ParameterMappingFunction outputParameterMapper,
-    const string& overrideDocumentName)
+    const set<string> supportedBSDFInputs, const string& overrideDocumentName)
 {
     // Processed MaterialX document string.
     string processedMtlXDocument;
@@ -667,13 +814,17 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // Get reference to original or processed materialX document string.
     const string& mtlXDocument = processedMtlXDocument.empty() ? document : processedMtlXDocument;
 
-    // Set the current input an output mappers to provided values.
-    _currentInputParameterMapper = inputParameterMapper;
-    _currentOutputParameterMapper =
-        outputParameterMapper ? outputParameterMapper : _defaultOutputMapper;
-
+    // Clear any previous data.
     _pGenerator->clearTempVariables();
     _processedNodes.clear();
+    _parameters.clear();
+    _parameterIndexLookup.clear();
+    _builtInIndexLookup.clear();
+    _materialProperties.clear();
+    _materialPropertyDefaults.clear();
+    _textures.clear();
+    _builtIns.clear();
+    _hasUnits = false;
 
     // Clear the setup code string.
     pResultOut->materialSetupCode = "";
@@ -681,7 +832,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // Create new document object.
     MaterialX::DocumentPtr mtlxDocument = MaterialX::createDocument();
 
-    // Read the XML into the document.
+    // Read the XML into a document.
     try
     {
         MaterialX::readFromXmlString(mtlxDocument, mtlXDocument);
@@ -691,14 +842,164 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
         AU_ERROR("Failed to read MaterialX from document:\n%s\n", exception.what());
         return false;
     }
+    MaterialX::DocumentPtr doc = mtlxDocument;
 
+    // Write unit registry.
     _unitRegistry->write(mtlxDocument);
 
+    // Return false and print error message, if any.
     string errorMessage;
     if (!mtlxDocument->validate(&errorMessage))
     {
         AU_ERROR("Invalid MaterialX document:\n%s", errorMessage.c_str());
         return false;
+    }
+
+    // Find all the terminal input values that will become the setup function parameters.
+    vector<MaterialX::ElementPtr> stringValues;
+    map<string, int> textureIndexLookup;
+    for (MaterialX::ElementPtr elem : doc->traverseTree())
+    {
+        // Get full path to node.
+        string path = elem->getNamePath();
+
+        // Initialize parameter struct to be filled in if parameter is found.
+        Parameter param;
+        param.parameterIndex = (int)_parameters.size();
+
+        // Have we found a parameter?
+        bool foundParam = false;
+
+        MaterialX::ValueElementPtr valueElem = elem->asA<MaterialX::ValueElement>();
+        if (valueElem && valueElem->isA<MaterialX::Input>() && valueElem->hasValue())
+        {
+            // All ValueElement's are parameters.
+            foundParam = true;
+
+            // Create a parameter object from the ValueElement's input value (adsk texture node
+            // values will be represented this way).
+            auto type = valueElem->getType();
+
+            // Fill in parameter based on type.
+            if (type.compare("filename") == 0)
+            {
+                // Create texture parameter from the file ValueElement.
+                param.path = processPath(path, true); // Remove the last and first part of path.
+                param.variableName = pathToVariableName(param.path);
+                param.index        = (int)_textures.size();
+                param.paramType    = ParameterType::Texture;
+                param.type         = "sampler2D";
+
+                // Create the texture definition for this parameter.
+                TextureDefinition tex;
+                tex.name            = param.path;
+                tex.defaultFilename = valueElem->getValue()->asA<string>();
+
+                // Set linearize to if no color space or srgb_texture color space.
+                string colorSpace = valueElem->getColorSpace();
+                tex.linearize     = colorSpace.empty() || colorSpace.compare("srgb_texture") == 0;
+
+                _textures.push_back(tex);
+                textureIndexLookup[param.path] = param.index;
+            }
+            else if (type.compare("string") == 0)
+            {
+                // String parameters are hardcoded texture properties (e.g. wrap mode), must be
+                // post-processed.
+                stringValues.push_back(elem);
+            }
+            else
+            {
+                // All other ValueElement types become material properties.
+                param.path         = processPath(path, false); // Remove only first section of path.
+                param.variableName = pathToVariableName(param.path);
+                param.index        = (int)_materialProperties.size();
+                param.paramType    = ParameterType::MaterialProperty;
+                param.type         = valueElem->getType();
+
+                // Create uniform block property definition for parameter.
+                PropertyValue propVal;
+                materialXValueToAuroraPropertyValue(&propVal, valueElem->getValue());
+                UniformBufferPropertyDefinition propDef(
+                    param.path, param.variableName, propVal.type);
+                _materialProperties.push_back(propDef);
+                _materialPropertyDefaults.push_back(propVal);
+            }
+        }
+        else
+        {
+
+            // image nodes and their children are not represented by ValueElement for some reason,
+            // so get the type as attribute.
+            string type = elem->getAttribute("type");
+            if (!type.empty())
+            {
+                // Process string and filename nodes.
+                if (type.compare("filename") == 0)
+                {
+                    // Found a filename parameter.
+                    foundParam = true;
+
+                    // Create texture parameter.
+                    param.path = processPath(path, true); // Remove the last and first part of path.
+                    param.variableName = pathToVariableName(param.path);
+                    param.index        = (int)_textures.size();
+                    param.paramType    = ParameterType::Texture;
+                    param.type         = "sampler2D";
+
+                    // Create the texture definition for this parameter.
+                    TextureDefinition tex;
+                    tex.name            = param.path;
+                    tex.defaultFilename = elem->getAttribute("value");
+
+                    // Set linearize to if no color space or srgb_texture color space.
+                    string colorSpace = elem->getAttribute("colorspace");
+                    tex.linearize = colorSpace.empty() || colorSpace.compare("srgb_texture") == 0;
+
+                    _textures.push_back(tex);
+                    textureIndexLookup[param.path] = param.index;
+                }
+                else if (type.compare("string") == 0)
+                {
+                    // Found a string parameter.
+                    foundParam = true;
+
+                    // String parameters are hardcoded texture properties (e.g. wrap mode), must be
+                    // post-processed.
+                    stringValues.push_back(elem);
+                }
+            }
+        }
+
+        // Add to setup function parameters.
+        if (foundParam && !param.variableName.empty())
+        {
+            _parameterIndexLookup[path] = (int)_parameters.size();
+            _parameters.push_back(param);
+        }
+    }
+
+    // Process the hardcoded texture properties that will become sampler settings.
+    // TODO: Fix this in MaterialX, so we have actual sampler objects, not error prone hard coded
+    // magic property names.
+    for (MaterialX::ElementPtr elem : stringValues)
+    {
+        string path    = elem->getNamePath();
+        string txtPath = processPath(path, true);
+        string valData = elem->getAttribute("value");
+        auto iter      = textureIndexLookup.find(txtPath);
+        if (iter != textureIndexLookup.end())
+        {
+            auto& texture = _textures[iter->second];
+            if (elem->getName().compare("uaddressmode") == 0)
+            {
+                texture.addressModeU = valData;
+            }
+            else if (elem->getName().compare("vaddressmode") == 0)
+            {
+                texture.addressModeV = valData;
+            }
+        }
     }
 
     // Import the standard library.
@@ -763,20 +1064,14 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     }
 
     // Find the surface node for shader.
-    MaterialX::TypedElementPtr shaderNodeElement     = nullptr;
-    MaterialX::InterfaceElementPtr shaderNodeDefImpl = nullptr;
+    MaterialX::TypedElementPtr shaderNodeElement = nullptr;
     for (MaterialX::NodePtr shaderNode : shaderNodes)
     {
         if ((shaderNode->getType() == MaterialX::SURFACE_SHADER_TYPE_STRING) &&
             (shaderNode->getCategory() == _surfaceShaderNodeCategory))
         {
             shaderNodeElement = shaderNode;
-
-            // Find the nodegraph implementation of the surface node.
-            shaderNodeDefImpl = shaderNodeElement->asA<MaterialX::Node>()->getImplementation();
-
-            if (shaderNodeDefImpl)
-                break;
+            break;
         }
     }
     if (!shaderNodeElement)
@@ -784,17 +1079,43 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
         AU_ERROR("Failed to find surface shader in material");
         return false;
     }
+
+    // Get the node for materialX shader.
+    MaterialX::NodePtr shaderNode = shaderNodeElement->asA<MaterialX::Node>();
+
+    // Build a set of the BSDF inputs used by the shader nodes.  These will be the outputs to the
+    // setup function.
+    auto graphInputs = shaderNode->getInputs();
+    set<string> bsdfInputSet;
+    for (auto gi : graphInputs)
+    {
+        string bsdfInputName = gi->getName();
+        if (supportedBSDFInputs.empty() ||
+            supportedBSDFInputs.find(bsdfInputName) != supportedBSDFInputs.end())
+            bsdfInputSet.insert(bsdfInputName);
+    }
+
+    // Get the implementation for the node.
+    MaterialX::InterfaceElementPtr shaderNodeDefImpl = shaderNode->getImplementation();
     if (!shaderNodeDefImpl)
     {
         AU_ERROR("Failed to find nodegraph implementation for the surface shader");
         return false;
     }
-
     string surfaceShaderNodeType = shaderNodeDefImpl->getName();
 
     // Create a shader graph from the surface node.
-    MaterialX::ShaderGraphPtr graph = MaterialX::ShaderGraph::create(
-        nullptr, "BSDFCodeGeneratorShaderGraph", shaderNodeElement, *_pGeneratorContext);
+    MaterialX::ShaderGraphPtr graph;
+    try
+    {
+        graph = MaterialX::ShaderGraph::create(
+            nullptr, "BSDFCodeGeneratorShaderGraph", shaderNodeElement, *_pGeneratorContext);
+    }
+    catch (MaterialX::ExceptionShaderGenError& ex)
+    {
+        AU_ERROR("Exception in MaterialX code:%s", ex.what());
+        return false;
+    }
     shared_ptr<BSDFCodeGeneratorShader> pBSDFGenShader =
         make_shared<BSDFCodeGeneratorShader>("BSDFCodeGeneratorShader", graph);
     MaterialX::ShaderPtr shader = dynamic_pointer_cast<MaterialX::Shader>(pBSDFGenShader);
@@ -818,46 +1139,79 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     _topLevelShaderNodeName = surfaceShaderNode->getName();
 
     // Create the active inputs and outputs.
-    _activeOutputs.clear();
-    _activeInputs.clear();
-    _activeInputNames.clear();
-    _activeOutputNames.clear();
+    _activeBSDFInputs.clear();
+    _activeBSDFInputNames.clear();
 
     // Build the body of the setup function from the surface shader node inputs.
     string functionBody      = "";
     auto surfaceShaderInputs = surfaceShaderNode->getInputs();
     for (int ssi = 0; ssi < surfaceShaderInputs.size(); ssi++)
     {
-
         // Is this shader input one of the outputs we are interested in ?
         auto surfaceShaderInput = surfaceShaderInputs[ssi];
+        string inputName        = surfaceShaderInput->getName();
 
-        IValues::Type auroraoOutputType = glslTypeToAuroraType(
-            pBSDFGenShader->syntax()->getTypeName(surfaceShaderInput->getType()));
-        string outputVariable = _currentOutputParameterMapper(
-            surfaceShaderInput->getName(), auroraoOutputType, _topLevelShaderNodeName);
-
-        if (!outputVariable.empty())
+        // Process inputs that are in the set of BSDF inputs for this material.
+        string bsdfInputVariable;
+        if (bsdfInputSet.find(inputName) != bsdfInputSet.end())
+            bsdfInputVariable = inputName;
+        if (!bsdfInputVariable.empty())
         {
             // Process the shader input.
-            processInput(surfaceShaderInput, pBSDFGenShader, outputVariable, &functionBody);
+            processInput(surfaceShaderInput, pBSDFGenShader, bsdfInputVariable, &functionBody);
 
-            // Add type to active outputs.
-            _activeOutputNames.push_back(outputVariable);
-            _activeOutputs[outputVariable] =
+            // Add to list of active BSDF inputs.
+            _activeBSDFInputNames.push_back(bsdfInputVariable);
+            _activeBSDFInputs[bsdfInputVariable] =
                 pBSDFGenShader->syntax()->getTypeName(surfaceShaderInput->getType());
         };
     }
 
-    // Create a hash from the contents of the setup function. This is used to uniquely identify the
-    // shader code generated for this material, without any of the parameters or other surrounding
-    // data.
+    // Set the material properties and textures in result.
+    pResultOut->materialProperties       = _materialProperties;
+    pResultOut->materialPropertyDefaults = _materialPropertyDefaults;
+    pResultOut->textureDefaults          = _textures;
+    pResultOut->hasUnits                 = _hasUnits;
+
+    // Set the texture names in the result.
+    pResultOut->textures.clear();
+    for (int i = 0; i < pResultOut->textureDefaults.size(); i++)
+    {
+        pResultOut->textures.push_back(pResultOut->textureDefaults[i].name);
+    }
+
+    // Create the contents of the material struct.
+    string structProperties;
+    for (int i = 0; i < pResultOut->materialProperties.size(); i++)
+    {
+        string glslType = getGLSLStringFromType(pResultOut->materialProperties[i].type);
+
+        structProperties.append(
+            "\t" + glslType + " " + pResultOut->materialProperties[i].variableName + ";\n");
+    }
+
+    // Create a hash from the contents of the setup function and the material struct. This is used
+    // to uniquely identify the shader code generated for this material.  It is possible to have
+    // identical functions with different material structs (as struct properties can be unused.)
+    // TODO: Strip out unused material parameters.
+    size_t structHash        = hash<string> {}(structProperties);
     pResultOut->functionHash = hash<string> {}(functionBody);
+    Foundation::hashCombine(pResultOut->functionHash, structHash);
 
     // Create setup function name from hash.
     stringstream sstream;
     sstream << "setupMaterial_" << Foundation::sHash(pResultOut->functionHash);
     pResultOut->setupFunctionName = sstream.str();
+
+    // Create material struct type name from hash.
+    sstream = stringstream();
+    sstream << "Material_" << Foundation::sHash(pResultOut->functionHash);
+    pResultOut->materialStructName = sstream.str();
+
+    // Create the GLSL code for the material struct (containing all material properties).
+    pResultOut->materialStructCode.append("struct " + pResultOut->materialStructName + " {\n");
+    pResultOut->materialStructCode.append(structProperties);
+    pResultOut->materialStructCode.append("};\n");
 
     // Create the function prototype from the function name, active inputs and outputs.
     pResultOut->materialSetupCode = "void " + pResultOut->setupFunctionName + "(\n";
@@ -865,68 +1219,50 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // Keep track of total input and output parameter count.
     int numParams = 0;
 
-    // Clear the argument and default values vectors.
-    pResultOut->argumentsUsed.clear();
-    pResultOut->defaultInputValues.clear();
-    pResultOut->defaultInputValues.resize(_activeInputNames.size());
+    // The first argument is always the material struct.
+    pResultOut->materialSetupCode.append("\t" + pResultOut->materialStructName + " material");
 
-    // Add the material inputs to the function prototype.
-    for (int i = 0; i < _activeInputNames.size(); i++)
+    // Add the texture inputs to the function prototype.
+    for (int i = 0; i < _textures.size(); i++)
     {
-        auto inputVar = _activeInputNames[i];
+        pResultOut->materialSetupCode.append(",\n");
 
-        auto activeTypeIter = _activeInputs.find(inputVar);
-        if (activeTypeIter != _activeInputs.end())
-        {
-            auto activeInput       = activeTypeIter->second;
-            string activeInputType = activeInput.first;
+        // Add the code for this input to the prototype.
+        pResultOut->materialSetupCode.append(
+            "\tsampler2D " + _textures[i].name + "_image_parameter");
 
-            // Create variable name using input name and suffix.
-            string inputVarName = inputVar + _materialInputSuffix;
-
-            // Append comma to previous line, if any.
-            if (numParams)
-                pResultOut->materialSetupCode.append(",\n");
-
-            // Convert GLSL type to Aurora type enum.
-            IValues::Type auroraType = glslTypeToAuroraType(activeInputType);
-
-            // Convert MaterialX value for input into Aurora Value.
-            if (activeInput.second)
-            {
-                materialXValueToAuroraValue(&pResultOut->defaultInputValues[i], activeInput.second);
-            }
-            Value* pDefaultValue = &pResultOut->defaultInputValues[i];
-
-            // Add this input to the results.
-            pResultOut->argumentsUsed.push_back({ inputVar, auroraType, false, pDefaultValue });
-
-            // Add the code for this input to the prototype.
-            pResultOut->materialSetupCode.append("\t" + activeInputType + " " + inputVarName);
-
-            // Increment parameter count.
-            numParams++;
-        }
+        numParams++;
     }
 
-    // Add the material outputs to the function prototype.
-    for (auto outputVar : _activeOutputNames)
+    // The distance unit (if used) is last input parameter in setup function prototype.
+    if (_hasUnits)
     {
-        auto activeTypeIter = _activeOutputs.find(outputVar);
-        if (activeTypeIter != _activeOutputs.end())
+        pResultOut->materialSetupCode.append(",\n");
+
+        // Add the code for the distance unit.
+        pResultOut->materialSetupCode.append("\tint " + _builtIns[0].second);
+
+        numParams++;
+    }
+
+    // The active BSDF inputs become output parameters to the function prototype.
+    pResultOut->bsdfInputs.clear();
+    for (auto bsdfInputName : _activeBSDFInputNames)
+    {
+        auto activeTypeIter = _activeBSDFInputs.find(bsdfInputName);
+        if (activeTypeIter != _activeBSDFInputs.end())
         {
             // Create variable name using output name and suffix.
-            string outputVarName = outputVar + _materialOutputSuffix;
+            string outputVarName = bsdfInputName;
 
             // Append comma to previous line, if any.
-            if (numParams)
-                pResultOut->materialSetupCode.append(",\n");
+            pResultOut->materialSetupCode.append(",\n");
 
             // Convert GLSL type to Aurora type enum.
-            IValues::Type auroraType = glslTypeToAuroraType(activeTypeIter->second);
+            PropertyValue::Type auroraType = glslTypeToAuroraType(activeTypeIter->second);
 
             // Add this output to the results.
-            pResultOut->argumentsUsed.push_back({ outputVar, auroraType, true });
+            pResultOut->bsdfInputs.push_back({ bsdfInputName, auroraType });
 
             // Add the code for this output to the prototype.
             pResultOut->materialSetupCode.append(

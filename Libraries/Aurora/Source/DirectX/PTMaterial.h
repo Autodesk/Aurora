@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,23 @@
 #pragma once
 
 #include "MaterialBase.h"
+#include "MemoryPool.h"
 
 BEGIN_AURORA
 
 // Forward declarations.
 class PTRenderer;
-class PTMaterialType;
+class MaterialShader;
 class PTShaderLibrary;
+struct MaterialDefaultValues;
+
+struct TextureTransform
+{
+    vec2 pivot;
+    vec2 scale;
+    vec2 offset;
+    float rotation = 0.0f;
+};
 
 // An internal implementation for IMaterial.
 class PTMaterial : public MaterialBase
@@ -35,7 +45,8 @@ public:
 
     /*** Lifetime Management ***/
 
-    PTMaterial(PTRenderer* pRenderer, shared_ptr<PTMaterialType> pType);
+    PTMaterial(
+        PTRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef);
     ~PTMaterial() {};
 
     /*** Functions ***/
@@ -43,22 +54,20 @@ public:
     // The total number of texture descriptors for each material instance.
     static uint32_t descriptorCount()
     {
-        // Base color, specular roughness, normal and opacity textures.
-        return 4;
+        // Base color, specular roughness, normal, emission color, and opacity textures.
+        return 5;
     }
 
     // The total number of sampler descriptors for each material instance.
     static uint32_t samplerDescriptorCount()
     {
         // Base color + opacity only for now.
+        // TODO: Support samplers for other textures.
         return 2;
     }
 
     // Gets the constant buffer for this material.
-    ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
-
-    // Gets the material type for this material.
-    shared_ptr<PTMaterialType> materialType() const { return _pType; }
+    ID3D12Resource* buffer() const { return _constantBuffer.pGPUBuffer.Get(); }
 
     bool update();
     void createDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT increment) const;
@@ -70,11 +79,12 @@ private:
 
     /*** Private Functions ***/
 
+    bool computeIsOpaque() const;
+
     /*** Private Variables ***/
 
     PTRenderer* _pRenderer = nullptr;
-    ID3D12ResourcePtr _pConstantBuffer;
-    shared_ptr<PTMaterialType> _pType;
+    TransferBuffer _constantBuffer;
 };
 MAKE_AURORA_PTR(PTMaterial);
 

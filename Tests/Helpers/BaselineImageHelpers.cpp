@@ -1,4 +1,4 @@
-// Copyright 2022 Autodesk, Inc.
+// Copyright 2023 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+
+#include <Aurora/Foundation/Utilities.h>
 
 using namespace std;
 
@@ -137,7 +139,7 @@ Result compare(const uint8_t* renderedPixels, size_t width, size_t height,
     string fileName = name + ".png";
 
     // replace non-file chars with underscore
-    sanitizeFileName(fileName);
+    Aurora::Foundation::sanitizeFileName(fileName);
 
     // Output and baseline file named identically in baseline and output folder
     string outputFile   = combinePaths(ouputImageFolder, fileName);
