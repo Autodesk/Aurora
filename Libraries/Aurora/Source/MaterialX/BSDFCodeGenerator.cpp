@@ -406,8 +406,8 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
         return;
     }
 
-    // Compare connection name.
-    string variableName = connection->getFullName();
+    // Get full variable name (with postfix numeral) for connection.
+    string variableName = connection->getVariable();
     if (input->getConnection()->getNode()->getName() == "BSDFCodeGeneratorShaderGraph")
     {
         // If this a connection from the high-level shader graph, its a material input.
@@ -1209,7 +1209,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     pResultOut->materialStructName = sstream.str();
 
     // Create the GLSL code for the material struct (containing all material properties).
-    pResultOut->materialStructCode.append("struct " + pResultOut->materialStructName + " {\n");
+    pResultOut->materialStructCode = "struct " + pResultOut->materialStructName + " {\n";
     pResultOut->materialStructCode.append(structProperties);
     pResultOut->materialStructCode.append("};\n");
 

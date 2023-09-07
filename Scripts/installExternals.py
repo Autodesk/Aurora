@@ -150,8 +150,8 @@ def InstallBoost_Helper(context, force, buildArgs):
         bootstrap = "bootstrap.bat" if Windows() else "./bootstrap.sh"
         Run(f'{bootstrap} {bsToolset}')
 
-        # b2 supports at most -j64 and will error if given a higher value.
-        numProc = min(64, context.numJobs)
+        # b2 supports at most -j32 and will error if given a higher value.
+        numProc = min(32, context.numJobs)
 
         b2Settings = [
             f'--build-dir="{context.buildDir}"',
@@ -597,7 +597,7 @@ OPENSUBDIV = Dependency(OPENSUBDIV_INSTALL_FOLDER, OPENSUBDIV_PACKAGE_NAME, Inst
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.5.zip"
+MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.7.zip"
 MATERIALX_INSTALL_FOLDER = "MaterialX"
 MATERIALX_PACKAGE_NAME = "MaterialX"
 

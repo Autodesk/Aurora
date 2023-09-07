@@ -70,7 +70,10 @@ def windowsBuild(Config) {
     call set VULKAN_SDK=C:\\VulkanSDK\\1.3.231.1
 
     :: Set up Visual Studio 2019 Environment
-    call C:\\"Program Files (x86)"\\"Microsoft Visual Studio"\\2019\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
+    for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere" -property installationPath`) do (
+        if exist "%%i\\MSBuild\\Microsoft\\VisualStudio\\v16.0" set "VSInstallPath=%%i"
+    )
+    call "%VSInstallPath%\\VC\\Auxiliary\\Build\\vcvars64.bat"
 
     :: install externals
     python -u Scripts\\installExternals.py ${EXTERNALS_DIR_AURORA} --build-variant=${Config} -v -v

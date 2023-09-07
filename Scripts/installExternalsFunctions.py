@@ -334,6 +334,10 @@ def FormatMultiProcs(numJobs, generator):
         if "Visual Studio" in generator:
             tag = "/M:" # This will build multiple projects at once.
 
+    # More than 32 jobs with cause -j argument not to be recognized.
+    if(numJobs>32):
+        PrintWarning("Maximum 32 concurrent jobs supported. Clamping from "+str(numJobs)+" to 32")
+        numJobs=32
     return "{tag}{procs}".format(tag=tag, procs=numJobs)
 
 def BuildConfigs(context):
