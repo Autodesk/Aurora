@@ -1080,7 +1080,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
         return false;
     }
 
-    // Get the node for materialX shader.
+    // Get the node for MaterialX shader.
     MaterialX::NodePtr shaderNode = shaderNodeElement->asA<MaterialX::Node>();
 
     // Build a set of the BSDF inputs used by the shader nodes.  These will be the outputs to the

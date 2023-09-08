@@ -439,7 +439,7 @@ bool Plasma::initialize()
 
     // Setup asset search paths. Including the path to the ProteinX test folder (if running within
     // the Github repo).
-    // TODO: A more reliable solution would be to set based on the loaded materialX file path.
+    // TODO: A more reliable solution would be to set based on the loaded MaterialX file path.
     _assetPaths = { "",
         Foundation::getModulePath() +
             "../../../Renderers/Tests/Data/Materials/mtlx_ProteinSubset/" };
@@ -605,7 +605,7 @@ bool Plasma::initialize()
 
 bool Plasma::addDecal(const string& decalMtlXPath)
 {
-    // Load the materialX file for decal.
+    // Load the MaterialX file for decal.
     auto materialPath = loadMaterialXFile(decalMtlXPath);
     if (materialPath.empty())
         return false;
@@ -1139,7 +1139,7 @@ Aurora::Path Plasma::loadMaterialXFile(const string& filePath)
     processedMtlXString =
         regex_replace(processedMtlXString, regex(R"(\.\.\/\.\.\/\.\.)"), mtlxResourcesPath);
 
-    // Create a new material from the materialX document.
+    // Create a new material from the MaterialX document.
     _pScene->setMaterialType(
         materialPath, Aurora::Names::MaterialTypes::kMaterialX, processedMtlXString);
 
@@ -1147,7 +1147,7 @@ Aurora::Path Plasma::loadMaterialXFile(const string& filePath)
 }
 bool Plasma::applyMaterialXFile(const string& filePath)
 {
-    // Create a new material from the materialX document.
+    // Create a new material from the MaterialX document.
     Aurora::Path materialPath = loadMaterialXFile(filePath);
     if (materialPath.empty())
     {
@@ -1515,7 +1515,7 @@ void Plasma::onKeyPressed(WPARAM keyCode)
         adjustUnit(+1);
         break;
 
-    // W: Add decal from materialX file.
+    // W: Add decal from MaterialX file.
     case 0x57:
         if (::GetAsyncKeyState(VK_CONTROL) != 0)
         {

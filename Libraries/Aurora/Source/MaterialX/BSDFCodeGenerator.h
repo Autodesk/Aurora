@@ -143,7 +143,7 @@ protected:
     // Convert GLSL type string to Aurora type (asserts if conversion fails.)
     PropertyValue::Type glslTypeToAuroraType(const string glslType);
 
-    // Convert materialX value to Aurora value (asserts if conversion fails.)
+    // Convert MaterialX value to Aurora value (asserts if conversion fails.)
     bool materialXValueToAuroraValue(Value* pValueOut, shared_ptr<MaterialX::Value> pMtlXValue);
 
     bool materialXValueToAuroraPropertyValue(

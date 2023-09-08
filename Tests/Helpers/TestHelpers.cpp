@@ -49,17 +49,30 @@ float as_float(const uint32_t x)
 std::string compareTextFile(
     const std::string filename, const std::string cmpString, const std::string message)
 {
+
     std::string errMsg = "";
 
     std::stringstream cmpsstream(cmpString);
     std::fstream infile;
     infile.open(filename, std::ios::in);
-    if (infile.bad())
+    if (infile.bad() || !infile.is_open())
     {
         errMsg = "Failed to open baseline text file:" + filename;
     }
     if (errMsg.empty())
     {
+        if (cmpString.empty())
+        {
+            infile.seekg(0, infile.end);
+            size_t length = infile.tellg();
+            infile.seekg(0, infile.beg);
+
+            if (length == 0)
+                return "";
+
+            return message + " comparison string is empty but " + filename + " contains " +
+                std::to_string(length) + "characters.";
+        }
         std::string inlinestr;
         std::string cmplinestr;
         bool atEof = false;

@@ -1,0 +1,23 @@
+struct Material_55c0082a3bf2c52a {
+	float base;
+	float metalness;
+	float specular;
+	float specular_roughness;
+	float specular_IOR;
+	int thin_walled;
+	vec2 basecolor_bitmap_realworld_offset;
+	vec2 basecolor_bitmap_realworld_scale;
+	vec2 basecolor_bitmap_uv_offset;
+	vec2 basecolor_bitmap_uv_scale;
+	float basecolor_bitmap_rotation_angle;
+	vec2 opacity_bitmap_realworld_offset;
+	vec2 opacity_bitmap_realworld_scale;
+	vec2 opacity_bitmap_uv_offset;
+	vec2 opacity_bitmap_uv_scale;
+	float opacity_bitmap_rotation_angle;
+	vec3 difference_image_with_chromekey_bg;
+	float difference_image_with_chromekey_mix;
+	float convert_to_opacity_white_black_value2;
+	vec3 convert_to_opacity_white_black_in1;
+	vec3 convert_to_opacity_white_black_in2;
+};

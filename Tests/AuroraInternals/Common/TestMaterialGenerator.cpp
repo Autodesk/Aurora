@@ -15,6 +15,8 @@
 #if !defined(DISABLE_UNIT_TESTS)
 
 #include "TestHelpers.h"
+
+#include <filesystem>
 #include <gtest/gtest.h>
 
 // Include the Aurora PCH (this is an internal test so needs all the internal Aurora includes)
@@ -33,6 +35,8 @@ public:
     MaterialGeneratorTest() : _dataPath(TestHelpers::kSourceRoot + "/Tests/Assets") {}
     ~MaterialGeneratorTest() {}
     const std::string& dataPath() { return _dataPath; }
+    // Test for the existence of the ADSK materialX libraries (in the working folder for the tests)
+    bool adskMaterialXSupport() { return std::filesystem::exists("MaterialX/libraries/adsk"); }
 
 protected:
     std::string _dataPath;
@@ -316,9 +320,9 @@ TEST_F(MaterialGeneratorTest, CodeGenTest)
 
     Aurora::MaterialXCodeGen::BSDFCodeGenerator::Result res;
     bool ok;
-    string errMsg;
+    string errMsg, defStr;
 
-    codeGen.generate(materialXString0, &res, supportedBSDFInputs);
+    ok = codeGen.generate(materialXString0, &res, supportedBSDFInputs);
     ASSERT_TRUE(ok);
 
     errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX0_Setup.glsl",
@@ -329,7 +333,13 @@ TEST_F(MaterialGeneratorTest, CodeGenTest)
         res.materialStructCode, "Generated struct code comparison failed");
     ASSERT_TRUE(errMsg.empty()) << errMsg;
 
-    codeGen.generate(materialXString1, &res, supportedBSDFInputs);
+    codeGen.generateDefinitions(&defStr);
+    errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX0_Defs.glsl",
+        defStr, "Generated definitions code comparison failed");
+    ASSERT_TRUE(errMsg.empty()) << errMsg;
+
+    codeGen.clearDefinitions();
+    ok = codeGen.generate(materialXString1, &res, supportedBSDFInputs);
     ASSERT_TRUE(ok);
 
     errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX1_Setup.glsl",
@@ -340,7 +350,13 @@ TEST_F(MaterialGeneratorTest, CodeGenTest)
         res.materialStructCode, "Generated struct code comparison failed");
     ASSERT_TRUE(errMsg.empty()) << errMsg;
 
-    codeGen.generate(materialXString2, &res, supportedBSDFInputs);
+    codeGen.generateDefinitions(&defStr);
+    errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX1_Defs.glsl",
+        defStr, "Generated definitions code comparison failed");
+    ASSERT_TRUE(errMsg.empty()) << errMsg;
+
+    codeGen.clearDefinitions();
+    ok = codeGen.generate(materialXString2, &res, supportedBSDFInputs);
     ASSERT_TRUE(ok);
 
     errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX2_Setup.glsl",
@@ -351,7 +367,13 @@ TEST_F(MaterialGeneratorTest, CodeGenTest)
         res.materialStructCode, "Generated struct code comparison failed");
     ASSERT_TRUE(errMsg.empty()) << errMsg;
 
-    codeGen.generate(materialXString3, &res, supportedBSDFInputs);
+    codeGen.generateDefinitions(&defStr);
+    errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX2_Defs.glsl",
+        defStr, "Generated definitions code comparison failed");
+    ASSERT_TRUE(errMsg.empty()) << errMsg;
+
+    codeGen.clearDefinitions();
+    ok = codeGen.generate(materialXString3, &res, supportedBSDFInputs);
     ASSERT_TRUE(ok);
 
     errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX3_Setup.glsl",
@@ -362,7 +384,34 @@ TEST_F(MaterialGeneratorTest, CodeGenTest)
         res.materialStructCode, "Generated struct code comparison failed");
     ASSERT_TRUE(errMsg.empty()) << errMsg;
 
+    codeGen.generateDefinitions(&defStr);
+    errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/TestMaterialX3_Defs.glsl",
+        defStr, "Generated definitions code comparison failed");
+    ASSERT_TRUE(errMsg.empty()) << errMsg;
+
     string readMtlXText;
+
+    if (adskMaterialXSupport())
+    {
+        ok = readTextFile(dataPath() + "/Materials/Decals/test_decal_mask.mtlx", readMtlXText);
+        ASSERT_TRUE(ok);
+
+        ok = codeGen.generate(readMtlXText, &res, supportedBSDFInputs);
+        ASSERT_TRUE(ok);
+
+        errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/Mask_Setup.glsl",
+            res.materialSetupCode, "Generated setup code comparison failed");
+        ASSERT_TRUE(errMsg.empty()) << errMsg;
+
+        errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/Mask_Struct.glsl",
+            res.materialStructCode, "Generated struct code comparison failed");
+        ASSERT_TRUE(errMsg.empty()) << errMsg;
+
+        codeGen.generateDefinitions(&defStr);
+        errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/Mask_Defs.glsl", defStr,
+            "Generated definitions code comparison failed");
+        ASSERT_TRUE(errMsg.empty()) << errMsg;
+    }
 
     ok = readTextFile(dataPath() + "/Materials/HdAuroraTextureTest.mtlx", readMtlXText);
     ASSERT_TRUE(ok);
@@ -378,18 +427,9 @@ TEST_F(MaterialGeneratorTest, CodeGenTest)
         res.materialStructCode, "Generated struct code comparison failed");
     ASSERT_TRUE(errMsg.empty()) << errMsg;
 
-    ok = readTextFile(dataPath() + "/Materials/HdAuroraTest.mtlx", readMtlXText);
-    ASSERT_TRUE(ok);
-
-    ok = codeGen.generate(readMtlXText, &res, supportedBSDFInputs);
-    ASSERT_TRUE(ok);
-
-    errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/HdAuroraTest_Setup.glsl",
-        res.materialSetupCode, "Generated setup code comparison failed");
-    ASSERT_TRUE(errMsg.empty()) << errMsg;
-
-    errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/HdAuroraTest_Struct.glsl",
-        res.materialStructCode, "Generated struct code comparison failed");
+    codeGen.generateDefinitions(&defStr);
+    errMsg = TestHelpers::compareTextFile(dataPath() + "/TextFiles/HdAuroraTextureTest_Defs.glsl",
+        defStr, "Generated definitions code comparison failed");
     ASSERT_TRUE(errMsg.empty()) << errMsg;
 }
 

@@ -148,7 +148,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
         supportedBSDFInputs.insert(iter.first);
     }
 
-    // Run the code generator overriding materialX document name, so that regardless of the name in
+    // Run the code generator overriding MaterialX document name, so that regardless of the name in
     // the document, the generated HLSL is based on a hardcoded name string for caching purposes.
     // NOTE: This will immediate run the code generator and invoke the inputMapper and outputMapper
     // function populate hardcodedInputs and set modifiedNormal.
@@ -350,7 +350,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     generatedMtlxSetupFunction += ");\n";
 
     // Replace overwrite metal color with base color.
-    // TODO: Metal color is not supported by materialX and not in Standard Surface definition.  So
+    // TODO: Metal color is not supported by MaterialX and not in Standard Surface definition.  So
     // maybe remove it?
     generatedMtlxSetupFunction += "material.metalColor = material.baseColor;";
 
@@ -380,7 +380,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     bool isOpaque = bsdfInputs.find("opacity") == bsdfInputs.end() &&
         bsdfInputs.find("transmission") == bsdfInputs.end();
 
-    // Create update function which just sets opacity flag based on materialX inputs.
+    // Create update function which just sets opacity flag based on MaterialX inputs.
     function<void(MaterialBase&)> updateFunc = [isOpaque](MaterialBase& mtl) {
         mtl.setIsOpaque(isOpaque);
     };

@@ -79,7 +79,7 @@ public:
     }
     ~MaterialTest() {}
 
-    // Test for the existence of the ADSK materialX libraries (in the working folder for the tests)
+    // Test for the existence of the ADSK MaterialX libraries (in the working folder for the tests)
     bool adskMaterialXSupport() { return std::filesystem::exists("MaterialX/libraries/adsk"); }
 
     // Load a MaterialX document and process file paths to correct locations for unit tests.
@@ -882,7 +882,7 @@ TEST_P(MaterialTest, TestMaterialTypes)
 
     Path geometry = createTeapotGeometry(*pScene);
 
-    // Create materialX material from document.
+    // Create MaterialX material from document.
     Path mtl0("Mtl0");
     pScene->setMaterialType(mtl0, Names::MaterialTypes::kMaterialX, testMtl);
 
@@ -891,7 +891,7 @@ TEST_P(MaterialTest, TestMaterialTypes)
     instProps[Names::InstanceProperties::kTransform] = translate(vec3(-3, 0, 6));
     EXPECT_TRUE(pScene->addInstance(Path("I0"), geometry, instProps));
 
-    // Create materialX material from path.
+    // Create MaterialX material from path.
     Path mtl1("Mtl1");
     pScene->setMaterialType(
         mtl1, Names::MaterialTypes::kMaterialXPath, dataPath() + "/Materials/TestMaterial.mtlx");
@@ -900,7 +900,7 @@ TEST_P(MaterialTest, TestMaterialTypes)
     instProps[Names::InstanceProperties::kTransform] = translate(vec3(0, 0, 6));
     EXPECT_TRUE(pScene->addInstance(Path("I1"), geometry, instProps));
 
-    // Create materialX material from path.
+    // Create MaterialX material from path.
     Path mtl2("Mtl2");
     pScene->setMaterialType(mtl2, Names::MaterialTypes::kBuiltIn, "Default");
 
@@ -930,7 +930,7 @@ TEST_P(MaterialTest, TestMaterialX)
 
     // Create a material with invalid document.
     pScene->setMaterialType("NullMaterial", Names::MaterialTypes::kMaterialX,
-        "Not valid materialX! $#$(#*(%*#,.,.,.<><><>");
+        "Not valid MaterialX! $#$(#*(%*#,.,.,.<><><>");
 
     // Error occurs when material resource is activated.
     pScene->addPermanent("NullMaterial");
@@ -1067,7 +1067,7 @@ TEST_P(MaterialTest, TestHdAuroraTextureMaterialX)
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMaterialXFlipImageY)
 {
-    // This mtlx file requires support ADSK materialX support.
+    // This mtlx file requires support ADSK MaterialX support.
     if (!adskMaterialXSupport())
         return;
 
@@ -1093,7 +1093,7 @@ TEST_P(MaterialTest, TestMaterialXFlipImageY)
         // Create teapot geom.
         Path geometry = createTeapotGeometry(*pScene);
 
-        // Read the materialX document from file.
+        // Read the MaterialX document from file.
         string materialXFullPath = dataPath() + "/Materials/TestTexture.mtlx";
 
         // Load source into string.
@@ -1232,7 +1232,7 @@ TEST_P(MaterialTest, TestLotsOfMaterialX)
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMaterialXBMP)
 {
-    // This mtlx file requires support ADSK materialX support.
+    // This mtlx file requires support ADSK MaterialX support.
     if (!adskMaterialXSupport())
         return;
 
@@ -1252,7 +1252,7 @@ TEST_P(MaterialTest, TestMaterialXBMP)
     // Create teapot geom.
     Path geometry = createTeapotGeometry(*pScene);
 
-    // Read the materialX document from file.
+    // Read the MaterialX document from file.
     string materialXFullPath = dataPath() + "/Materials/TestBMPTexture.mtlx";
 
     // Load and process the MaterialX document and ensure it loaded correctly.
@@ -1401,7 +1401,7 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMtlXSamplers)
 {
-    // This mtlx file requires support ADSK materialX support.
+    // This mtlx file requires support ADSK MaterialX support.
     if (!adskMaterialXSupport())
         return;
 
@@ -1444,7 +1444,7 @@ TEST_P(MaterialTest, TestMtlXSamplers)
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMaterialMaterialXLayers)
 {
-    // This mtlx file requires support ADSK materialX support.
+    // This mtlx file requires support ADSK MaterialX support.
     if (!adskMaterialXSupport())
         return;
 
@@ -1567,6 +1567,158 @@ TEST_P(MaterialTest, TestMaterialMaterialXLayers)
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName() + "_Removed");
 }
 
+// MaterialX as layered materials
+// Disabled as this testcase fails with error in MaterialGenerator::generate
+TEST_P(MaterialTest, TestMaterialMaterialXLayerTransforms)
+{
+    // This mtlx file requires support ADSK MaterialX support.
+    if (!adskMaterialXSupport())
+        return;
+
+    // No MaterialX on HGI yet.
+    if (!isDirectX())
+        return;
+
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    setupAssetPaths();
+
+    Properties options = { { "isFlipImageYEnabled", false } };
+    pRenderer->setOptions(options);
+
+    std::string proteinXFullPath        = dataPath() + "/Materials/FishScale.mtlx";
+    string processedBaseMaterialXString = loadAndProcessMaterialXFile(proteinXFullPath);
+    ASSERT_FALSE(processedBaseMaterialXString.empty());
+
+    string materialLayer0XFullPath        = dataPath() + "/Materials/Decals/test_decal_mask.mtlx";
+    string processedLayer0MaterialXString = loadAndProcessMaterialXFile(materialLayer0XFullPath);
+    ASSERT_FALSE(processedLayer0MaterialXString.empty());
+
+    vector<Path> materialLayers = { "LayerMaterial0", "LayerMaterial1", "LayerMaterial2",
+        "LayerMaterial3" };
+    pScene->setMaterialType(
+        materialLayers[0], Names::MaterialTypes::kMaterialX, processedLayer0MaterialXString);
+    pScene->setMaterialProperties(materialLayers[0],
+        {
+            { "basecolor_bitmap/rotation_angle", 45.0f },
+            { "basecolor_bitmap/uv_offset", glm::vec2(0, 0) },
+            { "basecolor_bitmap/uv_scale", glm::vec2(2, 0.5) },
+            { "opacity_bitmap/rotation_angle", 45.0f },
+            { "opacity_bitmap/uv_offset", glm::vec2(0, 0) },
+            { "opacity_bitmap/uv_scale", glm::vec2(2, 0.5) },
+        });
+
+    pScene->setMaterialType(
+        materialLayers[1], Names::MaterialTypes::kMaterialX, processedLayer0MaterialXString);
+    pScene->setMaterialProperties(materialLayers[1],
+        {
+            { "basecolor_bitmap/rotation_angle", -15.0f },
+            { "basecolor_bitmap/uv_offset", glm::vec2(3.0, 0) },
+            { "basecolor_bitmap/uv_scale", glm::vec2(4, 4) },
+            { "opacity_bitmap/rotation_angle", -15.0f },
+            { "opacity_bitmap/uv_offset", glm::vec2(3.0, 0) },
+            { "opacity_bitmap/uv_scale", glm::vec2(4, 4) },
+        });
+
+    pScene->setMaterialType(
+        materialLayers[2], Names::MaterialTypes::kMaterialX, processedLayer0MaterialXString);
+    pScene->setMaterialProperties(materialLayers[2],
+        {
+            { "basecolor_bitmap/rotation_angle", 5.0f },
+            { "basecolor_bitmap/uv_offset", glm::vec2(3.0, 2.0) },
+            { "basecolor_bitmap/uv_scale", glm::vec2(4, 4) },
+            { "opacity_bitmap/rotation_angle", 5.0f },
+            { "opacity_bitmap/uv_offset", glm::vec2(3.0, 2.0) },
+            { "opacity_bitmap/uv_scale", glm::vec2(4, 4) },
+        });
+
+    pScene->setMaterialType(
+        materialLayers[3], Names::MaterialTypes::kMaterialX, processedLayer0MaterialXString);
+    pScene->setMaterialProperties(materialLayers[3],
+        {
+            { "basecolor_bitmap/rotation_angle", -60.0f },
+            { "basecolor_bitmap/uv_offset", glm::vec2(1.5, 0.0) },
+            { "basecolor_bitmap/uv_scale", glm::vec2(0.5, 4) },
+            { "opacity_bitmap/rotation_angle", -60.0f },
+            { "opacity_bitmap/uv_offset", glm::vec2(1.5, 0.0) },
+            { "opacity_bitmap/uv_scale", glm::vec2(0.5, 4) },
+        });
+
+    Path baseMaterial("BaseMaterial");
+    pScene->setMaterialType(
+        baseMaterial, Names::MaterialTypes::kMaterialX, processedBaseMaterialXString);
+
+    int numGeomLayers = 1;
+    vector<string> geometryLayers;
+
+    float scales[]      = { 1, 2, 1.5f, 0.4f };
+    glm::vec2 origins[] = { glm::vec2(0.75f, 1.0f), glm::vec2(-0.25f, 1.2f), glm::vec2(0.25f, 0.6f),
+        glm::vec2(-0.5f, 1.4f) };
+
+    vector<vector<glm::vec2>> xformedUVs(numGeomLayers);
+
+    for (int layer = 0; layer < numGeomLayers; layer++)
+    {
+        auto& uvs = xformedUVs[layer];
+        uvs.resize(TestHelpers::TeapotModel::verticesCount());
+
+        for (uint32_t i = 0; i < uvs.size(); i++)
+        {
+            uvs[i].x = *(TestHelpers::TeapotModel::vertices() + (i * 3 + 0));
+            uvs[i].y = *(TestHelpers::TeapotModel::vertices() + (i * 3 + 1));
+            uvs[i]   = origins[layer] - uvs[i];
+            uvs[i] *= scales[layer];
+        }
+
+        const Path kDecalUVGeomPath = "DecalUVGeomPath" + to_string(layer);
+        GeometryDescriptor geomDesc;
+        geomDesc.type = PrimitiveType::Triangles;
+        geomDesc.vertexDesc.attributes[Names::VertexAttributes::kTexCoord0] =
+            AttributeFormat::Float2;
+        geomDesc.vertexDesc.count = TestHelpers::TeapotModel::verticesCount();
+        geomDesc.getAttributeData = [&xformedUVs, layer](AttributeDataMap& buffers,
+                                        size_t firstVertex, size_t vertexCount, size_t firstIndex,
+                                        size_t indexCount) {
+            AU_ASSERT(firstVertex == 0, "Partial update not supported");
+            AU_ASSERT(vertexCount == TestHelpers::TeapotModel::verticesCount(),
+                "Partial update not supported");
+            AU_ASSERT(firstIndex == 0, "Partial update not supported");
+            AU_ASSERT(indexCount == 0, "Partial update not supported");
+            buffers[Names::VertexAttributes::kTexCoord0].address = xformedUVs[layer].data();
+            buffers[Names::VertexAttributes::kTexCoord0].size =
+                TestHelpers::TeapotModel::verticesCount() * sizeof(vec2);
+            buffers[Names::VertexAttributes::kTexCoord0].stride = sizeof(vec2);
+
+            return true;
+        };
+        pScene->setGeometryDescriptor(kDecalUVGeomPath, geomDesc);
+    }
+
+    for (int layer = 0; layer < materialLayers.size(); layer++)
+    {
+        const Path kDecalUVGeomPath = "DecalUVGeomPath0";
+        geometryLayers.push_back(kDecalUVGeomPath);
+    }
+
+    // Create a teapot instance with a default material.
+    Path geometry      = createTeapotGeometry(*pScene);
+    Path planeGeometry = createPlaneGeometry(*pScene);
+    EXPECT_TRUE(pScene->addInstance("TeapotInstance", geometry,
+        { { Names::InstanceProperties::kMaterial, baseMaterial },
+            { Names::InstanceProperties::kMaterialLayers, materialLayers },
+            { Names::InstanceProperties::kGeometryLayers, geometryLayers },
+            { Names::InstanceProperties::kTransform, glm::translate(glm::vec3(0, -0.5, -0.8)) } }));
+    EXPECT_TRUE(pScene->addInstance(
+        "Plane", planeGeometry, { { Names::InstanceProperties::kMaterial, baseMaterial } }));
+
+    ASSERT_BASELINE_IMAGE_PASSES(currentTestName());
+}
+
 // Normal map image test.
 TEST_P(MaterialTest, TestNormalMapMaterialX)
 {
@@ -1613,10 +1765,10 @@ TEST_P(MaterialTest, TestNormalMapMaterialX)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
 }
 
-// Test object space normal in materialX.
+// Test object space normal in MaterialX.
 TEST_P(MaterialTest, TestObjectSpaceMaterialX)
 {
-    // This mtlx file requires support ADSK materialX support.
+    // This mtlx file requires support ADSK MaterialX support.
     if (!adskMaterialXSupport())
         return;
 

@@ -150,8 +150,8 @@ def InstallBoost_Helper(context, force, buildArgs):
         bootstrap = "bootstrap.bat" if Windows() else "./bootstrap.sh"
         Run(f'{bootstrap} {bsToolset}')
 
-        # b2 supports at most -j32 and will error if given a higher value.
-        numProc = min(32, context.numJobs)
+        # b2 supports at most -j64 and will error if given a higher value.
+        numProc = min(64, context.numJobs)
 
         b2Settings = [
             f'--build-dir="{context.buildDir}"',

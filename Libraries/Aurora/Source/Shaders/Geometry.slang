@@ -37,9 +37,9 @@ struct ShadingData
     float3 tangent;        // the shading tangent (X), interpolated from adjacent vertices
     float3 bitangent;      // the shading bitangent (Y), interpolated from adjacent vertices
     float3 objectNormal;   // the shading position in object space (not world space). Used only in
-                           // materialX generated code.
+                           // MaterialX generated code.
     float3 objectPosition; // the shading normal in object space (not world space). Used only in
-                           // materialX generated code.
+                           // MaterialX generated code.
 };
 
 // Computes the barycentric coordinates from the specified triangle intersection.

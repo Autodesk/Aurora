@@ -38,7 +38,7 @@
 #include "Denoiser.h"
 #endif
 
-// Development flag to dump materialX documents to disk.
+// Development flag to dump MaterialX documents to disk.
 // NOTE: This should never be enabled in committed code; it is only for local development.
 #define AU_DEV_DUMP_MATERIALX_DOCUMENTS 0
 #define AU_DEV_DUMP_PROCESSED_MATERIALX_DOCUMENTS 0
@@ -82,7 +82,7 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
     _pShaderLibrary->setOption("ENABLE_LAYERS", true);
 
 #if ENABLE_MATERIALX
-    // Get the materialX folder relative to the module path.
+    // Get the MaterialX folder relative to the module path.
     string mtlxFolder = Foundation::getModulePath() + "MaterialX";
     // Initialize the MaterialX code generator.
     _pMaterialXGenerator = make_unique<MaterialXCodeGen::MaterialGenerator>(mtlxFolder);
@@ -194,7 +194,7 @@ IMaterialPtr PTRenderer::createMaterialPointer(
     }
     else if (materialType.compare(Names::MaterialTypes::kMaterialX) == 0)
     {
-        // Generate a material shader and definition from the materialX document.
+        // Generate a material shader and definition from the MaterialX document.
         pShader = generateMaterialX(document, &pDef);
 
         // If flag is set dump the document to disk for development purposes.
@@ -1524,7 +1524,7 @@ shared_ptr<MaterialShader> PTRenderer::generateMaterialX([[maybe_unused]] const 
     [[maybe_unused]] shared_ptr<MaterialDefinition>* pDefOut)
 {
 #if ENABLE_MATERIALX
-    // Generate the material definition for the materialX document, this contains the source code,
+    // Generate the material definition for the MaterialX document, this contains the source code,
     // default values, and a unique name.
     shared_ptr<MaterialDefinition> pDef = _pMaterialXGenerator->generate(document);
     if (!pDef)
