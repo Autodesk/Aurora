@@ -25,9 +25,14 @@ public:
 
     void DeleteRenderDelegate(HdRenderDelegate* renderDelegate) override;
 
+// The extra arguments to IsSupported were added with Hydra version 50.  As we need to support
+// both USD 23.08.01 and older versions, make arguments conditional at compile time.
+#if HD_API_VERSION >= 50
+    virtual bool IsSupported(bool gpuEnabled = true, TfToken hgiToken = TfToken("")) const override;
+#else
     bool IsSupported() const override;
-
+#endif
 private:
-    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&)            = delete;
+    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&) = delete;
     HdAuroraRendererPlugin& operator=(const HdAuroraRendererPlugin&) = delete;
 };

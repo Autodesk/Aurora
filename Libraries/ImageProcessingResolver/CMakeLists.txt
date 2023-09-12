@@ -8,6 +8,11 @@ find_package(pxr REQUIRED) # Find the Universal Scene Description (USD) library
 find_package(OpenImageIO REQUIRED)
 find_package(miniz REQUIRED)
 find_package(uriparser REQUIRED)
+# Include system python libraries if needed by USD.
+if(USD_BUILT_WITH_PYTHON)
+  find_package (Python3 COMPONENTS Development)
+  set(PYTHON_DEPENDENCY Python3::Python)
+endif()
 
 # On windows, the version resource and header files that add the version information to the DLL.
 if(WIN32)
@@ -54,6 +59,7 @@ PRIVATE
     pxr::hd
     pxr::hdx
     Foundation
+    ${PYTHON_DEPENDENCY}
     Aurora
 )
 

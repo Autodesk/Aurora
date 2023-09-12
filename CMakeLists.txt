@@ -7,6 +7,15 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
     message(FATAL_ERROR "In-source build is not allowed!")
 endif()
 
+# See if USD was built with python.
+find_library(USD_usdviewq_LIBRARY_RELEASE usd_usdviewq)
+find_library(USD_usdviewq_LIBRARY_DEBUG usd_usdviewqd)
+if(USD_usdviewq_LIBRARY_RELEASE OR USD_usdviewq_LIBRARY_DEBUG)
+  # iF USDView is found, then we know USD was built with python.
+  set(USD_BUILT_WITH_PYTHON "True")
+  message(STATUS "USD built with Python, system Python libraries required.")
+endif()
+
 # Set the project name and project variables
 project(Aurora VERSION 23.07.0.0)
 
