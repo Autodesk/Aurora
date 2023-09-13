@@ -14,6 +14,8 @@
 #ifndef __GEOMETRY_H__
 #define __GEOMETRY_H__
 
+#include "Globals.slang"
+
 interface IGeometry
 {
     uint3 getIndices(int bufferLocation);
@@ -37,10 +39,12 @@ struct ShadingData
     float3 tangent;        // the shading tangent (X), interpolated from adjacent vertices
     float3 bitangent;      // the shading bitangent (Y), interpolated from adjacent vertices
     float3 objectNormal;   // the shading position in object space (not world space). Used only in
-                           // MaterialX generated code.
+                           // materialX generated code.
     float3 objectPosition; // the shading normal in object space (not world space). Used only in
-                           // MaterialX generated code.
+                           // materialX generated code.
+    float3x4 objToWorld;
 };
+
 
 // Computes the barycentric coordinates from the specified triangle intersection.
 float3 computeBarycentrics(BuiltInTriangleIntersectionAttributes attribs)
@@ -164,6 +168,8 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
 
     // Generate bitangent from normal and tangent.
     shading.bitangent = computeBitangent(shading.normal, shading.tangent);
+
+    shading.objToWorld = objToWorld;
 
     return shading;
 }

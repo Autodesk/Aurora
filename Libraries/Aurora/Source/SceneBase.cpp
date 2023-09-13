@@ -25,6 +25,7 @@ Path SceneBase::kDefaultEnvironmentName = "__AuroraDefaultEnvironment";
 Path SceneBase::kDefaultMaterialName    = "__AuroraDefaultMaterial";
 Path SceneBase::kDefaultGeometryName    = "__AuroraDefaultInstance";
 Path SceneBase::kDefaultInstanceName    = "__AuroraDefaultGeometry";
+Path SceneBase::kDefaultImageName       = "__AuroraDefaultImage";
 
 RendererBase* SceneBase::rendererBase()
 {
@@ -33,6 +34,13 @@ RendererBase* SceneBase::rendererBase()
 
 void SceneBase::createDefaultResources()
 {
+    if (_resources.find(kDefaultEnvironmentName) != _resources.end())
+        _resources.erase(kDefaultEnvironmentName);
+    if (_resources.find(kDefaultInstanceName) != _resources.end())
+        _resources.erase(kDefaultInstanceName);
+    if (_resources.find(kDefaultImageName) != _resources.end())
+        _resources.erase(kDefaultImageName);
+
     // Create a default environment resource, and set it as current environment.
     _pDefaultEnvironmentResource = make_shared<EnvironmentResource>(
         kDefaultEnvironmentName, _resources, _environments, _pRenderer);
@@ -59,7 +67,6 @@ void SceneBase::createDefaultResources()
     _resources[kDefaultMaterialName] = _pDefaultMaterialResource;
     _pDefaultMaterialResource->incrementPermanentRefCount();
 
-    const Path kDefaultQuadPath = "DefaultQuadGeometry";
     GeometryDescriptor geomDesc;
     geomDesc.type                                                      = PrimitiveType::Triangles;
     geomDesc.vertexDesc.attributes[Names::VertexAttributes::kPosition] = AttributeFormat::Float3;
@@ -92,6 +99,26 @@ void SceneBase::createDefaultResources()
     _pDefaultInstanceResource->setProperties(
         { { Names::InstanceProperties::kGeometry, kDefaultGeometryName } });
     _resources[kDefaultInstanceName] = _pDefaultInstanceResource;
+
+    ImageDescriptor imageDesc;
+    imageDesc.width         = 2;
+    imageDesc.height        = 2;
+    imageDesc.isEnvironment = false;
+    imageDesc.linearize     = true;
+    imageDesc.format        = ImageFormat::Integer_RGBA;
+    imageDesc.getPixelData  = [this](PixelData& dataOut, glm::ivec2, glm::ivec2) {
+        // Get address and size from buffer (assumes will be called from scope of test, so buffer
+        // still valid)
+        dataOut.address = _defaultImagePixels.data();
+        dataOut.size    = _defaultImagePixels.size();
+        return true;
+    };
+
+    _pDefaultImageResource =
+        make_shared<ImageResource>(kDefaultImageName, _resources, _images, _pRenderer);
+    _pDefaultImageResource->setDescriptor(imageDesc);
+    _resources[kDefaultImageName] = _pDefaultImageResource;
+    _pDefaultImageResource->incrementPermanentRefCount();
 }
 
 SceneBase::~SceneBase()

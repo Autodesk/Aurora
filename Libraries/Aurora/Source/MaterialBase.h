@@ -25,7 +25,7 @@ class MaterialBase : public IMaterial, public FixedValues
 public:
     /*** Lifetime Management ***/
 
-    MaterialBase(MaterialShaderPtr pShader, MaterialDefinitionPtr pDef);
+    MaterialBase(const string& name, MaterialShaderPtr pShader, MaterialDefinitionPtr pDef);
 
     /*** IMaterial Functions ***/
 
@@ -121,7 +121,7 @@ public:
     static void updateBuiltInMaterial(MaterialBase& mtl);
 
     shared_ptr<MaterialDefinition> definition() { return _pDef; }
-    const shared_ptr<MaterialDefinition> definition() const { return _pDef; }
+    const shared_ptr<const MaterialDefinition> definition() const { return _pDef; }
 
 protected:
     bool _isOpaque = true;
@@ -130,6 +130,7 @@ private:
     MaterialDefinitionPtr _pDef;
     MaterialShaderPtr _pShader;
     UniformBuffer _uniformBuffer;
+    string _name;
 };
 
 END_AURORA

@@ -38,9 +38,8 @@
 #include "Denoiser.h"
 #endif
 
-// Development flag to dump MaterialX documents to disk.
+// Development flag to dump materialX documents to disk.
 // NOTE: This should never be enabled in committed code; it is only for local development.
-#define AU_DEV_DUMP_MATERIALX_DOCUMENTS 0
 #define AU_DEV_DUMP_PROCESSED_MATERIALX_DOCUMENTS 0
 
 // Development flag to turn of exception catching during the render loop.
@@ -73,27 +72,6 @@ PTRenderer::PTRenderer(uint32_t taskCount) : RendererBase(taskCount)
     // Initialize the command list, which includes creating the command queue and a command
     // allocator for each simultaneously active task.
     initCommandList();
-
-    // Initialize the shader library.
-    // TODO: Should be per-scene not per-renderer.
-    _pShaderLibrary = make_unique<PTShaderLibrary>(_pDXDevice);
-
-    // Enable layer shaders.
-    _pShaderLibrary->setOption("ENABLE_LAYERS", true);
-
-#if ENABLE_MATERIALX
-    // Get the MaterialX folder relative to the module path.
-    string mtlxFolder = Foundation::getModulePath() + "MaterialX";
-    // Initialize the MaterialX code generator.
-    _pMaterialXGenerator = make_unique<MaterialXCodeGen::MaterialGenerator>(mtlxFolder);
-
-    // Default to MaterialX distance unit to centimeters.
-    _pShaderLibrary->setOption(
-        "DISTANCE_UNIT", _pMaterialXGenerator->codeGenerator().units().indices.at("centimeter"));
-
-    // Set the importance sampling mode.
-    _pShaderLibrary->setOption("IMPORTANCE_SAMPLING_MODE", kImportanceSamplingModeMIS);
-#endif
 
     // Initialize a per-frame data buffer.
     initFrameData();
@@ -159,174 +137,13 @@ ISamplerPtr PTRenderer::createSamplerPointer(const Properties& props)
 IMaterialPtr PTRenderer::createMaterialPointer(
     const string& materialType, const string& document, const string& name)
 {
-    // Validate material type.
-    AU_ASSERT(materialType.compare(Names::MaterialTypes::kBuiltIn) == 0 ||
-            materialType.compare(Names::MaterialTypes::kMaterialX) == 0 ||
-            materialType.compare(Names::MaterialTypes::kMaterialXPath) == 0,
-        "Invalid material type:", materialType.c_str());
-
-    // Set the global "flipY" flag on the asset manager, to match option.
-    // This has no overhead, so just do it each time.
-    _pAssetMgr->enableVerticalFlipOnImageLoad(_values.asBoolean(kLabelIsFlipImageYEnabled));
-
-    // The material shader and definition for this material.
-    MaterialShaderPtr pShader;
-    shared_ptr<MaterialDefinition> pDef;
-
-    // Create a material type based on the material type name provided.
-    if (materialType.compare(Names::MaterialTypes::kBuiltIn) == 0)
-    {
-        // Work out built-in type.
-        string builtInType = document;
-
-        // Get the built-in material type and definition for built-in.
-        pShader = _pShaderLibrary->getBuiltInShader(builtInType);
-        pDef    = _pShaderLibrary->getBuiltInMaterialDefinition(builtInType);
-
-        // Print error and provide null material shader if built-in not found.
-        // TODO: Proper error handling for this case.
-        if (!pShader)
-        {
-            AU_ERROR("Unknown built-in material type %s for material %s", document.c_str(),
-                name.c_str());
-            pShader = nullptr;
-        }
-    }
-    else if (materialType.compare(Names::MaterialTypes::kMaterialX) == 0)
-    {
-        // Generate a material shader and definition from the MaterialX document.
-        pShader = generateMaterialX(document, &pDef);
-
-        // If flag is set dump the document to disk for development purposes.
-        if (AU_DEV_DUMP_MATERIALX_DOCUMENTS)
-        {
-            string mltxPath = name + "Dumped.mtlx";
-            Foundation::sanitizeFileName(mltxPath);
-            if (Foundation::writeStringToFile(document, mltxPath))
-                AU_INFO("Dumping MTLX document to:%s", mltxPath.c_str());
-            else
-                AU_WARN("Failed to dump MTLX document to:%s", mltxPath.c_str());
-        }
-    }
-    else if (materialType.compare(Names::MaterialTypes::kMaterialXPath) == 0)
-    {
-        // Load the MaterialX file using asset manager.
-        auto pMtlxDocument = _pAssetMgr->acquireTextFile(document);
-
-        // Print error and provide default material type if built-in not found.
-        // TODO: Proper error handling for this case.
-        if (!pMtlxDocument)
-        {
-            AU_ERROR("Failed to load MaterialX document %s for material %s", document.c_str(),
-                name.c_str());
-            pShader = nullptr;
-        }
-        else
-        {
-            // If Material XML document loaded, use it to generate the material shader and
-            // definition.
-            pShader = generateMaterialX(*pMtlxDocument, &pDef);
-        }
-    }
-    else
-    {
-        // Print error and return null material shader if material type not found.
-        // TODO: Proper error handling for this case.
-        AU_ERROR(
-            "Unrecognized material type %s for material %s.", materialType.c_str(), name.c_str());
-        pShader = nullptr;
-    }
-
-    // Error case, just return null material.
-    if (!pShader || !pDef)
-        return nullptr;
-
-    // Create the material object with the material shader and definition.
-    auto pNewMtl = make_shared<PTMaterial>(this, pShader, pDef);
-
-    // Set the default textures on the new material.
-    for (int i = 0; i < pDef->defaults().textures.size(); i++)
-    {
-        auto txtDef = pDef->defaults().textures[i];
-
-        // Image default values are provided as strings and must be loaded.
-        auto textureFilename = txtDef.defaultFilename;
-        if (!textureFilename.empty())
-        {
-            // Load the pixels for the image using asset manager.
-            auto pImageData = _pAssetMgr->acquireImage(textureFilename);
-            if (!pImageData)
-            {
-                // Print error if image fails to load, and then ignore default.
-                // TODO: Proper error handling here.
-                AU_ERROR("Failed to load image data %s for material %s", textureFilename.c_str(),
-                    name.c_str());
-            }
-            else
-            {
-                // Set the linearize flag.
-                // TODO: Should effect caching.
-                pImageData->data.linearize = txtDef.linearize;
-
-                // Create Ultra image from the loaded pixels.
-                // TODO: This should be cached by filename.
-                auto pImage = createImagePointer(pImageData->data);
-                if (!pImage)
-                {
-                    // Print error if image creation fails, and then ignore default.
-                    // TODO: Proper error handling here.
-                    AU_ERROR("Failed to create image %s for material %s", textureFilename.c_str(),
-                        name.c_str());
-                }
-                else
-                {
-                    // Set the default image.
-                    pNewMtl->setImage(txtDef.name, pImage);
-                }
-            }
-        }
-
-        // If we have an address mode, create a sampler for texture.
-        // Currently only the first two hardcoded textures have samplers, so only do this for first
-        // two textures.
-        // TODO: Move to fully data driven textures and samplers.
-        if (i < 2 && (!txtDef.addressModeU.empty() || !txtDef.addressModeV.empty()))
-        {
-            Properties samplerProps;
-
-            // Set U address mode.
-            if (txtDef.addressModeU.compare("periodic") == 0)
-                samplerProps[Names::SamplerProperties::kAddressModeU] = Names::AddressModes::kWrap;
-            else if (txtDef.addressModeU.compare("clamp") == 0)
-                samplerProps[Names::SamplerProperties::kAddressModeU] = Names::AddressModes::kClamp;
-            else if (txtDef.addressModeU.compare("mirror") == 0)
-                samplerProps[Names::SamplerProperties::kAddressModeU] =
-                    Names::AddressModes::kMirror;
-
-            // Set V address mode.
-            if (txtDef.addressModeV.compare("periodic") == 0)
-                samplerProps[Names::SamplerProperties::kAddressModeV] = Names::AddressModes::kWrap;
-            else if (txtDef.addressModeV.compare("clamp") == 0)
-                samplerProps[Names::SamplerProperties::kAddressModeV] = Names::AddressModes::kClamp;
-            else if (txtDef.addressModeV.compare("mirror") == 0)
-                samplerProps[Names::SamplerProperties::kAddressModeV] =
-                    Names::AddressModes::kMirror;
-
-            // Create a sampler and set in the material.
-            // TODO: Don't assume hardcoded _sampler prefix.
-            auto pSampler = createSamplerPointer(samplerProps);
-            pNewMtl->setSampler(txtDef.name + "_sampler", pSampler);
-        }
-    }
-
-    // Return new material.
-    return pNewMtl;
+    return dxScene()->createMaterialPointer(materialType, document, name);
 }
 
 IScenePtr PTRenderer::createScene()
 {
     // Create and return a new scene object.
-    return make_shared<PTScene>(this, _pShaderLibrary.get(), kDescriptorCount);
+    return make_shared<PTScene>(this, kDescriptorCount);
 }
 
 IEnvironmentPtr PTRenderer::createEnvironmentPointer()
@@ -358,7 +175,9 @@ void PTRenderer::setScene(const IScenePtr& pScene)
 
     // Assign the new scene.
     _pScene = dynamic_pointer_cast<SceneBase>(pScene);
-    ;
+
+    // Scene's default resources cannot be created until the scene is attached to a renderer.
+    _pScene->createDefaultResources();
 }
 
 void PTRenderer::setTargets(const TargetAssignments& targetAssignments)
@@ -439,10 +258,14 @@ void PTRenderer::waitForTask()
         ::WaitForSingleObject(_hTaskEvent, INFINITE);
     }
 }
-
 const vector<string>& PTRenderer::builtInMaterials()
 {
-    return _pShaderLibrary->builtInMaterials();
+    return shaderLibrary().builtInMaterials();
+}
+
+PTShaderLibrary& PTRenderer::shaderLibrary()
+{
+    return dxScene()->shaderLibrary();
 }
 
 void PTRenderer::setLoadResourceFunction(LoadResourceFunction func)
@@ -530,6 +353,9 @@ D3D12_GPU_VIRTUAL_ADDRESS PTRenderer::getScratchBuffer(size_t size)
 
 void PTRenderer::transferBufferUpdated(const TransferBuffer& buffer)
 {
+
+    AU_ASSERT(!buffer.isMapped(), "Buffer is mapped");
+
     // Get the mapped range for buffer (set the end to buffer size, in the case where end==0.)
     size_t beginMap = buffer.mappedRange.Begin;
     size_t endMap   = buffer.mappedRange.End == 0 ? buffer.size : buffer.mappedRange.End;
@@ -583,6 +409,7 @@ void PTRenderer::uploadTransferBuffers()
     {
         // Get pending buffer.
         auto& buffer = iter->second;
+        AU_ASSERT(!buffer.isMapped(), "Buffer was not unmapped");
 
         // Calculate the byte count from the mapped range (which will be the maximum range mapped
         // this frame.)
@@ -826,7 +653,7 @@ void PTRenderer::updateRayGenShaderTable()
 
     // Write the shader identifier for the ray gen shader.
     ::memcpy_s(pShaderTableMappedData, _rayGenShaderTableSize,
-        _pShaderLibrary->getSharedEntryPointShaderID(EntryPointTypes::kRayGen), SHADER_ID_SIZE);
+        shaderLibrary().getShaderID(PTShaderLibrary::kRayGenEntryPointName), SHADER_ID_SIZE);
 
     // Unmap the shader table buffer.
     _rayGenShaderTable.unmap();
@@ -884,40 +711,26 @@ void PTRenderer::renderInternal(uint32_t sampleStart, uint32_t sampleCount)
     // Have any options changed?
     if (_bIsDirty)
     {
-#if ENABLE_MATERIALX
-        // Get the units option.
         string unit = _values.asString(kLabelUnits);
-        // Lookup the unit in the code generator, and ensure it is valid.
-        auto unitIter = _pMaterialXGenerator->codeGenerator().units().indices.find(unit);
-        if (unitIter == _pMaterialXGenerator->codeGenerator().units().indices.end())
-        {
-            AU_ERROR("Invalid unit:" + unit);
-        }
-        else
-        {
-            // Set the option in the shader library.
-            _pShaderLibrary->setOption("DISTANCE_UNIT", unitIter->second);
-        }
-#endif
-
-        // Set the importance sampling mode.
-        _pShaderLibrary->setOption(
-            "IMPORTANCE_SAMPLING_MODE", _values.asInt(kLabelImportanceSamplingMode));
+        dxScene()->setUnit(unit);
 
         // Set the default BSDF (if true will use Reference, if false will use Standard Surface.)
-        _pShaderLibrary->setOption(
+        shaderLibrary().setOption(
             "USE_REFERENCE_BSDF", _values.asBoolean(kLabelIsReferenceBSDFEnabled));
 
         // Clear the dirty flag.
         _bIsDirty = false;
     }
 
+    // Update the scene.
+    dxScene()->update();
+
     // Rebuild shader library if needed.
-    if (_pShaderLibrary->rebuildRequired())
+    if (shaderLibrary().rebuildRequired())
     {
         // If shader rebuild required, wait for GPU to be idle, then rebuild.
         waitForTask();
-        _pShaderLibrary->rebuild();
+        shaderLibrary().rebuild(dxScene()->computeMaterialTextureCount());
 
         // Update the ray gen shader table after rebuild.
         updateRayGenShaderTable();
@@ -927,7 +740,7 @@ void PTRenderer::renderInternal(uint32_t sampleStart, uint32_t sampleCount)
     }
 
     // Update the scene.
-    dxScene()->update();
+    dxScene()->updateResources();
 
     // Update the resources associated with the scene, output (targets), and denoising.
     // NOTE: These updates are very fast if nothing relevant has changed since the last render.
@@ -1136,6 +949,10 @@ void PTRenderer::updateOutputResources()
         }
 
         // Create UAVs for the textures as the first entries in the descriptor heap.
+        // The order they are written to the descriptor heap must match the ray gen root descriptor
+        // defined in PTShaderLibrary::initRootSignatures and the AOV RWTexture2D defined in
+        // MainEntryPoints.slang.
+        // TODO: These do not seem to match the values in the shader, why is that?
         CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
             _pDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
         createUAV(_pTexFinal.Get(), handle);
@@ -1214,6 +1031,10 @@ void PTRenderer::updateDenoisingResources()
 
         // Create UAVs for the denoising textures as the entries in the descriptor heap *after* the
         // descriptors for the output-related textures.
+        // The order they are written to the descriptor heap must match the ray gen root descriptor
+        // defined in PTShaderLibrary::initRootSignatures and the AOV RWTexture2D defined in
+        // MainEntryPoints.slang.
+        // TODO: These do not seem to match the values in the shader, why is that?
         CD3DX12_CPU_DESCRIPTOR_HANDLE handle(_pDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
             kOutputDescriptorCount, _handleIncrementSize);
         createUAV(_pDenoisingTexDepthView.Get(), handle);
@@ -1315,10 +1136,12 @@ void PTRenderer::submitRayDispatch(
 
     // Prepare the root signature, and pipeline state.
     pCommandList->SetDescriptorHeaps(2, pDescriptorHeaps);
-    pCommandList->SetComputeRootSignature(_pShaderLibrary->globalRootSignature().Get());
-    pCommandList->SetPipelineState1(_pShaderLibrary->pipelineState().Get());
+    pCommandList->SetComputeRootSignature(shaderLibrary().globalRootSignature().Get());
+    pCommandList->SetPipelineState1(shaderLibrary().pipelineState().Get());
 
     // Set the global root signature arguments.
+    // Must match the root signature defined in PTShaderLibrary::initRootSignatures and the GPU
+    // version in GlobalRootSignature.slang.
     {
         // 0) The acceleration structure.
         D3D12_GPU_VIRTUAL_ADDRESS accelStructureAddress =
@@ -1363,6 +1186,14 @@ void PTRenderer::submitRayDispatch(
         // 7) The null acceleration structure (used for layer material shading).
         D3D12_GPU_VIRTUAL_ADDRESS nullAccelStructAddress = 0;
         pCommandList->SetComputeRootShaderResourceView(7, nullAccelStructAddress);
+
+        // 8) The global material buffer
+        pCommandList->SetComputeRootShaderResourceView(
+            8, dxScene()->globalMaterialBuffer().pGPUBuffer->GetGPUVirtualAddress());
+
+        // 9) The global material texture buffer
+        handle.Offset(dxScene()->environment()->descriptorCount(), _handleIncrementSize);
+        pCommandList->SetComputeRootDescriptorTable(9, handle);
     }
 
     // Launch the ray generation shader with the dispatch, which performs path tracing.
@@ -1518,33 +1349,6 @@ bool PTRenderer::isDenoisingAOVsEnabled() const
     // rendering with a denoising AOV.
     return _values.asBoolean(kLabelIsDenoisingEnabled) ||
         _values.asInt(kLabelDebugMode) > kDebugModeErrors;
-}
-
-shared_ptr<MaterialShader> PTRenderer::generateMaterialX([[maybe_unused]] const string& document,
-    [[maybe_unused]] shared_ptr<MaterialDefinition>* pDefOut)
-{
-#if ENABLE_MATERIALX
-    // Generate the material definition for the MaterialX document, this contains the source code,
-    // default values, and a unique name.
-    shared_ptr<MaterialDefinition> pDef = _pMaterialXGenerator->generate(document);
-    if (!pDef)
-    {
-        return nullptr;
-    }
-
-    // Acquire a material shader for the definition.
-    // This will create a new one if needed (and trigger a rebuild), otherwise will it will return
-    // existing one.
-    auto pShader = _pShaderLibrary->acquireShader(*pDef);
-
-    // Output the definition pointer.
-    if (pDefOut)
-        *pDefOut = pDef;
-
-    return pShader;
-#else
-    return nullptr;
-#endif
 }
 
 END_AURORA

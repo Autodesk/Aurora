@@ -104,11 +104,13 @@ public:
 
     LightData& lights() { return _lights; }
 
+    // Create the default resources for the scene (default material, instance, image, etc.)
+    // NOTE: Must be called *after* scene is attached to renderer via setScene.
+    void createDefaultResources();
+
 protected:
     // Is the path a valid resource path.
     virtual bool isPathValid(const Path& path);
-
-    void createDefaultResources();
 
     template <typename ResourceType>
     shared_ptr<ResourceType> getResource(const Path& path)
@@ -140,6 +142,7 @@ protected:
     shared_ptr<EnvironmentResource> _pDefaultEnvironmentResource;
     shared_ptr<MaterialResource> _pDefaultMaterialResource;
     shared_ptr<InstanceResource> _pDefaultInstanceResource;
+    shared_ptr<ImageResource> _pDefaultImageResource;
 
     // Images loaded with setImageFromFilePath.
     map<string, shared_ptr<ImageAsset>> _loadedImages;
@@ -148,8 +151,10 @@ protected:
     static Path kDefaultMaterialName;
     static Path kDefaultGeometryName;
     static Path kDefaultInstanceName;
+    static Path kDefaultImageName;
     vector<float> _defaultGeometryVerts = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     vector<int> _defaultGeometryIndices = { 0, 1, 2 };
+    vector<int> _defaultImagePixels     = { -1, -1, -1, -1 };
 
     shared_ptr<ImageAsset> _pErrorImageData;
 };

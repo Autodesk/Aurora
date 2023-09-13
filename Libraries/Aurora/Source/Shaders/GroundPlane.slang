@@ -18,22 +18,10 @@
 #include "Globals.slang"
 #include "Random.slang"
 #include "RayTrace.slang"
+#include "GlobalPipelineState.slang"
 
-// Layout of ground plane properties.
-struct GroundPlane
-{
-    bool enabled;
-    float3 position;
-    float3 normal;
-    float3 tangent;
-    float3 bitangent;
-    float shadowOpacity;
-    float3 shadowColor;
-    float reflectionOpacity;
-    float3 reflectionColor;
-    float reflectionRoughness;
-};
-
+// TODO: Re-enable ground plane.
+#if 0
 // Shades a matte reflection effect with the specified properties.
 float4 shadeMatteReflection(float opacity, float3 color, float roughness,
     RaytracingAccelerationStructure scene, Environment environment, float3 rayDir, float3 normal,
@@ -167,3 +155,4 @@ float4 shadeGroundPlane(GroundPlane groundPlane, RaytracingAccelerationStructure
 
     return result;
 }
+#endif

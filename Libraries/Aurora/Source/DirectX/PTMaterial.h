@@ -22,6 +22,7 @@ BEGIN_AURORA
 class PTRenderer;
 class MaterialShader;
 class PTShaderLibrary;
+class PTImage;
 struct MaterialDefaultValues;
 
 struct TextureTransform
@@ -38,25 +39,13 @@ class PTMaterial : public MaterialBase
 public:
     /*** Static Functions ***/
 
-    /// Validates that the offsets with CPU material structure match the GPU version in shader.
-    ///
-    /// \return True if valid.
-    static bool validateOffsets(const PTShaderLibrary& pShaderLibrary);
-
     /*** Lifetime Management ***/
 
-    PTMaterial(
-        PTRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef);
+    PTMaterial(PTRenderer* pRenderer, const string& name, MaterialShaderPtr pShader,
+        shared_ptr<MaterialDefinition> pDef);
     ~PTMaterial() {};
 
     /*** Functions ***/
-
-    // The total number of texture descriptors for each material instance.
-    static uint32_t descriptorCount()
-    {
-        // Base color, specular roughness, normal, emission color, and opacity textures.
-        return 5;
-    }
 
     // The total number of sampler descriptors for each material instance.
     static uint32_t samplerDescriptorCount()
@@ -70,8 +59,7 @@ public:
     ID3D12Resource* buffer() const { return _constantBuffer.pGPUBuffer.Get(); }
 
     bool update();
-    void createDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT increment) const;
-    void createSamplerDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE& handle, UINT increment) const;
+    void getTextures(vector<PTImage*>& texturesOut) const;
     size_t computeSamplerHash() const;
 
 private:

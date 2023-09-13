@@ -129,6 +129,8 @@ struct TransferBuffer
     D3D12_RESOURCE_STATES finalState = D3D12_RESOURCE_STATE_GENERIC_READ;
     // Has this buffer been uploaded ?
     bool wasUploaded = false;
+    // Is this buffer mapped?
+    bool isUploadBufferMapped = false;
 
     // Is the buffer valid?
     bool valid() { return pGPUBuffer != nullptr; }
@@ -141,6 +143,7 @@ struct TransferBuffer
         size        = 0;
         pRenderer   = nullptr;
     }
+    bool isMapped() const { return isUploadBufferMapped; }
     // Map the upload buffer in CPU memory.
     uint8_t* map(size_t size = 0, size_t offset = 0);
     // Unmap the upload buffer in CPU memory.  This will trigger an upload to the GPU buffer, in the

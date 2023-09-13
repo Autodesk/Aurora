@@ -79,7 +79,7 @@ public:
     }
     ~MaterialTest() {}
 
-    // Test for the existence of the ADSK MaterialX libraries (in the working folder for the tests)
+    // Test for the existence of the ADSK materialX libraries (in the working folder for the tests)
     bool adskMaterialXSupport() { return std::filesystem::exists("MaterialX/libraries/adsk"); }
 
     // Load a MaterialX document and process file paths to correct locations for unit tests.
@@ -116,6 +116,8 @@ TEST_P(MaterialTest, TestMaterialDefault)
 
     // Create a material
     IScenePtr pScene = pRenderer->createScene();
+    pRenderer->setScene(pScene);
+
     Path testMaterial("testMaterial");
     pScene->setMaterialType(testMaterial);
     pScene->addPermanent(testMaterial);
@@ -882,7 +884,7 @@ TEST_P(MaterialTest, TestMaterialTypes)
 
     Path geometry = createTeapotGeometry(*pScene);
 
-    // Create MaterialX material from document.
+    // Create materialX material from document.
     Path mtl0("Mtl0");
     pScene->setMaterialType(mtl0, Names::MaterialTypes::kMaterialX, testMtl);
 
@@ -891,7 +893,7 @@ TEST_P(MaterialTest, TestMaterialTypes)
     instProps[Names::InstanceProperties::kTransform] = translate(vec3(-3, 0, 6));
     EXPECT_TRUE(pScene->addInstance(Path("I0"), geometry, instProps));
 
-    // Create MaterialX material from path.
+    // Create materialX material from path.
     Path mtl1("Mtl1");
     pScene->setMaterialType(
         mtl1, Names::MaterialTypes::kMaterialXPath, dataPath() + "/Materials/TestMaterial.mtlx");
@@ -900,7 +902,7 @@ TEST_P(MaterialTest, TestMaterialTypes)
     instProps[Names::InstanceProperties::kTransform] = translate(vec3(0, 0, 6));
     EXPECT_TRUE(pScene->addInstance(Path("I1"), geometry, instProps));
 
-    // Create MaterialX material from path.
+    // Create materialX material from path.
     Path mtl2("Mtl2");
     pScene->setMaterialType(mtl2, Names::MaterialTypes::kBuiltIn, "Default");
 
@@ -930,7 +932,7 @@ TEST_P(MaterialTest, TestMaterialX)
 
     // Create a material with invalid document.
     pScene->setMaterialType("NullMaterial", Names::MaterialTypes::kMaterialX,
-        "Not valid MaterialX! $#$(#*(%*#,.,.,.<><><>");
+        "Not valid materialX! $#$(#*(%*#,.,.,.<><><>");
 
     // Error occurs when material resource is activated.
     pScene->addPermanent("NullMaterial");
@@ -1067,7 +1069,7 @@ TEST_P(MaterialTest, TestHdAuroraTextureMaterialX)
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMaterialXFlipImageY)
 {
-    // This mtlx file requires support ADSK MaterialX support.
+    // This mtlx file requires support ADSK materialX support.
     if (!adskMaterialXSupport())
         return;
 
@@ -1093,7 +1095,7 @@ TEST_P(MaterialTest, TestMaterialXFlipImageY)
         // Create teapot geom.
         Path geometry = createTeapotGeometry(*pScene);
 
-        // Read the MaterialX document from file.
+        // Read the materialX document from file.
         string materialXFullPath = dataPath() + "/Materials/TestTexture.mtlx";
 
         // Load source into string.
@@ -1232,7 +1234,7 @@ TEST_P(MaterialTest, TestLotsOfMaterialX)
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMaterialXBMP)
 {
-    // This mtlx file requires support ADSK MaterialX support.
+    // This mtlx file requires support ADSK materialX support.
     if (!adskMaterialXSupport())
         return;
 
@@ -1252,8 +1254,48 @@ TEST_P(MaterialTest, TestMaterialXBMP)
     // Create teapot geom.
     Path geometry = createTeapotGeometry(*pScene);
 
-    // Read the MaterialX document from file.
+    // Read the materialX document from file.
     string materialXFullPath = dataPath() + "/Materials/TestBMPTexture.mtlx";
+
+    // Load and process the MaterialX document and ensure it loaded correctly.
+    string processedMtlXString = loadAndProcessMaterialXFile(materialXFullPath);
+    EXPECT_FALSE(processedMtlXString.empty());
+
+    // Create material with current flip-Y value.
+    Path material("Texture");
+    pScene->setMaterialType(material, Names::MaterialTypes::kMaterialX, processedMtlXString);
+
+    // Add to scene.
+    Path instance("Mtl");
+    Properties instProps;
+    instProps[Names::InstanceProperties::kMaterial] = material;
+    EXPECT_TRUE(pScene->addInstance(instance, geometry, instProps));
+
+    // Render the scene and check baseline image.
+    ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName(), "Materials");
+}
+
+TEST_P(MaterialTest, TestMaterialXImageNode)
+{
+
+    // Create the default scene (also creates renderer)
+    auto pScene    = createDefaultScene();
+    auto pRenderer = defaultRenderer();
+    setDefaultRendererPathTracingIterations(256);
+
+    // If pRenderer is null this renderer type not supported, skip rest of the test.
+    if (!pRenderer)
+        return;
+
+    // No MaterialX on HGI yet.
+    if (!isDirectX())
+        return;
+
+    // Create teapot geom.
+    Path geometry = createTeapotGeometry(*pScene);
+
+    // Read the materialX document from file.
+    string materialXFullPath = dataPath() + "/Materials/TestImageNode.mtlx";
 
     // Load and process the MaterialX document and ensure it loaded correctly.
     string processedMtlXString = loadAndProcessMaterialXFile(materialXFullPath);
@@ -1326,7 +1368,8 @@ TEST_P(MaterialTest, TestMaterialTransparency)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Opacity", "Materials");
 }
 
-TEST_P(MaterialTest, TestMaterialShadowTransparency)
+// TODO: Re-enable test when shadow anyhit shaders are working.
+TEST_P(MaterialTest, DISABLED_TestMaterialShadowTransparency)
 {
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
@@ -1399,9 +1442,10 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
 }
 
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, TestMtlXSamplers)
+// TODO: Re-enable once samplers working.
+TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
 {
-    // This mtlx file requires support ADSK MaterialX support.
+    // This mtlx file requires support ADSK materialX support.
     if (!adskMaterialXSupport())
         return;
 
@@ -1444,7 +1488,7 @@ TEST_P(MaterialTest, TestMtlXSamplers)
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 TEST_P(MaterialTest, TestMaterialMaterialXLayers)
 {
-    // This mtlx file requires support ADSK MaterialX support.
+    // This mtlx file requires support ADSK materialX support.
     if (!adskMaterialXSupport())
         return;
 

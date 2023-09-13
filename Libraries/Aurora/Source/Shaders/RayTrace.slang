@@ -29,11 +29,8 @@ struct IndirectOutput
     float glossyHitDist;
 
     // Clears the indirect output to values expected for a miss.
-#if 1 //! DIRECTX
     [mutating]
-#endif
-        void
-        clear()
+    void clear()
     {
         diffuse        = BLACK;
         diffuseHitDist = INFINITY;
@@ -96,6 +93,13 @@ struct RadianceRayPayload
     // random numbers are generated along the path.
     Random rng;
 
+    // Properties of next ray in the path.
+    float3 nextRayDirec;
+    float3 nextRayOrigin;
+    float3 opacityScale;
+    float3 nextRayContribution;
+    int nextRayType;
+
     // Clears the radiance ray payload to values expected for a miss.
     // NOTE: The normal value (-1.0, -1.0, -1.0) will appear as black when remapped for output.
     // NDC depth is typically in the range [-1.0, 1.0] or [0.0, 1.0] so a max value of 1.0 is used,
@@ -115,6 +119,14 @@ struct RadianceRayPayload
         baseColor = BLACK;
         roughness = 0.1f;
         metalness = 0.1f;
+
+        nextRayDirec = 0.0f;
+        nextRayOrigin = 0.0f;
+        opacityScale = 1.0f;
+        nextRayContribution = 1.0f;
+        nextRayType         = -1;
+        //NO_SECONDARY_RAY;
+
         indirect.clear();
     };
 
@@ -132,36 +144,16 @@ struct RadianceRayPayload
     }
 };
 
-// The shared ray payload that must be used by all TraceRay calls in the ray tree.
-// NOTE: See: https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#ray-payload-structure
-struct RayPayload
-{
-    // =================================================================================================
-    // Radiance ray payload.
-    // Used by all shaders (radiance, shadow miss, and layer miss)
-    // =================================================================================================
-
-    // The incoming radiance ray data.
-    RadianceRayPayload radianceRay;
-
-    // =================================================================================================
-    // Hit and transform information from previous intersection.
-    // Used by ray miss shader.
-    // =================================================================================================
-
-    // The intersection data for radiance hit on base layer.
-    BuiltInTriangleIntersectionAttributes hit;
-    // The object-to-world matrix for base layer instance.
-    // TODO: This could be moved to constant buffer.
-    float3x4 objToWorld;
-    // The view direction for parent radiance ray.
-    float3 viewDirection;
-    // The primitive index for parent ray collision.
-    uint primitiveIndex;
-    // The current T for parent ray collision.
-    float currentT;
-    // Set to true if the layer absorbs the ray.
-    bool absorbedByLayer;
+// Instance ray payload.  Used by all closest hit shaders.
+struct InstanceRayPayload {
+    // Shading data for the instance that was hit.
+    ShadingData shading;
+    // Offset withing material buffer for instance.
+    int materialBufferOffset;
+    // Did the ray hit?
+    bool hit;
+    // Distance from ray origin collision occurred.
+    float distance;
 };
 
 // Computes the origin and direction of a ray at the specified screen coordinates, using the
@@ -222,23 +214,13 @@ void computeCameraRay(float2 screenCoords, float2 screenSize, float4x4 invView, 
 }
 
 // Traces a ray in the specified direction, returning the radiance from that direction.
-RadianceRayPayload traceRadianceRay(RaytracingAccelerationStructure scene, Environment environment,
-    float3 origin, float3 dir, float tMin, int depth, int maxDepth, bool useBackgroundMiss,
-    inout Random rng)
+bool traceInstanceRay(RaytracingAccelerationStructure scene, 
+    float3 origin, float3 dir, float tMin, out InstanceRayPayload rayPayload)
 {
-    // If the maximum trace recursion depth has been reached, simply return black.
-    if (depth == maxDepth)
-    {
-        RadianceRayPayload rayPayload;
-        rayPayload.color = evaluateEnvironment(environment, dir, useBackgroundMiss);
-
-        return rayPayload;
-    }
 
     // Set the force opaque ray flag to treat all objects as opaque, so that the any hit shader is
     // not called. Also set the radiance or background miss shader.
     uint rayFlags        = RAY_FLAG_FORCE_OPAQUE;
-    uint missShaderIndex = useBackgroundMiss ? kMissBackground : kMissRadiance;
 
     // Prepare the ray.
     RayDesc ray;
@@ -247,10 +229,7 @@ RadianceRayPayload traceRadianceRay(RaytracingAccelerationStructure scene, Envir
     ray.TMin      = tMin;
     ray.TMax      = INFINITY;
 
-    // Prepare the ray payload.
-    RayPayload rayPayload;
-    rayPayload.radianceRay.depth = depth + 1;
-    rayPayload.radianceRay.rng   = rng;
+    rayPayload.hit = false;
 
     // Trace the ray.
     TraceRay(scene,      // acceleration structure to be traced against
@@ -258,15 +237,13 @@ RadianceRayPayload traceRadianceRay(RaytracingAccelerationStructure scene, Envir
         0xFF,            // instance mask
         0,               // ray contribution to hit group index
         0,               // multiplier for geometry contribution to hit group index
-        missShaderIndex, // miss shader index
+        kMissNull,               // miss shader index (always zero for now)
         ray,             // ray to be traced
         rayPayload);     // in/out data for shaders invoked during tracing
 
-    // Update the random number generator.
-    rng = rayPayload.radianceRay.rng;
-
-    return rayPayload.radianceRay;
+    return rayPayload.hit;
 }
+
 
 // The payload for shadow rays.
 struct ShadowRayPayload
@@ -330,7 +307,7 @@ float3 traceShadowRay(RaytracingAccelerationStructure scene, float3 origin, floa
 // =================================================================================================
 // Layer material code
 // =================================================================================================
-
+#if 0
 // Shade the layer material for provided miss shader index.
 // Returns true if absorbed by layer.
 bool shadeMaterialLayer(RaytracingAccelerationStructure nullScene, int layerMissShaderIdx,
@@ -354,7 +331,6 @@ bool shadeMaterialLayer(RaytracingAccelerationStructure nullScene, int layerMiss
     RayPayload layerData;
     layerData.hit             = hit;
     layerData.radianceRay     = rayPayload;
-    layerData.objToWorld      = ObjectToWorld3x4();
     layerData.currentT        = RayTCurrent();
     layerData.viewDirection   = -WorldRayDirection();
     layerData.absorbedByLayer = false;
@@ -383,4 +359,7 @@ bool shadeMaterialLayer(RaytracingAccelerationStructure nullScene, int layerMiss
     // Return false (as not absorbed and ray payload unaffected)
     return false;
 }
+
+#endif
+
 #endif // __RAY_TRACE_H__

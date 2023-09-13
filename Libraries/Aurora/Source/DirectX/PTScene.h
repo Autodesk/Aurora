@@ -24,6 +24,11 @@
 
 BEGIN_AURORA
 
+namespace MaterialXCodeGen
+{
+class MaterialGenerator;
+} // namespace MaterialXCodeGen
+
 // Forward declarations.
 class PTRenderer;
 class PTScene;
@@ -95,13 +100,14 @@ private:
 };
 MAKE_AURORA_PTR(PTInstance);
 
+class PTShaderOptions;
+
 // An internal implementation for IScene.
 class PTScene : public SceneBase
 {
 public:
     /*** Lifetime Management ***/
-    PTScene(
-        PTRenderer* pRenderer, PTShaderLibrary* pShaderLibrary, uint32_t numRendererDescriptors);
+    PTScene(PTRenderer* pRenderer, uint32_t numRendererDescriptors);
     ~PTScene() = default;
 
     /*** IScene Functions ***/
@@ -112,9 +118,10 @@ public:
     ILightPtr addLightPointer(const string& lightType) override;
 
     void update();
+    void updateResources();
 
     /*** Functions ***/
-
+    int computeMaterialTextureCount();
     int instanceCount() const { return static_cast<int>(_instances.active().count()); }
     PTEnvironmentPtr environment() const { return _pEnvironment; }
     PTGroundPlanePtr groundPlane() const { return _pGroundPlane; }
@@ -126,6 +133,14 @@ public:
     void clearShaderData();
     void clearDesciptorHeap();
     PTRenderer* renderer() { return _pRenderer; }
+
+    const TransferBuffer& globalMaterialBuffer() { return _globalMaterialBuffer; }
+    PTShaderLibrary& shaderLibrary() { return *_pShaderLibrary.get(); }
+    IMaterialPtr createMaterialPointer(
+        const string& materialType, const string& document, const string& name);
+    shared_ptr<MaterialShader> generateMaterialX(
+        const string& document, shared_ptr<MaterialDefinition>* pDefOut);
+    void setUnit(const string& unit);
 
 private:
     /*** Private Types ***/
@@ -194,20 +209,21 @@ private:
     void updateDescriptorHeap();
     void updateShaderTables();
     ID3D12ResourcePtr buildTLAS(const vector<uint32_t>& instanceDataIndices);
-    static size_t GetSamplerHash(const PTMaterial& mtl) { return mtl.computeSamplerHash(); }
 
     /*** Private Variables ***/
 
-    PTRenderer* _pRenderer           = nullptr;
-    PTShaderLibrary* _pShaderLibrary = nullptr;
+    PTRenderer* _pRenderer = nullptr;
+    unique_ptr<PTShaderLibrary> _pShaderLibrary;
     InstanceDataList _lstInstanceData;
-    UniqueHashLookup<PTMaterial, GetSamplerHash> _samplerLookup;
-    LayerDataList _lstLayerData;
+    map<PTMaterial*, int> _materialOffsetLookup;
+    map<PTImage*, int> _materialTextureIndexLookup;
+    vector<PTImage*> _activeMaterialTextures;
     PTGroundPlanePtr _pGroundPlane;
     PTEnvironmentPtr _pEnvironment;
     uint32_t _numRendererDescriptors = 0;
     map<int, weak_ptr<PTLight>> _distantLights;
     int _currentLightIndex = 0;
+    TransferBuffer _globalMaterialBuffer;
 
     /*** DirectX 12 Objects ***/
 
@@ -222,7 +238,13 @@ private:
     bool _isEnvironmentDescriptorsDirty = true;
     bool _isHitGroupDescriptorsDirty    = true;
     std::mutex _mutex;
+
+    // Code generator used to generate MaterialX files.
+#if ENABLE_MATERIALX
+    unique_ptr<MaterialXCodeGen::MaterialGenerator> _pMaterialXGenerator;
+#endif
 };
+
 MAKE_AURORA_PTR(PTScene);
 
 END_AURORA

@@ -145,30 +145,30 @@ string UniformBuffer::generateByteAddressBufferAccessors(const string& prefix) c
 
         ss << " // Get property " << def.name << " from byte address buffer" << endl;
         ss << getHLSLStringFromType(def.type) << " " << prefix << def.variableName
-           << "(ByteAddressBuffer buf) {" << endl;
+           << "(ByteAddressBuffer buf, int materialOffset = 0) {" << endl;
         size_t offset = _fields[i].bufferIndex * sizeof(_data[0]);
         switch (def.type)
         {
         case PropertyValue::Type::Bool:
         case PropertyValue::Type::Int:
-            ss << "\treturn buf.Load(" << offset << ");" << endl;
+            ss << "\treturn buf.Load(materialOffset + " << offset << ");" << endl;
             break;
         case PropertyValue::Type::Float:
-            ss << "\treturn asfloat(buf.Load(" << offset << "));" << endl;
+            ss << "\treturn asfloat(buf.Load(materialOffset + " << offset << "));" << endl;
             break;
         case PropertyValue::Type::Float2:
-            ss << "\treturn asfloat(buf.Load2(" << offset << "));" << endl;
+            ss << "\treturn asfloat(buf.Load2(materialOffset + " << offset << "));" << endl;
             break;
         case PropertyValue::Type::Float3:
-            ss << "\treturn asfloat(buf.Load3(" << offset << "));" << endl;
+            ss << "\treturn asfloat(buf.Load3(materialOffset + " << offset << "));" << endl;
             break;
         case PropertyValue::Type::Float4:
-            ss << "\treturn asfloat(buf.Load4(" << offset << "));" << endl;
+            ss << "\treturn asfloat(buf.Load4(materialOffset + " << offset << "));" << endl;
         case PropertyValue::Type::Matrix4:
             for (int j = 0; j < 16; j++)
             {
-                ss << "\tfloat4 m" << j << " = asfloat(buf.Load(" << offset + (j * 4) << "));"
-                   << endl;
+                ss << "\tfloat4 m" << j << " = asfloat(buf.Load(materialOffset + "
+                   << offset + (j * 4) << "));" << endl;
                 ;
             }
             ss << "float4x4 mtx = {";

@@ -194,9 +194,8 @@ float3 shadeEnvironmentLightMIS(Environment environment, RaytracingAccelerationS
 }
 
 // Compute shading with indirect light, from a random direction.
-float3 shadeIndirectLight(RaytracingAccelerationStructure scene,
-    Environment environment, Material material, ShadingData shading, float3 V, int depth,
-    int maxDepth, inout Random rng, out float alpha, inout IndirectOutput indirect)
+int setupIndirectLightRay(Material material, ShadingData shading, float3 V, int depth,
+    int maxDepth, inout Random rng, out float3 indirectRayDirec, out float3 indirectRayOrigin, out float3 indirectColorOut)
 {
     // Generate random numbers for sampling.
     float2 random = random2D(rng);
@@ -211,7 +210,7 @@ float3 shadeIndirectLight(RaytracingAccelerationStructure scene,
         sampleMaterial(material, shading, V, random, L, pdf, lobeID);
     if (isBlack(bsdfAndCosine))
     {
-        return BLACK;
+        return NO_SECONDARY_RAY;
     }
 
     // Trace a radiance ray with the sampled light direction, i.e. the next step in tracing the
@@ -220,32 +219,9 @@ float3 shadeIndirectLight(RaytracingAccelerationStructure scene,
     // ray is from a transmission lobe, use the background miss shader so that the background is
     // sampled.
     bool isTransmission = lobeID == TRANSMISSION_LOBE;
-    float3 position =
-        dot(V, shading.normal) < 0.0f || isTransmission ? shading.geomPosition : shading.position;
-    RadianceRayPayload rayPayload = traceRadianceRay(
-        scene, environment, position, L, M_RAY_TMIN, depth, maxDepth, isTransmission, rng);
-
-    // Compute the outgoing radiance as the BSDF (with cosine term) multipled by the light radiance,
-    // divided by the PDF.
-    float3 radiance = rayPayload.color * bsdfAndCosine / pdf;
-
-    // If the payload alpha is zero and this was a transmission lobe, pass along an alpha of zero.
-    // This indicates that all the path segments beyond this hit have been transparent or
-    // transmissive. Otherwise the alpha is assumed to be one (opaque).
-    alpha = (rayPayload.alpha == 0.0f && lobeID == TRANSMISSION_LOBE) ? 0.0f : 1.0f;
-
-    // Update the indirect output values based on the sampled lobe: diffuse for the diffuse lobe,
-    // and treat everything else as glossy.
-    if (lobeID == DIFFUSE_LOBE)
-    {
-        indirect.diffuse += radiance;
-        indirect.diffuseHitDist = rayPayload.depthView;
-    }
-    else
-    {
-        indirect.glossy += radiance;
-        indirect.glossyHitDist = rayPayload.depthView;
-    }
-
-    return radiance;
+    indirectRayOrigin =
+        (dot(V, shading.normal) < 0.0f || isTransmission) ? shading.geomPosition : shading.position;
+    indirectRayDirec = L;
+    indirectColorOut = bsdfAndCosine / pdf;
+    return lobeID;
 }

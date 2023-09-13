@@ -60,7 +60,7 @@ void PTSampler::createDescriptor(
 D3D12_TEXTURE_ADDRESS_MODE PTSampler::valueToDXAddressMode(const PropertyValue& value)
 {
 
-    // Convert property string to DX addres mode.
+    // Convert property string to DX address mode.
     string valStr = value.asString();
     if (valStr.compare(Names::AddressModes::kWrap) == 0)
         return D3D12_TEXTURE_ADDRESS_MODE_WRAP;

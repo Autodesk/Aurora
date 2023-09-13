@@ -59,8 +59,7 @@ private:
 #if defined(INTERACTIVE_PLASMA)
     static LRESULT __stdcall wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 #endif
-    static Aurora::IScenePtr createSampleScene(
-        Aurora::IRenderer* pRenderer, SceneContents& contentsOut);
+    static void createSampleScene(Aurora::IScene* pRenderer, SceneContents& contentsOut);
 
     /*** Private Functions ***/
 

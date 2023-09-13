@@ -110,7 +110,7 @@ void createTestEnv(IScenePtr scene, const Path& path, int height, const array<gl
     imageDesc.isEnvironment = true;
     imageDesc.linearize     = true;
     imageDesc.getPixelData  = [pBufferOut](PixelData& dataOut, glm::ivec2, glm::ivec2) {
-        // Get addres and size from buffer (assumes will be called from scope of test, so buffer
+        // Get address and size from buffer (assumes will be called from scope of test, so buffer
         // still valid)
         dataOut.address = pBufferOut->data();
         dataOut.size    = pBufferOut->size();

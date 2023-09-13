@@ -151,17 +151,10 @@ bool Plasma::run(int argc, char* argv[])
 #endif
 
 // Creates a sample scene.
-Aurora::IScenePtr Plasma::createSampleScene(Aurora::IRenderer* pRenderer, SceneContents& contents)
+void Plasma::createSampleScene(Aurora::IScene* pScene, SceneContents& contents)
 {
     // Clear the result.
     contents.reset();
-
-    // Create an Aurora scene.
-    Aurora::IScenePtr pScene = pRenderer->createScene();
-    if (!pScene)
-    {
-        return nullptr;
-    }
 
     // Create sample geometry, a single triangle.
     const Aurora::Path kGeomPath = "PlasmaDefaultSceneGeometry";
@@ -269,7 +262,7 @@ Aurora::IScenePtr Plasma::createSampleScene(Aurora::IRenderer* pRenderer, SceneC
     vec3 max(1.0f, 1.0f, 0.01f);
     contents.bounds = Foundation::BoundingBox(min, max);
 
-    return pScene;
+    return;
 }
 
 bool Plasma::getFloat3Option(const string& name, glm::vec3& value) const
@@ -536,8 +529,14 @@ bool Plasma::initialize()
     // If a file was not loaded, create a sample scene.
     if (!bFileLoaded)
     {
+        // Create new empty scene
+        _pScene = _pRenderer->createScene();
+
+        // Set the scene on the renderer.
+        _pRenderer->setScene(_pScene);
+
         // Create the sample scene, and return if it not successful.
-        _pScene = createSampleScene(_pRenderer.get(), _sceneContents);
+        createSampleScene(_pScene.get(), _sceneContents);
         if (!_pScene)
         {
             return false;
@@ -704,10 +703,6 @@ void Plasma::updateNewScene()
     _sampleCounter.reset();
     _animationTimer.reset(!_isAnimating);
     _frameNumber = 0;
-
-    // Set the scene on the renderer, and assign the environment and ground plane. Set the ground
-    // plane position to the bottom corner, of the scene bounds.
-    _pRenderer->setScene(_pScene);
 
     // Setup environment for new scene.
     _pScene->setEnvironmentProperties(
@@ -1052,10 +1047,15 @@ bool Plasma::loadSceneFile(const string& filePath)
     auto directory = filesystem::path(filePath).parent_path();
     filesystem::current_path(directory);
 
+    // Create new empty scene
+    _pScene = _pRenderer->createScene();
+
+    // Set the scene on the renderer.
+    _pRenderer->setScene(_pScene);
+
     // Create a new scene and load the scene file into it. If that fails, return immediately.
     _sceneContents.reset();
-    Aurora::IScenePtr pScene = _pRenderer->createScene();
-    if (!loadSceneFunc(_pRenderer.get(), pScene.get(), filePath, _sceneContents))
+    if (!loadSceneFunc(_pRenderer.get(), _pScene.get(), filePath, _sceneContents))
     {
         ::errorMessage("Unable to load the specified scene file: \"" + filePath + "\"");
 
@@ -1064,7 +1064,6 @@ bool Plasma::loadSceneFile(const string& filePath)
     _instanceLayers = vector<Layers>(_sceneContents.instances.size());
 
     // Record the new scene and update application state for the new scene.
-    _pScene = pScene;
     updateNewScene();
 
     // Report the load time.

@@ -180,6 +180,11 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // Create material name from the hash provided by code generator.
     string materialName = "MaterialX_" + Foundation::sHash(res.functionHash);
 
+    string functionInterface = "Material evaluateMaterial_" + materialName +
+        "(ShadingData shading, int headerOffset, out float3 "
+        "materialNormal, out bool "
+        "isGeneratedNormal)";
+
     // Append the material accessor functions used to read material properties from
     // ByteAddressBuffer.
     UniformBuffer mtlConstantsBuffer(res.materialProperties, res.materialPropertyDefaults);
@@ -192,11 +197,8 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     generatedMtlxSetupFunction += GLSLToHLSL(res.materialSetupCode);
 
     // Create a wrapper function that is called by the ray hit entry point to initialize material.
-    generatedMtlxSetupFunction +=
-        "\nMaterial initializeMaterial"
-        "(ShadingData shading, float3x4 objToWorld, out float3 "
-        "materialNormal, out bool "
-        "isGeneratedNormal) {\n";
+    generatedMtlxSetupFunction += "\nexport " + functionInterface + " {\n";
+    generatedMtlxSetupFunction += "\tint offset = headerOffset + kMaterialHeaderSize;\n";
 
     // Fill in the global vertexData struct (used by generated code to access vertex attributes).
     generatedMtlxSetupFunction += "\tvertexData = shading;\n";
@@ -216,8 +218,8 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map first texture to the base_color_image and sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D base_color_image = createSampler2D(gBaseColorTexture, "
-            "gBaseColorSampler);\n";
+            "\tsampler2D base_color_image = createSampler2D(materialTexture(headerOffset, 0), "
+            "gDefaultSampler);\n";
 
         // Add to the texture array.
         TextureDefinition txtDef = res.textureDefaults[0];
@@ -229,8 +231,8 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map second texture to the opacity_image and sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D opacity_image = createSampler2D(gOpacityTexture, "
-            "gOpacitySampler);\n";
+            "\tsampler2D opacity_image = createSampler2D(materialTexture(headerOffset, 1), "
+            "gDefaultSampler);\n";
 
         // Add to the texture array.
         TextureDefinition txtDef = res.textureDefaults[1];
@@ -242,7 +244,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map third texture to the normal_image and the default sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D normal_image = createSampler2D(gNormalTexture, "
+            "\tsampler2D normal_image = createSampler2D(materialTexture(headerOffset, 2), "
             "gDefaultSampler);\n";
 
         // Add to the texture array.
@@ -255,7 +257,8 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map fourth texture to the specular_roughness_image and the default sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D specular_roughness_image = createSampler2D(gSpecularRoughnessTexture, "
+            "\tsampler2D specular_roughness_image = createSampler2D(materialTexture(headerOffset, "
+            "3), "
             "gDefaultSampler);\n";
 
         // Add to the texture array.
@@ -268,7 +271,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map fifth texture to the emission_color_image and the default sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D emission_color_image = createSampler2D(gEmissionColorTexture, "
+            "\tsampler2D emission_color_image = createSampler2D(materialTexture(offset, 4), "
             "gDefaultSampler);\n";
 
         // Add to the texture array.
@@ -296,7 +299,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         generatedMtlxSetupFunction += "\tsetupMaterialStruct." +
             res.materialProperties[i].variableName + " = " + res.materialStructName + "_" +
-            res.materialProperties[i].variableName + "(gMaterialConstants);\n";
+            res.materialProperties[i].variableName + "(gGlobalMaterialConstants, offset);\n";
         ;
     }
 
@@ -352,7 +355,16 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // Replace overwrite metal color with base color.
     // TODO: Metal color is not supported by MaterialX and not in Standard Surface definition.  So
     // maybe remove it?
-    generatedMtlxSetupFunction += "material.metalColor = material.baseColor;";
+    generatedMtlxSetupFunction += "material.metalColor = material.baseColor;\n";
+
+    /*
+    if (res.textures.size() >= 1)
+    {
+        generatedMtlxSetupFunction +=
+            "material.baseColor =  materialTexture(headerOffset, 0).SampleLevel(gDefaultSampler,
+    shading.texCoord, 0).xyz;"; //texture(base_color_image, shading.texCoord).xyz\n;";
+    }
+    */
 
     // Return the generated material struct.
     generatedMtlxSetupFunction += "\treturn material;\n";
@@ -371,6 +383,11 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     source.definitions = "#include \"GLSLToHLSL.slang\"\n";
     source.definitions += "#include \"MaterialXCommon.slang\"\n";
     source.definitions += (GLSLToHLSL(definitionGLSL));
+    source.definitions += "#include \"GlobalPipelineState.slang\"\n";
+    source.definitions += "#include \"MaterialHeader.slang\"\n";
+    source.definitions += "#include \"Material.slang\"\n";
+
+    source.setupFunctionDeclaration = functionInterface;
 
     // Create the default values object from the generated properties and textures.
     MaterialDefaultValues defaults(

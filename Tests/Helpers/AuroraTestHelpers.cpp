@@ -231,7 +231,7 @@ void FixtureBase::loadImage(const string& filename, ImageData* pImageOut)
 
     // Set up the pixel data callback
     imageDesc.getPixelData = [pImageOut](PixelData& dataOut, glm::ivec2, glm::ivec2) {
-        // Get addres and size from buffer (assumes will be called from scope of test, so buffer
+        // Get address and size from buffer (assumes will be called from scope of test, so buffer
         // still valid)
         dataOut.address = pImageOut->buffer.data();
         dataOut.size    = pImageOut->buffer.size();

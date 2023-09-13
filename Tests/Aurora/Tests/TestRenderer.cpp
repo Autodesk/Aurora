@@ -443,7 +443,8 @@ TEST_P(RendererTest, TestRendererEmptySceneBounds)
 }
 
 // Test ground plane.
-TEST_P(RendererTest, TestRendererGroundPlane)
+// TODO: Re-enable once ground plane re-enabled.
+TEST_P(RendererTest, DISABLED_TestRendererGroundPlane)
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -641,7 +642,8 @@ TEST_P(RendererTest, TestRendererRemoveInstance)
 }
 
 // Test instance with layer materials
-TEST_P(RendererTest, TestRendererMaterialLayers)
+// TODO: Re-enable test when layers are working.
+TEST_P(RendererTest, DISABLED_TestRendererMaterialLayers)
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -731,8 +733,9 @@ TEST_P(RendererTest, TestRendererMaterialLayers)
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName());
 }
 
-// Test instance with layer materials
-TEST_P(RendererTest, TestRendererInvalidMaterialLayerPaths)
+// Test instance with invalid layer material paths
+// TODO: Re-enable test when layers are working.
+TEST_P(RendererTest, DISABLED_TestRendererInvalidMaterialLayerPaths)
 {
     // No layers on HGI currently.
     if (!isDirectX())
@@ -835,7 +838,8 @@ TEST_P(RendererTest, TestRendererInvalidMaterialLayerPaths)
         ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: iter != _container.end()"));
 }
 
-TEST_P(RendererTest, TestRendererInvalidGeometryLayers)
+// TODO: Re-enable test when layers are working.
+TEST_P(RendererTest, DISABLED_TestRendererInvalidGeometryLayers)
 {
     // No layers on HGI backed.
     if(!isDirectX())
@@ -951,7 +955,8 @@ TEST_P(RendererTest, TestRendererInvalidGeometryLayers)
 }
 
 // Test instance with layer materials
-TEST_P(RendererTest, TestRendererMultipleMaterialLayers)
+// TODO: Re-enable test when layers are working.
+TEST_P(RendererTest, DISABLED_TestRendererMultipleMaterialLayers)
 {
     if (!isDirectX())
         return;

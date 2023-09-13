@@ -178,7 +178,8 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
             { "normal_image",             normalImage }
         };
         // clang-format on
-        Aurora::Path materialPath = filePath + ":OBJFileMaterial-" + to_string(mtlCount++);
+        Aurora::Path materialPath =
+            filePath + "-" + objMaterial.name + ":OBJFileMaterial-" + to_string(mtlCount++);
         pScene->setMaterialProperties(materialPath, properties);
         lstMaterials.push_back(materialPath);
     };

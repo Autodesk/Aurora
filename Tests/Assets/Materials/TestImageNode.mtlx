@@ -1,0 +1,35 @@
+<?xml version='1.0' encoding='utf-8'?>
+<materialx version="1.38">
+  <nodegraph name="TestImageNodeGraph">
+    <constant name="UVScale" type="float">
+      <input name="value" type="float" value="2" />
+    </constant>
+    <output name="base_color_output" type="color3" nodename="node_image_color3_2" />
+    <texcoord name="node_texcoord_vector2_8" type="vector2">
+      <input name="index" type="integer" value="0" />
+    </texcoord>
+    <multiply name="node_multiply_9" type="vector2">
+      <input name="in1" type="vector2" nodename="node_texcoord_vector2_8" />
+      <input name="in2" type="float" nodename="UVScale" />
+    </multiply>
+
+    <image name="node_image_color3_2" type="color3" GLSLFX_usage="baseColor" expose="true">
+      <input name="texcoord" type="vector2" nodename="node_multiply_9" />
+      <input name="file" type="filename" colorspace="srgb_texture" value="../Textures/fishscale_basecolor.jpg" />
+      <input name="layer" type="string" value="" />
+      <input name="default" type="color3" value=" 0.000000, 0.000000, 0.000000" />
+      <input name="uaddressmode" type="string" value="periodic" />
+      <input name="vaddressmode" type="string" value="periodic" />
+      <input name="filtertype" type="string" value="linear" />
+      <input name="framerange" type="string" value="" />
+      <input name="frameoffset" type="integer" value="0" />
+      <input name="frameendaction" type="string" value="constant" />
+    </image>
+  </nodegraph>
+  <standard_surface name="TestImageNode" type="surfaceshader">
+    <input name="base_color" type="color3" output="base_color_output" nodegraph="TestImageNodeGraph" />
+  </standard_surface>
+  <surfacematerial name="Motley_Patchwork_Rug" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="TestImageNode" />
+  </surfacematerial>
+</materialx>

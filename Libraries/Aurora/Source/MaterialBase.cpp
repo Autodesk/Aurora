@@ -139,12 +139,8 @@ UniformBufferDefinition MaterialBase::StandardSurfaceUniforms = {
 // clang-format on
 
 // Textures used by the built-in Standard Surface material type.
-vector<string> MaterialBase::StandardSurfaceTextures = {
-    "base_color_image",
-    "specular_roughness_image",
-    "opacity_image",
-    "normal_image",
-};
+vector<string> MaterialBase::StandardSurfaceTextures = { "base_color_image",
+    "specular_roughness_image", "opacity_image", "normal_image", "emission_color_image" };
 
 // Default values for textures used in Standard Surface material type.
 vector<TextureDefinition> StandardSurfaceDefaultTextures = {
@@ -152,6 +148,7 @@ vector<TextureDefinition> StandardSurfaceDefaultTextures = {
     { "specular_roughness_image", true },
     { "opacity_image", true },
     { "normal_image", true },
+    { "emission_color_image", true },
 };
 
 // Default values for Standard Surface properties.
@@ -219,11 +216,14 @@ vector<PropertyValue> StandardSurfaceDefaultProperties = {
 MaterialDefaultValues MaterialBase::StandardSurfaceDefaults(
     StandardSurfaceUniforms, StandardSurfaceDefaultProperties, StandardSurfaceDefaultTextures);
 
-MaterialBase::MaterialBase(MaterialShaderPtr pShader, MaterialDefinitionPtr pDef) :
+MaterialBase::MaterialBase(
+    const string& name, MaterialShaderPtr pShader, MaterialDefinitionPtr pDef) :
     FixedValues(propertySet()),
     _pDef(pDef),
     _pShader(pShader),
-    _uniformBuffer(pDef->defaults().propertyDefinitions, pDef->defaults().properties)
+    _uniformBuffer(pDef->defaults().propertyDefinitions, pDef->defaults().properties),
+    _name(name)
+
 {
 }
 

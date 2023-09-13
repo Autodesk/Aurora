@@ -20,7 +20,6 @@ MaterialShader::MaterialShader(MaterialShaderLibrary* pShaderLibrary, int librar
     _entryPointsTypes(entryPoints),
     _def(def)
 {
-
     // Initialize ref. counts to zero.
     for (int i = 0; i < entryPoints.size(); i++)
     {
