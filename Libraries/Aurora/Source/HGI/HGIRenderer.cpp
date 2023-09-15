@@ -366,7 +366,7 @@ void HGIRenderer::render(uint32_t sampleStart, uint32_t sampleCount)
     pHGIScene->update();
 
     // Must have opaque shadows on HGI currently.
-    _values.setValue(kLabelIsOpaqueShadowsEnabled, true);
+    _values.setValue(kLabelIsForceOpaqueShadowsEnabled, true);
 
     // Render all the samples.
     for (uint32_t i = 0; i < sampleCount; i++)

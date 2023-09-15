@@ -92,6 +92,8 @@ bool PTDevice::initialize(PTDevice::Features features, int sampleCount)
     // NOTE: The debug layer requires installation of Graphics Tools for Windows 10, which may not
     // be desired by some clients.
 #if AU_DEVICE_DEBUG_ENABLED
+    AU_INFO("AU_DEVICE_DEBUG_ENABLED macro set to 1.  Creating debug device.");
+
     // Enable the D3D12 debug layer.
     // D3D12GetDebugInterface return a null pointer if the Graphics Tools are not installed.
     ComPtr<ID3D12Debug> pDebugInterface;

@@ -1369,7 +1369,7 @@ TEST_P(MaterialTest, TestMaterialTransparency)
 }
 
 // TODO: Re-enable test when shadow anyhit shaders are working.
-TEST_P(MaterialTest, DISABLED_TestMaterialShadowTransparency)
+TEST_P(MaterialTest, TestMaterialShadowTransparency)
 {
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();

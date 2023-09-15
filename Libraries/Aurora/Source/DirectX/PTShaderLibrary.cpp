@@ -188,8 +188,9 @@ string PTShaderOptions::toHLSL() const
 // Define entry point name constants.
 const LPWSTR PTShaderLibrary::kInstanceHitGroupName             = L"InstanceClosestHitShaderGroup";
 const LPWSTR PTShaderLibrary::kInstanceClosestHitEntryPointName = L"InstanceClosestHitShader";
-const LPWSTR PTShaderLibrary::kRayGenEntryPointName             = L"RayGenShader";
-const LPWSTR PTShaderLibrary::kShadowMissEntryPointName         = L"ShadowMissShader";
+const LPWSTR PTShaderLibrary::kInstanceShadowAnyHitEntryPointName = L"InstanceShadowAnyHitShader";
+const LPWSTR PTShaderLibrary::kRayGenEntryPointName               = L"RayGenShader";
+const LPWSTR PTShaderLibrary::kShadowMissEntryPointName           = L"ShadowMissShader";
 
 bool PTShaderLibrary::compileLibrary(const ComPtr<IDxcLibrary>& pDXCLibrary, const string source,
     const string& name, const string& target, const string& entryPoint,
@@ -716,6 +717,8 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
                 { "raygeneration", Foundation::w2s(kRayGenEntryPointName) });
             compileJobs.back().entryPoints.push_back(
                 { "closesthit", Foundation::w2s(kInstanceClosestHitEntryPointName) });
+            compileJobs.back().entryPoints.push_back(
+                { "anyhit", Foundation::w2s(kInstanceShadowAnyHitEntryPointName) });
         }
 
         return true;
@@ -996,13 +999,13 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
     pAssociationSubobject->SetSubobjectToAssociate(*pInstanceClosestHitRootSigSubobject);
     pAssociationSubobject->AddExport(kInstanceClosestHitEntryPointName);
 
-    auto* pInstanceClosestHitShaderSubobject =
+    auto* pInstanceShaderSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
-    pInstanceClosestHitShaderSubobject->SetHitGroupExport(kInstanceHitGroupName);
+    pInstanceShaderSubobject->SetHitGroupExport(kInstanceHitGroupName);
 
-    pInstanceClosestHitShaderSubobject->SetClosestHitShaderImport(
-        kInstanceClosestHitEntryPointName);
-    pInstanceClosestHitShaderSubobject->SetHitGroupType(D3D12_HIT_GROUP_TYPE_TRIANGLES);
+    pInstanceShaderSubobject->SetClosestHitShaderImport(kInstanceClosestHitEntryPointName);
+    pInstanceShaderSubobject->SetAnyHitShaderImport(kInstanceShadowAnyHitEntryPointName);
+    pInstanceShaderSubobject->SetHitGroupType(D3D12_HIT_GROUP_TYPE_TRIANGLES);
 
     pAssociationSubobject->AddExport(kInstanceHitGroupName);
 

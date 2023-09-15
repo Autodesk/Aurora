@@ -60,6 +60,19 @@ TEST_P(RendererTest, TestRendererDefault)
     ASSERT_EQ(pRenderer->backend(), backend) << rendererDescription();
 }
 
+// Ensure debug flag is not set on device.
+TEST_P(RendererTest, TestRendererDebugDevice)
+{
+    if (!backendSupported())
+        return;
+
+    auto renderer = createRenderer(rendererBackend());
+    ASSERT_NE(renderer.get(), nullptr);
+
+    // Look for the string that DXDevice::initialize will print to consolve if debug enabled.
+    ASSERT_THAT(lastLogMessage(), ::testing::Not(::testing::HasSubstr("AU_DEVICE_DEBUG_ENABLED")));
+}
+
 // Test creating, destroying renderer then rendering.
 TEST_P(RendererTest, TestRendererCreateDestroyThenRenderFull)
 {

@@ -87,7 +87,7 @@ struct FrameData
     float sceneSize;
 
     // Whether shadow evaluation should treat all objects as opaque, as a performance optimization.
-    bool isOpaqueShadowsEnabled;
+    bool isForceOpaqueShadowsEnabled;
 
     // Whether to write the NDC depth result to an output texture.
     bool isDepthNDCEnabled;

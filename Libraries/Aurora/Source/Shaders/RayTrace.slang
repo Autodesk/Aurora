@@ -254,7 +254,7 @@ struct ShadowRayPayload
 // Traces a shadow ray for the specified sample position and light direction, returning the
 // visibiliity of the light in that direction.
 float3 traceShadowRay(RaytracingAccelerationStructure scene, float3 origin, float3 L, float tMin,
-    bool isOpaque, int depth, int maxDepth)
+    bool onlyOpaqueHits, int depth, int maxDepth)
 {
     // If the maximum trace recursion depth has been reached, treat the light as visible. This will
     // mean there is more light than expected, but that works better than blocking the light, for
@@ -272,7 +272,7 @@ float3 traceShadowRay(RaytracingAccelerationStructure scene, float3 origin, floa
     // - Zero visibility for shadow rays that treat all objects as opaque. if the miss shader is
     //   evaluated, it will set full visibility.
     ShadowRayPayload rayPayload;
-    rayPayload.visibility = isOpaque ? BLACK : WHITE;
+    rayPayload.visibility = onlyOpaqueHits ? BLACK : WHITE;
 
     // Prepare the shadow ray, with a small offset from the origin to avoid self-intersection.
     RayDesc ray;
@@ -291,9 +291,9 @@ float3 traceShadowRay(RaytracingAccelerationStructure scene, float3 origin, floa
     //   - Treat all intersections as opaque, so that the shadow any hit shader is never called.
     //   - Use the shadow miss shader, which simply sets full visibility on ray payload.
     uint rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
-    rayFlags |= isOpaque ? RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE : 0;
+    rayFlags |= onlyOpaqueHits ? RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE : 0;
 #if DIRECTX
-    uint missShaderIndex = isOpaque ? kMissShadow : kMissNull;
+    uint missShaderIndex = onlyOpaqueHits ? kMissShadow : kMissNull;
 #else
     uint missShaderIndex = kMissShadow;
 #endif

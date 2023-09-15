@@ -138,9 +138,9 @@ private:
     vec3 _lightDirection     = normalize(vec3(1.0f, -0.5f, 0.0f));
     bool _isDenoisingEnabled = false;
 #if defined(INTERACTIVE_PLASMA)
-    bool _isDiffuseOnlyEnabled   = false;
-    bool _isOpaqueShadowsEnabled = false;
-    bool _isToneMappingEnabled   = false;
+    bool _isDiffuseOnlyEnabled        = false;
+    bool _isForceOpaqueShadowsEnabled = false;
+    bool _isToneMappingEnabled        = false;
 #endif
     bool _isGroundPlaneShadowEnabled     = false;
     bool _isGroundPlaneReflectionEnabled = false;

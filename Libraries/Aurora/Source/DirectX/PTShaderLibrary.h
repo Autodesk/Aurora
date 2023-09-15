@@ -105,6 +105,7 @@ public:
 
     static const LPWSTR kInstanceHitGroupName;
     static const LPWSTR kInstanceClosestHitEntryPointName;
+    static const LPWSTR kInstanceShadowAnyHitEntryPointName;
     static const LPWSTR kRayGenEntryPointName;
     static const LPWSTR kShadowMissEntryPointName;
 

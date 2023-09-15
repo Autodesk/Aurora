@@ -1481,8 +1481,8 @@ void Plasma::onKeyPressed(WPARAM keyCode)
         }
         else
         {
-            _isOpaqueShadowsEnabled = !_isOpaqueShadowsEnabled;
-            options.setBoolean("isOpaqueShadowsEnabled", _isOpaqueShadowsEnabled);
+            _isForceOpaqueShadowsEnabled = !_isForceOpaqueShadowsEnabled;
+            options.setBoolean("isForceOpaqueShadowsEnabled", _isForceOpaqueShadowsEnabled);
             requestUpdate();
         }
         break;

@@ -99,7 +99,7 @@ float4 shadeMatteShadow(float opacity, float3 color, RaytracingAccelerationStruc
 // is not hit.
 float4 shadeGroundPlane(GroundPlane groundPlane, RaytracingAccelerationStructure scene,
     Environment environment, float3 rayOrigin, float3 rayDir, float maxDist,
-    bool isOpaqueShadowsEnabled, uint maxDepth, inout Random rng)
+    bool isForceOpaqueShadowsEnabled, uint maxDepth, inout Random rng)
 {
     // Collect ground plane properties.
     float3 position           = groundPlane.position;
@@ -144,7 +144,7 @@ float4 shadeGroundPlane(GroundPlane groundPlane, RaytracingAccelerationStructure
     if (shadowOpacity > 0.0f)
     {
         float4 shadow = shadeMatteShadow(shadowOpacity, shadowColor, scene, environment, normal,
-            hitPosition, isOpaqueShadowsEnabled, maxDepth, rng);
+            hitPosition, isForceOpaqueShadowsEnabled, maxDepth, rng);
 
         // Blend the shadow result with the prior result, using the shadow alpha. Also update the
         // result alpha to the combined alpha of the shadow and the prior result, as if they are

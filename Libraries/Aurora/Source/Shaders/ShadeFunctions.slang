@@ -27,7 +27,7 @@ float3 shadeEmission(Material material)
 // Compute shading with a directional light.
 float3 shadeDirectionalLight(float3 dir, float4 colorAndIntensity, float cosRadius,
     RaytracingAccelerationStructure scene, Material material, ShadingData shading, float3 V,
-    bool isOpaqueShadowsEnabled, int depth, int maxDepth, inout Random rng)
+    bool onlyOpaqueShadowHits, int depth, int maxDepth, inout Random rng)
 {
     // Perform shading with the global directional light. Treat the light as having a disc area by
     // sampling a random direction in a cone around the light direction.
@@ -47,7 +47,7 @@ float3 shadeDirectionalLight(float3 dir, float4 colorAndIntensity, float cosRadi
     float3 lightRadiance = colorAndIntensity.a * colorAndIntensity.rgb;
     float3 position      = dot(V, shading.normal) < 0.0f ? shading.geomPosition : shading.position;
     float3 lightVisibility =
-        traceShadowRay(scene, position, L, M_RAY_TMIN, isOpaqueShadowsEnabled, depth, maxDepth);
+        traceShadowRay(scene, position, L, M_RAY_TMIN, onlyOpaqueShadowHits, depth, maxDepth);
 
     // Compute the outgoing radiance as the BSDF (with cosine term) multipled by the light
     // visibility and radiance.
@@ -57,7 +57,7 @@ float3 shadeDirectionalLight(float3 dir, float4 colorAndIntensity, float cosRadi
 // Compute shading with an environment light as direct lighting.
 float3 shadeEnvironmentLightDirect(Environment environment,
     RaytracingAccelerationStructure scene, Material material, ShadingData shading, float3 V,
-    bool isOpaqueShadowsEnabled, int depth, int maxDepth, inout Random rng)
+    bool onlyOpaqueShadowHits, int depth, int maxDepth, inout Random rng)
 {
     // Sample the environment to determine a sample (light) direction and the corresponding
     // probability density function (PDF) value for that direction.
@@ -78,7 +78,7 @@ float3 shadeEnvironmentLightDirect(Environment environment,
     // self-intersection.
     float3 position = dot(V, shading.normal) < 0.0f ? shading.geomPosition : shading.position;
     float3 lightVisibility =
-        traceShadowRay(scene, position, L, M_RAY_TMIN, isOpaqueShadowsEnabled, depth, maxDepth);
+        traceShadowRay(scene, position, L, M_RAY_TMIN, onlyOpaqueShadowHits, depth, maxDepth);
 
     // Compute the outgoing radiance as the BSDF (with cosine term) multipled by the light
     // visibility and radiance, divided by the PDF.
@@ -87,7 +87,7 @@ float3 shadeEnvironmentLightDirect(Environment environment,
 
 // Compute shading with an environment light using multiple importance sampling.
 float3 shadeEnvironmentLightMIS(Environment environment, RaytracingAccelerationStructure scene, Material material,
-        ShadingData shading, float3 V, bool isOpaqueShadowsEnabled, int depth, int maxDepth,
+        ShadingData shading, float3 V, bool onlyOpaqueShadowHits, int depth, int maxDepth,
         inout Random rng, inout IndirectOutput indirect)
 {
     float3 result = BLACK;
@@ -141,7 +141,7 @@ float3 shadeEnvironmentLightMIS(Environment environment, RaytracingAccelerationS
 
         // Step 3: Use a shadow ray to compute the visibility of the light at the hit position.
         float3 lightVisibility =
-            traceShadowRay(scene, position, L, M_RAY_TMIN, isOpaqueShadowsEnabled, depth, maxDepth);
+            traceShadowRay(scene, position, L, M_RAY_TMIN, onlyOpaqueShadowHits, depth, maxDepth);
 
         // Step 4: Compute a weight based on the PDF of the material and the light, and apply that
         // weight to the outgoing radiance: visibility * radiance * BSDF * cosine / material PDF.
@@ -164,7 +164,7 @@ float3 shadeEnvironmentLightMIS(Environment environment, RaytracingAccelerationS
     {
         // Step 7: Use a shadow ray to compute the visibility of the light at the hit position.
         float3 lightVisibility =
-            traceShadowRay(scene, position, L, M_RAY_TMIN, isOpaqueShadowsEnabled, depth, maxDepth);
+            traceShadowRay(scene, position, L, M_RAY_TMIN, onlyOpaqueShadowHits, depth, maxDepth);
 
         // Step 8: Compute a weight based on the PDF of the light and the material, and apply that
         // weight to the outgoing radiance: visibility * radiance * BSDF * cosine / light PDF.

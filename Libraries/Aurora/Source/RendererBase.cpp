@@ -45,7 +45,7 @@ static PropertySetPtr propertySet()
     gpPropertySet->add(kLabelImportanceSamplingMode, kImportanceSamplingModeMIS);
     gpPropertySet->add(kLabelIsFlipImageYEnabled, true);
     gpPropertySet->add(kLabelIsReferenceBSDFEnabled, false);
-    gpPropertySet->add(kLabelIsOpaqueShadowsEnabled, false);
+    gpPropertySet->add(kLabelIsForceOpaqueShadowsEnabled, false);
 
     return gpPropertySet;
 }
@@ -160,12 +160,13 @@ bool RendererBase::updateFrameDataGPUStruct(FrameData* pStaging)
     // Copy the current light buffer for the scene to this frame's light data.
     memcpy(&frameData.lights, &_pScene->lights(), sizeof(frameData.lights));
 
-    int debugMode                    = _values.asInt(kLabelDebugMode);
-    int traceDepth                   = _values.asInt(kLabelTraceDepth);
-    traceDepth                       = glm::max(1, glm::min(kMaxTraceDepth, traceDepth));
-    frameData.traceDepth             = traceDepth;
-    frameData.isDenoisingEnabled     = _values.asBoolean(kLabelIsDenoisingEnabled) ? 1 : 0;
-    frameData.isOpaqueShadowsEnabled = _values.asBoolean(kLabelIsOpaqueShadowsEnabled) ? 1 : 0;
+    int debugMode                = _values.asInt(kLabelDebugMode);
+    int traceDepth               = _values.asInt(kLabelTraceDepth);
+    traceDepth                   = glm::max(1, glm::min(kMaxTraceDepth, traceDepth));
+    frameData.traceDepth         = traceDepth;
+    frameData.isDenoisingEnabled = _values.asBoolean(kLabelIsDenoisingEnabled) ? 1 : 0;
+    frameData.isForceOpaqueShadowsEnabled =
+        _values.asBoolean(kLabelIsForceOpaqueShadowsEnabled) ? 1 : 0;
     frameData.isDiffuseOnlyEnabled   = _values.asBoolean(kLabelIsDiffuseOnlyEnabled) ? 1 : 0;
     frameData.maxLuminance           = _values.asFloat(kLabelMaxLuminance);
     frameData.isDisplayErrorsEnabled = debugMode == kDebugModeErrors ? 1 : 0;

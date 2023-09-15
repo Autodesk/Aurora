@@ -70,10 +70,11 @@ struct Output {
 
 // The ray generation shader, iteratively shades the entire ray path.
 [shader("raygeneration")] void RayGenShader() {
-    int maxDepth                = gFrameData.traceDepth;
+    // Get the max trace depth from frame settings.
+    int maxTraceDepth                = gFrameData.traceDepth;
 
-    // Disable transparent shadows.
-    bool isOpaqueShadowsEnabled = true;
+    // Is opaque shadow hits only enabled in frame settings.
+    bool onlyOpaqueShadowHits = gFrameData.isForceOpaqueShadowsEnabled;
 
     // Get the dispatch dimensions (screen size), dispatch index (screen coordinates), and sample
     // index.
@@ -114,7 +115,7 @@ struct Output {
     bool pathEnded = false;
 
     // Iterate through every segment in the ray path, until maximum depth is reached or path is ended.
-    for (int rayDepth = 0; rayDepth <= maxDepth && !pathEnded; rayDepth++)
+    for (int rayDepth = 0; rayDepth <= maxTraceDepth && !pathEnded; rayDepth++)
     {
         // The minimum T for this ray segment is zero for the initial camera ray otherwise use
         // a small epsilon to avoid self-intersection.
@@ -137,7 +138,7 @@ struct Output {
         int nextRayType;
 
         // Have we exceeded ray depth for this path?
-        if (rayDepth == maxDepth)
+        if (rayDepth == maxTraceDepth)
         {
             // If we have reached the end of this path, evaluate the environment and terminate the path.
             direct    = evaluateEnvironment(environment, rayDirection, shadeBackgroundOnMiss);
@@ -242,14 +243,14 @@ struct Output {
                                 gFrameData.lights.distantLights[lightIdx].direction,
                                 gFrameData.lights.distantLights[lightIdx].colorAndIntensity,
                                 gFrameData.lights.distantLights[lightIdx].cosRadius, gScene,
-                                material, shading, V, isOpaqueShadowsEnabled, rayDepth, maxDepth, rng);
+                                material, shading, V, onlyOpaqueShadowHits, rayDepth, maxTraceDepth, rng);
                         }
                     }
 
                     // Shade with the environment light with multiple importance sampling.
                     // NOTE: For denoising purposes, "indirect" lighting includes the environment light.
                     shadeEnvironmentLightMIS(environment, gScene, material, shading, V,
-                        isOpaqueShadowsEnabled, rayDepth, maxDepth, rng, indirect);
+                        onlyOpaqueShadowHits, rayDepth, maxTraceDepth, rng, indirect);
 
                     // Scale the ray contribution (for this ray segment and subsequent ones) by the inverse of 
                     // the transparency, and normalized by the probability of this segment being considered opaque.
@@ -261,7 +262,7 @@ struct Output {
                     output.alpha = (output.alpha == 0.0f && rayType == TRANSMISSION_LOBE) ? 0.0f : 1.0f;
 
                     // Sample the PDF for the current surface material, and compute the next ray direction and contribution.
-                    nextRayType = setupIndirectLightRay(material, shading, V, rayDepth, maxDepth, rng,
+                    nextRayType = setupIndirectLightRay(material, shading, V, rayDepth, maxTraceDepth, rng,
                         rayDirection, rayOrigin, nextRayContribution);
 
                     // If next ray not needed (as contribution is too small) terminate the path.
@@ -349,7 +350,7 @@ struct Output {
         // Shade the ground plane.
         Environment environment  = prepareEnvironmentValues();
         float4 groundPlaneResult = shadeGroundPlane(gGroundPlane, gScene, environment, rayOrigin, rayDirection,
-            rayPayload.depthView, gFrameData.isOpaqueShadowsEnabled, maxDepth, rng);
+            rayPayload.depthView, gFrameData.onlyOpaqueShadowHits, maxTraceDepth, rng);
 
         // Blend the ground plane result with the radiance and "direct" shading. The direct shading is
         // not itself denoised but is added to denoised output.
@@ -439,4 +440,60 @@ struct Output {
 
     // Return the material buffer offset for the instance.
     rayPayload.materialBufferOffset   = gMaterialBufferOffset;
+}
+
+[shader("anyhit")] void InstanceShadowAnyHitShader(
+        inout ShadowRayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit)
+{
+
+    // If the material is opaque, set the visibility to zero, accept the hit, and stop searching for
+    // hits, as the shadow ray is completely blocked. Doing this here is a performance optimization,
+    // as it avoids calling the full material initialization below, which can be expensive.
+    if (gIsOpaque)
+    {
+        rayPayload.visibility = BLACK;
+        AcceptHitAndEndSearch();
+    }
+
+    // Get the interpolated vertex data for the hit triangle, at the hit barycentric coordinates.
+    uint triangleIndex = PrimitiveIndex();
+    float3 barycentrics = computeBarycentrics(hit);
+    ShadingData shading =
+        computeShadingData(gGeometry, triangleIndex, barycentrics, ObjectToWorld3x4());
+
+    // Retrieve the shader index for intersected surface material.
+    // This is stored in the material header in the global material byte buffer,
+    // at a position indicated by instance's gMaterialBufferOffset.
+    int shaderIndex = materialShaderIndex(gMaterialBufferOffset);
+    
+    // Normal parameters generated by material's evaluate function (not used in shadow any hit shader.)
+    float3 materialNormal = shading.normal;
+    bool isGeneratedNormal = false;
+
+    // Initialize the material using the shader index with the externally defined evaluate function.
+    // This function will be generated at runtime and linked with the rest of the code.
+    Material material = evaluateMaterialForShader(shaderIndex, shading,
+                            gMaterialBufferOffset, materialNormal, isGeneratedNormal);
+
+    // Compute opacity from material opacity and transmision.
+    float3 opacity =
+        material.opacity * (WHITE - material.transmission * material.transmissionColor);
+    rayPayload.visibility *= 1.0f - opacity;
+
+    // If the visibility is zero (opaque) at this point, accept this hit and stop searching for
+    // hits, as the shadow ray is now completely blocked. Otherwise, ignore the hit so that
+    // visibility can continue to be accumulated from other any hit intersections.
+    if (isBlack(rayPayload.visibility))
+    {
+        AcceptHitAndEndSearch();
+    }
+    else
+    {
+        IgnoreHit();
+    }
+
+    // NOTE: The default behavior of accepting the hit while continuing to search for hits is not
+    // useful for shadow rays. It does not happen here, because of the intrinsic function calls
+    // above.
+
 }
