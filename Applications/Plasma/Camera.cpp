@@ -20,12 +20,19 @@ static constexpr vec3 kForward = vec3(0.0f, 0.0f, -1.0f);
 static constexpr vec3 kRight   = vec3(1.0f, 0.0f, 0.0f);
 static constexpr vec3 kUp      = vec3(0.0f, 1.0f, 0.0f);
 
+#define DUMP_CAMERA_POSITION 0
+
 const mat4& Camera::viewMatrix()
 {
     // Create a view matrix if it needs to be updated.
     if (_isViewDirty)
     {
-        _viewMatrix  = lookAt(_eye, _target, _up);
+        _viewMatrix = lookAt(_eye, _target, _up);
+        // If dev flag is set dump camera position.
+#if DUMP_CAMERA_POSITION
+        AU_INFO("--eye=%0.2f,%0.2f,%0.2f --target=%0.2f,%0.2f,%0.2f", _eye.x, _eye.y, _eye.z,
+            _target.x, _target.y, _target.z);
+#endif
         _isViewDirty = false;
     }
 

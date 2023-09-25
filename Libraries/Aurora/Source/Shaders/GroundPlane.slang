@@ -21,11 +21,10 @@
 #include "GlobalPipelineState.slang"
 
 // TODO: Re-enable ground plane.
-#if 0
+
 // Shades a matte reflection effect with the specified properties.
-float4 shadeMatteReflection(float opacity, float3 color, float roughness,
-    RaytracingAccelerationStructure scene, Environment environment, float3 rayDir, float3 normal,
-    float3 tangent, float3 bitangent, float3 position, uint maxDepth, inout Random rng)
+int setupMatteReflectionIndirectLightRay(float opacity, float3 color, float roughness, float3 rayDir, float3 normal,
+    float3 tangent, float3 bitangent, float3 position, uint maxDepth, inout Random rng, out float3 indirectRayDirec, out float3 indirectRayOrigin, out float3 indirectColorOut)
 {
     // Transform the ray to a view direction in tangent space.
     float3 V = worldToTangent(-rayDir, tangent, bitangent, normal);
@@ -34,13 +33,13 @@ float4 shadeMatteReflection(float opacity, float3 color, float roughness,
     // material. This gives a BSDF result, which is scaled by the cosine term.
     float3 L;
     float pdf;
-    float3 f0                     = color;
-    float2 random                 = random2D(rng);
+    float3 f0 = color;
+    float2 random = random2D(rng);
     BSDF_AND_COSINE bsdfAndCosine = sampleGGXSmithBRDF(V, f0, roughness, 0.0f, random, L, pdf);
     bsdfAndCosine *= abs(L.z);
     if (isBlack(bsdfAndCosine))
     {
-        return BLACK;
+        return NO_SECONDARY_RAY;
     }
 
     // Trace a radiance ray with the sampled light direction. If the ray payload alpha is zero,
@@ -48,16 +47,20 @@ float4 shadeMatteReflection(float opacity, float3 color, float roughness,
     // compute the outgoing radiance as the BSDF (with cosine term) multipled by the light radiance,
     // divided by the PDF.
     float3 Lw = tangentToWorld(L, tangent, bitangent, normal);
-    RadianceRayPayload rayPayload =
-        traceRadianceRay(scene, environment, position, Lw, M_RAY_TMIN, 1, maxDepth, false, rng);
-    if (rayPayload.alpha == 0.0f)
-    {
-        return BLACK;
-    }
-    float3 radiance = rayPayload.color * bsdfAndCosine / pdf;
-
-    // Return the result as the radiance for color, and reflection opacity for alpha.
-    return float4(radiance, opacity);
+    
+    // Compute the indirect ray, i.e. the next step in tracing the current path. 
+    
+    // If the view (ray) direction is on the back side of the geometry, or the ray is
+    // from a transmission lobe, use the geometric position to avoid self-intersection. 
+    indirectRayOrigin = position;
+    
+    // Set the direction from the sampled light direction.
+    indirectRayDirec = Lw;
+    
+    // Set the color from the sampled color scaled by the inverse of the PDF.
+    indirectColorOut = bsdfAndCosine / pdf;
+    
+    return GROUND_PLANE_REFLECTION_RAY;
 }
 
 // Shades a matte shadow effect with the specified environment light and position.
@@ -65,14 +68,14 @@ float4 shadeMatteReflection(float opacity, float3 color, float roughness,
 // i.e. shadowed and unshadowed components. This also does not consider the directional light. Both
 // of these issues should be addressed in the future.
 float4 shadeMatteShadow(float opacity, float3 color, RaytracingAccelerationStructure scene,
-    Environment environment, float3 normal, float3 position, bool isOpaque, uint maxDepth,
+    Environment environment, float3 normal, float3 position, bool onlyOpaqueShadowHits, uint maxDepth,
     inout Random rng)
 {
     // Sample the environment to determine a sample (light) direction and the corresponding
     // probability density function (PDF) value for that direction.
     float3 L;
     float pdf;
-    float2 random        = random2D(rng);
+    float2 random = random2D(rng);
     float3 lightRadiance = sampleEnvironment(environment, random, L, pdf);
 
     // If the light direction is below the ground plane, the light does not contribute to shadowing.
@@ -82,77 +85,107 @@ float4 shadeMatteShadow(float opacity, float3 color, RaytracingAccelerationStruc
     }
 
     // Use a shadow ray to compute the visibility of the light source at the hit position.
-    float3 lightVisibility = traceShadowRay(scene, position, L, M_RAY_TMIN, isOpaque, 1, maxDepth);
+    float3 lightVisibility = traceShadowRay(scene, position, L, M_RAY_TMIN, onlyOpaqueShadowHits, 1, maxDepth);
 
     // The result color is the shadow color, and the alpha (blend factor) is the luminance of the
     // inverse light visibility (i.e. zero visibility means full shadow) scaled by the shadow
     // opacity.
     float4 result = BLACK;
-    result.rgb    = color;
-    result.a      = luminance(1.0f - lightVisibility) * opacity;
-
+    result.rgb = color;
+    result.a = luminance(1.0f - lightVisibility) * opacity;
+    
+    // Return result color.
     return result;
 }
 
-// Shades the specified ground plane for the specified ray. The result is intended to be blended
-// with whatever is behind the ground plane. This returns black with zero alpha if the ground plane
-// is not hit.
-float4 shadeGroundPlane(GroundPlane groundPlane, RaytracingAccelerationStructure scene,
-    Environment environment, float3 rayOrigin, float3 rayDir, float maxDist,
-    bool isForceOpaqueShadowsEnabled, uint maxDepth, inout Random rng)
+bool intersectGroundPlane(GroundPlane groundPlane, float3 rayOrigin, float3 rayDir, inout float3 hitPosition, inout float distance)
 {
     // Collect ground plane properties.
-    float3 position           = groundPlane.position;
-    float3 normal             = groundPlane.normal;
-    float3 tangent            = groundPlane.tangent;
-    float3 bitangent          = groundPlane.bitangent;
-    float shadowOpacity       = groundPlane.shadowOpacity;
-    float3 shadowColor        = groundPlane.shadowColor;
-    float reflectionOpacity   = groundPlane.reflectionOpacity;
-    float3 reflectionColor    = groundPlane.reflectionColor;
-    float reflectionRoughness = groundPlane.reflectionRoughness;
-
+    float3 position = groundPlane.position;
+    float3 normal = groundPlane.normal;
+    
     // Compute the dot product of the ray direction and plane normal. If this is greater than zero,
     // the ray direction is below the plane and the plane is not visible.
     float planeDot = dot(rayDir, normal);
     if (planeDot >= 0.0)
     {
-        return BLACK;
+        return false;
     }
-
+    
     // Compute the distance to the plane along the ray direction, i.e ray-plane intersection. If the
     // distance is less than zero (behind the ray) or greater than the maximum distance, the plane
     // is not visible.
-    float distance = dot(position - rayOrigin, normal) / planeDot;
-    if (distance <= 0.0f || distance >= maxDist)
-    {
-        return BLACK;
-    }
-
+    distance = dot(position - rayOrigin, normal) / planeDot;
+    if (distance < 0.0)
+        return false;
+    
     // Compute the hit position.
-    float3 hitPosition = rayOrigin + rayDir * distance;
+    hitPosition = rayOrigin + rayDir * distance;
+    
+    return true;
+    
+}
 
-    // Shade with a matte reflection effect, if enabled.
-    float4 result = BLACK;
+// Shades the specified ground plane for the specified ray. The result is intended to be blended
+// with whatever is behind the ground plane. This returns black with zero alpha if the ground plane
+// is not hit.
+int setupGroundPlaneRay(float3 hitPosition, GroundPlane groundPlane, RaytracingAccelerationStructure scene,
+    Environment environment, float3 rayOrigin, float3 rayDir,
+    bool isForceOpaqueShadowsEnabled, uint maxDepth, inout Random rng,
+    out float3 groundPlaneRayDirecOut, out float3 groundPlaneRayOriginOut, out float3 groundPlaneColorOut)
+{
+    // Collect ground plane properties.
+    float3 position = groundPlane.position;
+    float3 normal = groundPlane.normal;
+    float3 tangent = groundPlane.tangent;
+    float3 bitangent = groundPlane.bitangent;
+    float shadowOpacity = groundPlane.shadowOpacity;
+    float3 shadowColor = groundPlane.shadowColor;
+    float reflectionOpacity = groundPlane.reflectionOpacity;
+    float3 reflectionColor = groundPlane.reflectionColor;
+    float reflectionRoughness = groundPlane.reflectionRoughness;
+   
+    // Shade with a matte reflection layer, if enabled.
+    groundPlaneColorOut = WHITE;
     if (reflectionOpacity > 0.0f)
     {
-        result = shadeMatteReflection(reflectionOpacity, reflectionColor, reflectionRoughness,
-            scene, environment, rayDir, normal, tangent, bitangent, hitPosition, maxDepth, rng);
+        // Compute transparency from inverse of reflection opacity.
+        float3 transparency = 1.0f - reflectionOpacity;
+        
+        // Randomly choose if next ray is a reflection ray, based on reflection opacity.
+        float Pr = luminance(transparency);
+        if (random2D(rng).x >= Pr)
+        {
+            // Setup the next ray as a reflection ray.
+            int rayType = setupMatteReflectionIndirectLightRay(reflectionOpacity, reflectionColor, reflectionRoughness,
+                rayDir, normal, tangent, bitangent, hitPosition, maxDepth, rng,
+                groundPlaneRayDirecOut, groundPlaneRayOriginOut, groundPlaneColorOut);
+            
+            // Normalize based on probability of reflecting.
+            groundPlaneColorOut *= reflectionOpacity / (1.0f - Pr);
+            
+            // Return the reflection ray type.
+            return rayType;
+        }
+        else
+            groundPlaneColorOut = transparency / Pr; // Normalize based on probability of not reflecting.
     }
-
-    // Shade with a matte shadow effect, if enabled.
+    
+    // Shade with a matte shadow layer, if enabled.    
     if (shadowOpacity > 0.0f)
     {
+        // Shade ground plane shadow.
         float4 shadow = shadeMatteShadow(shadowOpacity, shadowColor, scene, environment, normal,
-            hitPosition, isForceOpaqueShadowsEnabled, maxDepth, rng);
+                hitPosition, true, maxDepth, rng);
+        
+        // Compute interpolated shadow value (ground plane shadow color in shadowed regions, white elsewhere.)
+        float3 interpolatedShadowColor = lerp(WHITE, shadow.rgb, shadow.a);
+        
+        // Scale returned color by shadow value.
+        groundPlaneColorOut *= interpolatedShadowColor;
 
-        // Blend the shadow result with the prior result, using the shadow alpha. Also update the
-        // result alpha to the combined alpha of the shadow and the prior result, as if they are
-        // two overlapping layers with alpha as opacity.
-        result.rgb = lerp(result.rgb, shadow.rgb, shadow.a);
-        result.a   = 1.0f - ((1.0f - shadow.a) * (1.0f - result.a));
     }
-
-    return result;
+    
+    return CAMERA_RAY;
 }
-#endif
+

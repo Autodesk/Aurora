@@ -39,122 +39,41 @@ struct IndirectOutput
     }
 };
 
-// The radiance ray payload structure.
-// NOTE: This is currently 28 floats in size.
-struct RadianceRayPayload
-{
-    // The color value for outgoing radiance from the path.
-    float3 color;
-
-    // The opacity accumulated along the path. This is stochastic, i.e. a zero or one value for the
-    // entire path, where zero means transparent or transmissive for the entire path and one means
-    // at least one opaque segment on the path.
-    float alpha;
-
-    // The color value for outgoing radiance that is not intended to be denoised. This includes
-    // shading from material emission, discrete lights, and the background. Only data from the first
-    // hit (primary rays) is stored here.
-    float3 extra;
-
-    // The NDC depth is the Z component of NDC space, i.e. after dividing the clip space position by
-    // W. This is the value normally stored in the depth buffer for rasterization. The projection
-    // matrix must generate Z components in [-1.0, 1.0], which is remapped to [0.0, 1.0] as the NDC
-    // depth.
-    float depthNDC;
-
-    // The view depth is the distance from the eye to the hit position. This value is in world
-    // units.
-    float depthView;
-
-    // The normal in world space of the first hit surface. This is based on the material, and may
-    // include geometric normals perturbed by a bump map.
-    float3 normal;
-
-    // The albedo of the first hit surface, as defined by Standard Surface.
-    float3 baseColor;
-
-    // The roughness of the first hit surface, as defined by Standard Surface.
-    float roughness;
-
-    // The metalness of the first hit surface, as defined by Standard Surface.
-    float metalness;
-
-    // Outgoing radiance and hit distances for diffuse and glossy lobes. This is based on shading
-    // from indirect light or sampled environment light, and only data from the first hit (primary
-    // rays) is stored here. This is used for denoising.
-    IndirectOutput indirect;
-
-    // The ray depth or number of segments in the path at this point in path evaluation. This is
-    // use to prevent a path from exceeding a certain length. At the first intersection, the depth
-    // value is 1, indicating a first hit (primary ray).
-    int depth;
-
-    // Random number generation state, which is updated during path evaluation so that different
-    // random numbers are generated along the path.
-    Random rng;
-
-    // Properties of next ray in the path.
-    float3 nextRayDirec;
-    float3 nextRayOrigin;
-    float3 opacityScale;
-    float3 nextRayContribution;
-    int nextRayType;
-
-    // Clears the radiance ray payload to values expected for a miss.
-    // NOTE: The normal value (-1.0, -1.0, -1.0) will appear as black when remapped for output.
-    // NDC depth is typically in the range [-1.0, 1.0] or [0.0, 1.0] so a max value of 1.0 is used,
-    // while view depth is in world units so has a max value of INF.
-#if 1//!DIRECTX
-    [mutating]
-#endif
-        void
-        clear()
-    {
-        color     = BLACK;
-        alpha     = 0.0;
-        extra     = BLACK;
-        depthNDC  = 1.0f;
-        depthView = INFINITY;
-        normal    = -1.0f;
-        baseColor = BLACK;
-        roughness = 0.1f;
-        metalness = 0.1f;
-
-        nextRayDirec = 0.0f;
-        nextRayOrigin = 0.0f;
-        opacityScale = 1.0f;
-        nextRayContribution = 1.0f;
-        nextRayType         = -1;
-        //NO_SECONDARY_RAY;
-
-        indirect.clear();
-    };
-
-    // Scales the radiance ray payload color components by the specified values.
-#if 1//!DIRECTX
-    [mutating]
-#endif
-    void scaleColor(float3 scale)
-    {
-        color *= scale;
-        extra *= scale;
-        baseColor *= scale;
-        indirect.diffuse *= scale;
-        indirect.glossy *= scale;
-    }
-};
-
 // Instance ray payload.  Used by all closest hit shaders.
 struct InstanceRayPayload {
-    // Shading data for the instance that was hit.
-    ShadingData shading;
+    float3 tangent; // the geometric position, interpolated from adjancent vertices
+    float3 geomPosition; // the geometric position, interpolated from adjancent vertices
+    float2 texCoord; // the shading texture coordinates, interpolated from adjancent vertices
+    float3 objectNormal; // the shading position in object space (not world space). Used only in
+                           // materialX generated code.
+    float3 objectPosition; // the shading normal in object space (not world space). Used only in
+                           // materialX generated code.
+    float3x4 objToWorld;
     // Offset withing material buffer for instance.
     int materialBufferOffset;
     // Did the ray hit?
-    bool hit;
+    bool hit = false;
     // Distance from ray origin collision occurred.
-    float distance;
+    float distance = INFINITY;
 };
+
+ShadingData shadingDataFromInstanceResult(InstanceRayPayload result)
+{
+    ShadingData shading;
+    shading.geomPosition = result.geomPosition;
+    shading.texCoord = result.texCoord;
+    shading.objectNormal = result.objectNormal;
+    shading.objectPosition = result.objectPosition;
+    shading.objToWorld = result.objToWorld;
+    shading.position = mul(shading.objToWorld, float4(shading.objectPosition, 1.0f));
+    shading.normal = normalize(mul((float3x3) shading.objToWorld, shading.objectNormal));
+    shading.tangent = result.tangent;
+
+    // Generate bitangent from normal and tangent.
+    shading.bitangent = computeBitangent(shading.normal, shading.tangent);
+
+    return shading;
+}
 
 // Computes the origin and direction of a ray at the specified screen coordinates, using the
 // specified view parameters (orientation, position, and FOV).
@@ -215,11 +134,11 @@ void computeCameraRay(float2 screenCoords, float2 screenSize, float4x4 invView, 
 
 // Traces a ray in the specified direction, returning the radiance from that direction.
 bool traceInstanceRay(RaytracingAccelerationStructure scene, 
-    float3 origin, float3 dir, float tMin, out InstanceRayPayload rayPayload)
+    float3 origin, float3 dir, float tMin, inout InstanceRayPayload rayPayload)
 {
 
     // Set the force opaque ray flag to treat all objects as opaque, so that the any hit shader is
-    // not called. Also set the radiance or background miss shader.
+    // not called.
     uint rayFlags        = RAY_FLAG_FORCE_OPAQUE;
 
     // Prepare the ray.
@@ -237,7 +156,7 @@ bool traceInstanceRay(RaytracingAccelerationStructure scene,
         0xFF,            // instance mask
         0,               // ray contribution to hit group index
         0,               // multiplier for geometry contribution to hit group index
-        kMissNull,               // miss shader index (always zero for now)
+        kMissNull,       // miss shader index (always null shader for instance rays)
         ray,             // ray to be traced
         rayPayload);     // in/out data for shaders invoked during tracing
 

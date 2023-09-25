@@ -69,7 +69,7 @@ TEST_P(RendererTest, TestRendererDebugDevice)
     auto renderer = createRenderer(rendererBackend());
     ASSERT_NE(renderer.get(), nullptr);
 
-    // Look for the string that DXDevice::initialize will print to consolve if debug enabled.
+    // Look for the string that DXDevice::initialize will print to console if debug enabled.
     ASSERT_THAT(lastLogMessage(), ::testing::Not(::testing::HasSubstr("AU_DEVICE_DEBUG_ENABLED")));
 }
 

@@ -16,6 +16,7 @@
 #include "PTShaderLibrary.h"
 
 #include "CompiledShaders/CommonShaders.h"
+#include "CompiledShaders/MainEntryPoints.h"
 #include "PTGeometry.h"
 #include "PTImage.h"
 #include "PTMaterial.h"
@@ -178,7 +179,7 @@ string PTShaderOptions::toHLSL() const
     // Add each option as #defines statement.
     for (size_t i = 0; i < _data.size(); i++)
     {
-        hlslStr += "#define " + _data[i].first + "  " + to_string(_data[i].second) + "\n";
+        hlslStr += "#define " + _data[i].first + " " + to_string(_data[i].second) + "\n";
     }
 
     // Return HLSL.
@@ -477,27 +478,36 @@ DirectXShaderIdentifier PTShaderLibrary::getShaderID(LPWSTR name)
     return stateObjectProps->GetShaderIdentifier(name);
 }
 
-/*
-
-DirectXShaderIdentifier PTShaderLibrary::getLayerShaderID(MaterialShaderPtr pShader)
+// IDxcBlock interface to static pointer.
+class StaticBlob : public IDxcBlob
 {
-#if 0
-    auto& compiledShader = _compiledShaders[pShader->libraryIndex()];
+public:
+    StaticBlob(const void* data, size_t size) : _data(data), _size(size) {}
+    virtual void* GetBufferPointer(void) override { return const_cast<void*>(_data); }
+    virtual size_t GetBufferSize(void) override { return _size; }
 
-    return getShaderID(
-        Foundation::s2w(compiledShader.entryPoints[EntryPointTypes::kLayerMiss]).c_str());
-#endif
-    return nullptr;
-}
+    // Ref counting interface not needed for static buffer.
+    virtual HRESULT QueryInterface(const IID&, void**) override { return S_OK; }
+    virtual ULONG AddRef(void) override { return 0; }
+    virtual ULONG Release(void) override { return 0; }
 
-DirectXShaderIdentifier PTShaderLibrary::getSharedEntryPointShaderID(const string& entryPoint)
-{
-    // Get the shader ID for entry point.
-    return getShaderID(Foundation::s2w(entryPoint).c_str());
-}
-*/
+private:
+    const void* _data;
+    size_t _size;
+};
+
 void PTShaderLibrary::initialize()
 {
+
+    // Create a static block from the precomplied main entry point DXIL.
+    _pDefaultShaderDXIL.Attach(new StaticBlob(g_sMainEntryPointsDXIL.data(),
+        g_sMainEntryPointsDXIL.size() * sizeof(g_sMainEntryPointsDXIL[0])));
+
+    // Create a string for the default shader options (remove the first line which is added by
+    // minify script)
+    _defaultOptions = CommonShaders::g_sOptions;
+    _defaultOptions.erase(0, _defaultOptions.find("\n") + 1);
+
     // Always use runtime compiled evaluateMaterialForShader.
     // TODO: Use pre-compiled default version when only default shader is used in scene.
     _options.set("RUNTIME_COMPILE_EVALUATE_MATERIAL_FUNCTION", 1);
@@ -611,30 +621,41 @@ void PTShaderLibrary::generateEvaluateMaterialFunction(CompileJob& job)
         job.code += compiledShader.setupFunctionDeclaration + ";\n";
     }
 
-    // Add evaluate function definition and begin switch statement to select shader.
+    // Add evaluate function definition.
     job.code += R""""(
     export Material evaluateMaterialForShader(int shaderIndex, ShadingData shading, int offset, out float3 materialNormal,
         out bool isGeneratedNormal) {
+)"""";
 
+    // If there are multiple shaders to choose from, add a switch statment.
+    if (_compiledShaders.size() > 1)
+    {
+        job.code += R""""(
             switch(shaderIndex) {
 
 )"""";
 
-    // Add condition to switch statement for each shader, that calls its evaluateMaterial function.
-    for (int i = 1; i < _compiledShaders.size(); i++)
-    {
-        auto& compiledShader = _compiledShaders[i];
-        job.code += "\t\tcase " + to_string(i) + ":\n";
-        job.code += "\t\t\treturn  evaluateMaterial_" + compiledShader.id +
-            "(shading, offset, "
-            "materialNormal, "
-            "isGeneratedNormal);\n";
-    }
+        // Add condition to switch statement for each shader, that calls its evaluateMaterial
+        // function.
+        for (int i = 1; i < _compiledShaders.size(); i++)
+        {
+            auto& compiledShader = _compiledShaders[i];
+            job.code += "\t\tcase " + to_string(i) + ":\n";
+            job.code += "\t\t\treturn  evaluateMaterial_" + compiledShader.id +
+                "(shading, offset, "
+                "materialNormal, "
+                "isGeneratedNormal);\n";
+        }
 
-    // Complete switch statement and call default evaluate material function in default case.
-    job.code += R""""(
+        // Complete switch statement and call default evaluate material function in default case.
+        job.code += R""""(
                 default:
             }
+)"""";
+    }
+
+    // Return default shader.
+    job.code += R""""(
             return  evaluateDefaultMaterial(shading, offset, materialNormal,
                 isGeneratedNormal);
     }
@@ -775,6 +796,17 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
 
     // Transpilation and DXC Compile function is called from parallel threads.
     auto compileFunc = [this, &evaluateMaterialBinary](CompileJob& job) {
+        // If this is the default shader and no shader options have been changed, use the
+        // precompiled version.
+        if (job.index == kDefaultShaderIndex && _defaultOptions.compare(_optionsSource) == 0)
+        {
+            // Set the compiled shader's binary to the pre-compiled DXIL blob.
+            _compiledShaders[job.index].binary = _pDefaultShaderDXIL;
+
+            // Return without running the compiler.
+            return;
+        }
+
 #if AU_DEV_DUMP_INDIVIDUAL_COMPILATION_TIME
         float jobStart = _timer.elapsed();
 #endif
@@ -924,6 +956,9 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
     }
     float linkEnd = _timer.elapsed();
 
+    size_t libraryHash = Foundation::hashInts((uint32_t*)linkedShader->GetBufferPointer(),
+        linkedShader->GetBufferSize() / sizeof(uint32_t));
+
     // Create bytecode from compiled blob.
     D3D12_SHADER_BYTECODE shaderByteCode =
         CD3DX12_SHADER_BYTECODE(linkedShader->GetBufferPointer(), linkedShader->GetBufferSize());
@@ -964,16 +999,19 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
         shaderIdx, __uuidof(ID3D12LibraryReflection), (void**)&_pShaderLibraryReflection);
 
     // Create a shader configuration subobject, which indicates the maximum sizes of the ray payload
-    // (as defined in the shaders; see "RadianceRayPayload" and "LayerData") and intersection
-    // attributes (UV barycentric coordinates).
-    const unsigned int kRayPayloadSize   = 46 * sizeof(float);
+    // (as defined in the RayTrace.slang; in the ray payload structs "InstanceRayPayload" and
+    // "ShadowRayPayload") and intersection attributes (UV barycentric coordinates).
+    // If the structures used in the shader exceed these values the result will be a rendering
+    // failure.
+    const unsigned int kRayPayloadSize   = 30 * sizeof(float);
     const unsigned int kIntersectionSize = 2 * sizeof(float);
     auto* pShaderConfigSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
     pShaderConfigSubobject->Config(kRayPayloadSize, kIntersectionSize);
 
     // NOTE: The shader configuration is assumed to apply to all shaders, so it is *not* associated
-    // with specific shaders (which would use CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT).
+    // kydwith specific shaders (which would use
+    // CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT).
 
     // Create the global root signature subobject.
     auto* pGlobalRootSignatureSubobject =
@@ -1038,7 +1076,8 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
         static_cast<int>(elapsedMillisec));
     AU_INFO("  - Slang session creation took %d ms", static_cast<int>(scEnd - scStart));
     AU_INFO("  - Transpilation and DXC compile took %d ms", static_cast<int>(compEnd - compStart));
-    AU_INFO("  - DXC link took %d ms", static_cast<int>(linkEnd - linkStart));
+    AU_INFO(
+        "  - DXC link took %d ms (Hash:%llx)", static_cast<int>(linkEnd - linkStart), libraryHash);
     AU_INFO("  - Pipeline creation took %d ms", static_cast<int>(plEnd - plStart));
 }
 

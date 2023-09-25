@@ -193,7 +193,8 @@ float3 shadeEnvironmentLightMIS(Environment environment, RaytracingAccelerationS
     return result;
 }
 
-// Compute shading with indirect light, from a random direction.
+// Sample the BSDF to generate the next indirect ray in the path, and set output parameters for the next ray's origin, direction, and color.
+// Return the ID of the lobe that was sampled.
 int setupIndirectLightRay(Material material, ShadingData shading, float3 V, int depth,
     int maxDepth, inout Random rng, out float3 indirectRayDirec, out float3 indirectRayOrigin, out float3 indirectColorOut)
 {
@@ -213,15 +214,20 @@ int setupIndirectLightRay(Material material, ShadingData shading, float3 V, int 
         return NO_SECONDARY_RAY;
     }
 
-    // Trace a radiance ray with the sampled light direction, i.e. the next step in tracing the
-    // current path. If the view (ray) direction is on the back side of the geometry, or the ray is
-    // from a transmission lobe, use the geometric position to avoid self-intersection. Also, if the
-    // ray is from a transmission lobe, use the background miss shader so that the background is
-    // sampled.
+    // Compute the indirect ray, i.e. the next step in tracing the current path. 
+    
+    // If the view (ray) direction is on the back side of the geometry, or the ray is
+    // from a transmission lobe, use the geometric position to avoid self-intersection. 
     bool isTransmission = lobeID == TRANSMISSION_LOBE;
     indirectRayOrigin =
         (dot(V, shading.normal) < 0.0f || isTransmission) ? shading.geomPosition : shading.position;
+    
+    // Set the direction from the sampled light direction.
     indirectRayDirec = L;
+    
+    // Set the color from the sampled color scaled by the inverse of the PDF.
     indirectColorOut = bsdfAndCosine / pdf;
+    
+    // Return lobe ID.
     return lobeID;
 }

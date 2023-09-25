@@ -1045,67 +1045,6 @@ void PTScene::updateShaderTables()
             _pShaderLibrary->getShaderID(PTShaderLibrary::kShadowMissEntryPointName),
             SHADER_ID_SIZE);
         pShaderTableMappedData += _missShaderRecordStride;
-#if 0
-        // Fill in layer material miss shaders..
-        for (int i = 0; i < _lstLayerData.size(); i++)
-        {
-            // Get the layer data and the parent instance data for this layer.
-            auto& layerData          = _lstLayerData[i];
-            auto& parentInstanceData = _lstInstanceData[layerData.index];
-            PTMaterial& layerMtl     = activeMaterialResources[layerData.instanceData.mtlIndex];
-
-            // Get the material shader
-            auto pShader = layerMtl.shader();
-
-            // Create the geometry by merging the layer geometry with parent instance's geometry.
-            PTGeometry::GeometryBuffers geometryLayerBuffers =
-                parentInstanceData.pGeometry->buffers();
-            if (layerData.instanceData.pGeometry)
-            {
-                // Ensure the layer geometry matches parent geometry
-                if (layerData.instanceData.pGeometry->vertexCount() !=
-                    parentInstanceData.pGeometry->vertexCount())
-                {
-                    // If vertex counts don't match raise an error and then fail.
-                    AU_ERROR(
-                        "Layer geometry %s vertex count (%d) does not match base geometry %s "
-                        "vertex count "
-                        "(%d) for instance at index %d",
-                        layerData.instanceData.pGeometry->name().c_str(),
-                        layerData.instanceData.pGeometry->vertexCount(),
-                        parentInstanceData.pGeometry->name().c_str(),
-                        parentInstanceData.pGeometry->vertexCount(), layerData.index);
-
-                    // This will be caught by the try statement around render().
-                    AU_FAIL("Invalid geometry");
-                }
-
-                // Set any UVs from the layer geometry.
-                if (layerData.instanceData.pGeometry->buffers().TexCoordBuffer)
-                {
-                    geometryLayerBuffers.TexCoordBuffer =
-                        layerData.instanceData.pGeometry->buffers().TexCoordBuffer;
-                }
-
-                // Set any normals from the layer geometry.
-                if (layerData.instanceData.pGeometry->buffers().NormalBuffer)
-                    geometryLayerBuffers.NormalBuffer =
-                        layerData.instanceData.pGeometry->buffers().NormalBuffer;
-
-                // Set any positions from the layer geometry.
-                if (layerData.instanceData.pGeometry->buffers().PositionBuffer)
-                    geometryLayerBuffers.PositionBuffer =
-                        layerData.instanceData.pGeometry->buffers().PositionBuffer;
-            }
-            // Create hit group (as layer miss shader has same layout as luminance closest hit
-            // shader)
-            HitGroupShaderRecord layerRecord(_pShaderLibrary->getLayerShaderID(pShader),
-                geometryLayerBuffers, _materialOffsetLookup[&layerMtl], layerMtl.isOpaque(),
-                nullptr, 0);
-            layerRecord.copyTo(pShaderTableMappedData);
-            pShaderTableMappedData += _missShaderRecordStride;
-        }
-#endif
 
         // Ensure we didn't over run the shader table buffer.
         AU_ASSERT(pShaderTableMappedData == pEndOfShaderTableMappedData, "Shader table overrun");

@@ -227,6 +227,8 @@ private:
 
     Foundation::CPUTimer _timer;
     int _globalTextureCount = 0;
+    ComPtr<IDxcBlob> _pDefaultShaderDXIL;
+    string _defaultOptions;
 };
 
 END_AURORA

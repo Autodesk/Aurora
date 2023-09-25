@@ -35,7 +35,8 @@
 
 // Ray types (in addition to the lobe IDs defined above.)
 #define NO_SECONDARY_RAY    -1
-#define PRIMARY_RAY         -2
+#define CAMERA_RAY         -2
+#define GROUND_PLANE_REFLECTION_RAY         -3
 
 // =================================================================================================
 // Vector Conventions
