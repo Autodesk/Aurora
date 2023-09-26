@@ -1,8 +1,7 @@
-void setupMaterial_55c0082a3bf2c52a(
-	Material_55c0082a3bf2c52a material,
+void setupMaterial_54a1fee27fdeec69(
+	Material_54a1fee27fdeec69 material,
 	sampler2D basecolor_bitmap_image_parameter,
 	sampler2D opacity_bitmap_image_parameter,
-	int distance_unit,
 	out float base,
 	out vec3 base_color,
 	out float metalness,
@@ -37,112 +36,88 @@ sampler2D basecolor_bitmap_file1//};
 	nodeTmp_basecolor_bitmap_file = basecolor_bitmap_file1;// Output connection
 	//Temp input variables for basecolor_bitmap_realworld_offset_unit 
 	vec2 nodeOutTmp_basecolor_bitmap_realworld_offset_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_basecolor_bitmap_realworld_offset_unit_in; //Temp input variable for in 
-	int nodeTmp_basecolor_bitmap_realworld_offset_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_basecolor_bitmap_realworld_offset_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_basecolor_bitmap_realworld_offset_unit_in1; //Temp input variable for in1 
+	float nodeTmp_basecolor_bitmap_realworld_offset_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/basecolor_bitmap/realworld_offset
 	//{
-vec2 basecolor_bitmap_realworld_offset_unit_in1//};
+vec2 basecolor_bitmap_realworld_offset_unit_in11//};
  = material.basecolor_bitmap_realworld_offset;
-	nodeTmp_basecolor_bitmap_realworld_offset_unit_in = basecolor_bitmap_realworld_offset_unit_in1;// Output connection
+	nodeTmp_basecolor_bitmap_realworld_offset_unit_in1 = basecolor_bitmap_realworld_offset_unit_in11;// Output connection
 	// Graph input 
 	//{
-int basecolor_bitmap_realworld_offset_unit_unit_from1 = 3//};
+float basecolor_bitmap_realworld_offset_unit_in21 = 1//};
 ;
-	nodeTmp_basecolor_bitmap_realworld_offset_unit_unit_from = basecolor_bitmap_realworld_offset_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int basecolor_bitmap_realworld_offset_unit_unit_to//};
- = distance_unit;
-	nodeTmp_basecolor_bitmap_realworld_offset_unit_unit_to = basecolor_bitmap_realworld_offset_unit_unit_to;// Output connection
-	// Graph input function call realworld_offset (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_basecolor_bitmap_realworld_offset_unit_in2 = basecolor_bitmap_realworld_offset_unit_in21;// Output connection
+	// Graph input function call realworld_offset (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 basecolor_bitmap_realworld_offset_unit_out = nodeTmp_basecolor_bitmap_realworld_offset_unit_in * mx_distance_unit_ratio(nodeTmp_basecolor_bitmap_realworld_offset_unit_unit_from, nodeTmp_basecolor_bitmap_realworld_offset_unit_unit_to);
+    vec2 basecolor_bitmap_realworld_offset_unit_out = nodeTmp_basecolor_bitmap_realworld_offset_unit_in1 * nodeTmp_basecolor_bitmap_realworld_offset_unit_in2;
 //};
 	nodeOutTmp_basecolor_bitmap_realworld_offset_unit_out = basecolor_bitmap_realworld_offset_unit_out;// Output connection
 	nodeTmp_basecolor_bitmap_realworld_offset = basecolor_bitmap_realworld_offset_unit_out;// Output connection
 }
 	//Temp input variables for basecolor_bitmap_realworld_scale_unit 
 	vec2 nodeOutTmp_basecolor_bitmap_realworld_scale_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_basecolor_bitmap_realworld_scale_unit_in; //Temp input variable for in 
-	int nodeTmp_basecolor_bitmap_realworld_scale_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_basecolor_bitmap_realworld_scale_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_basecolor_bitmap_realworld_scale_unit_in1; //Temp input variable for in1 
+	float nodeTmp_basecolor_bitmap_realworld_scale_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/basecolor_bitmap/realworld_scale
 	//{
-vec2 basecolor_bitmap_realworld_scale_unit_in1//};
+vec2 basecolor_bitmap_realworld_scale_unit_in11//};
  = material.basecolor_bitmap_realworld_scale;
-	nodeTmp_basecolor_bitmap_realworld_scale_unit_in = basecolor_bitmap_realworld_scale_unit_in1;// Output connection
+	nodeTmp_basecolor_bitmap_realworld_scale_unit_in1 = basecolor_bitmap_realworld_scale_unit_in11;// Output connection
 	// Graph input 
 	//{
-int basecolor_bitmap_realworld_scale_unit_unit_from1 = 3//};
+float basecolor_bitmap_realworld_scale_unit_in21 = 1//};
 ;
-	nodeTmp_basecolor_bitmap_realworld_scale_unit_unit_from = basecolor_bitmap_realworld_scale_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int basecolor_bitmap_realworld_scale_unit_unit_to//};
- = distance_unit;
-	nodeTmp_basecolor_bitmap_realworld_scale_unit_unit_to = basecolor_bitmap_realworld_scale_unit_unit_to;// Output connection
-	// Graph input function call realworld_scale (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_basecolor_bitmap_realworld_scale_unit_in2 = basecolor_bitmap_realworld_scale_unit_in21;// Output connection
+	// Graph input function call realworld_scale (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 basecolor_bitmap_realworld_scale_unit_out = nodeTmp_basecolor_bitmap_realworld_scale_unit_in * mx_distance_unit_ratio(nodeTmp_basecolor_bitmap_realworld_scale_unit_unit_from, nodeTmp_basecolor_bitmap_realworld_scale_unit_unit_to);
+    vec2 basecolor_bitmap_realworld_scale_unit_out = nodeTmp_basecolor_bitmap_realworld_scale_unit_in1 * nodeTmp_basecolor_bitmap_realworld_scale_unit_in2;
 //};
 	nodeOutTmp_basecolor_bitmap_realworld_scale_unit_out = basecolor_bitmap_realworld_scale_unit_out;// Output connection
 	nodeTmp_basecolor_bitmap_realworld_scale = basecolor_bitmap_realworld_scale_unit_out;// Output connection
 }
 	//Temp input variables for basecolor_bitmap_uv_offset_unit 
 	vec2 nodeOutTmp_basecolor_bitmap_uv_offset_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_basecolor_bitmap_uv_offset_unit_in; //Temp input variable for in 
-	int nodeTmp_basecolor_bitmap_uv_offset_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_basecolor_bitmap_uv_offset_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_basecolor_bitmap_uv_offset_unit_in1; //Temp input variable for in1 
+	float nodeTmp_basecolor_bitmap_uv_offset_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/basecolor_bitmap/uv_offset
 	//{
-vec2 basecolor_bitmap_uv_offset_unit_in1//};
+vec2 basecolor_bitmap_uv_offset_unit_in11//};
  = material.basecolor_bitmap_uv_offset;
-	nodeTmp_basecolor_bitmap_uv_offset_unit_in = basecolor_bitmap_uv_offset_unit_in1;// Output connection
+	nodeTmp_basecolor_bitmap_uv_offset_unit_in1 = basecolor_bitmap_uv_offset_unit_in11;// Output connection
 	// Graph input 
 	//{
-int basecolor_bitmap_uv_offset_unit_unit_from1 = 3//};
+float basecolor_bitmap_uv_offset_unit_in21 = 1//};
 ;
-	nodeTmp_basecolor_bitmap_uv_offset_unit_unit_from = basecolor_bitmap_uv_offset_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int basecolor_bitmap_uv_offset_unit_unit_to//};
- = distance_unit;
-	nodeTmp_basecolor_bitmap_uv_offset_unit_unit_to = basecolor_bitmap_uv_offset_unit_unit_to;// Output connection
-	// Graph input function call uv_offset (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_basecolor_bitmap_uv_offset_unit_in2 = basecolor_bitmap_uv_offset_unit_in21;// Output connection
+	// Graph input function call uv_offset (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 basecolor_bitmap_uv_offset_unit_out = nodeTmp_basecolor_bitmap_uv_offset_unit_in * mx_distance_unit_ratio(nodeTmp_basecolor_bitmap_uv_offset_unit_unit_from, nodeTmp_basecolor_bitmap_uv_offset_unit_unit_to);
+    vec2 basecolor_bitmap_uv_offset_unit_out = nodeTmp_basecolor_bitmap_uv_offset_unit_in1 * nodeTmp_basecolor_bitmap_uv_offset_unit_in2;
 //};
 	nodeOutTmp_basecolor_bitmap_uv_offset_unit_out = basecolor_bitmap_uv_offset_unit_out;// Output connection
 	nodeTmp_basecolor_bitmap_uv_offset = basecolor_bitmap_uv_offset_unit_out;// Output connection
 }
 	//Temp input variables for basecolor_bitmap_uv_scale_unit 
 	vec2 nodeOutTmp_basecolor_bitmap_uv_scale_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_basecolor_bitmap_uv_scale_unit_in; //Temp input variable for in 
-	int nodeTmp_basecolor_bitmap_uv_scale_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_basecolor_bitmap_uv_scale_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_basecolor_bitmap_uv_scale_unit_in1; //Temp input variable for in1 
+	float nodeTmp_basecolor_bitmap_uv_scale_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/basecolor_bitmap/uv_scale
 	//{
-vec2 basecolor_bitmap_uv_scale_unit_in1//};
+vec2 basecolor_bitmap_uv_scale_unit_in11//};
  = material.basecolor_bitmap_uv_scale;
-	nodeTmp_basecolor_bitmap_uv_scale_unit_in = basecolor_bitmap_uv_scale_unit_in1;// Output connection
+	nodeTmp_basecolor_bitmap_uv_scale_unit_in1 = basecolor_bitmap_uv_scale_unit_in11;// Output connection
 	// Graph input 
 	//{
-int basecolor_bitmap_uv_scale_unit_unit_from1 = 3//};
+float basecolor_bitmap_uv_scale_unit_in21 = 1//};
 ;
-	nodeTmp_basecolor_bitmap_uv_scale_unit_unit_from = basecolor_bitmap_uv_scale_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int basecolor_bitmap_uv_scale_unit_unit_to//};
- = distance_unit;
-	nodeTmp_basecolor_bitmap_uv_scale_unit_unit_to = basecolor_bitmap_uv_scale_unit_unit_to;// Output connection
-	// Graph input function call uv_scale (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_basecolor_bitmap_uv_scale_unit_in2 = basecolor_bitmap_uv_scale_unit_in21;// Output connection
+	// Graph input function call uv_scale (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 basecolor_bitmap_uv_scale_unit_out = nodeTmp_basecolor_bitmap_uv_scale_unit_in * mx_distance_unit_ratio(nodeTmp_basecolor_bitmap_uv_scale_unit_unit_from, nodeTmp_basecolor_bitmap_uv_scale_unit_unit_to);
+    vec2 basecolor_bitmap_uv_scale_unit_out = nodeTmp_basecolor_bitmap_uv_scale_unit_in1 * nodeTmp_basecolor_bitmap_uv_scale_unit_in2;
 //};
 	nodeOutTmp_basecolor_bitmap_uv_scale_unit_out = basecolor_bitmap_uv_scale_unit_out;// Output connection
 	nodeTmp_basecolor_bitmap_uv_scale = basecolor_bitmap_uv_scale_unit_out;// Output connection
@@ -243,112 +218,88 @@ sampler2D opacity_bitmap_file1//};
 	nodeTmp_opacity_bitmap_file = opacity_bitmap_file1;// Output connection
 	//Temp input variables for opacity_bitmap_realworld_offset_unit 
 	vec2 nodeOutTmp_opacity_bitmap_realworld_offset_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_opacity_bitmap_realworld_offset_unit_in; //Temp input variable for in 
-	int nodeTmp_opacity_bitmap_realworld_offset_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_opacity_bitmap_realworld_offset_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_opacity_bitmap_realworld_offset_unit_in1; //Temp input variable for in1 
+	float nodeTmp_opacity_bitmap_realworld_offset_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/opacity_bitmap/realworld_offset
 	//{
-vec2 opacity_bitmap_realworld_offset_unit_in1//};
+vec2 opacity_bitmap_realworld_offset_unit_in11//};
  = material.opacity_bitmap_realworld_offset;
-	nodeTmp_opacity_bitmap_realworld_offset_unit_in = opacity_bitmap_realworld_offset_unit_in1;// Output connection
+	nodeTmp_opacity_bitmap_realworld_offset_unit_in1 = opacity_bitmap_realworld_offset_unit_in11;// Output connection
 	// Graph input 
 	//{
-int opacity_bitmap_realworld_offset_unit_unit_from1 = 3//};
+float opacity_bitmap_realworld_offset_unit_in21 = 1//};
 ;
-	nodeTmp_opacity_bitmap_realworld_offset_unit_unit_from = opacity_bitmap_realworld_offset_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int opacity_bitmap_realworld_offset_unit_unit_to//};
- = distance_unit;
-	nodeTmp_opacity_bitmap_realworld_offset_unit_unit_to = opacity_bitmap_realworld_offset_unit_unit_to;// Output connection
-	// Graph input function call realworld_offset (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_opacity_bitmap_realworld_offset_unit_in2 = opacity_bitmap_realworld_offset_unit_in21;// Output connection
+	// Graph input function call realworld_offset (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 opacity_bitmap_realworld_offset_unit_out = nodeTmp_opacity_bitmap_realworld_offset_unit_in * mx_distance_unit_ratio(nodeTmp_opacity_bitmap_realworld_offset_unit_unit_from, nodeTmp_opacity_bitmap_realworld_offset_unit_unit_to);
+    vec2 opacity_bitmap_realworld_offset_unit_out = nodeTmp_opacity_bitmap_realworld_offset_unit_in1 * nodeTmp_opacity_bitmap_realworld_offset_unit_in2;
 //};
 	nodeOutTmp_opacity_bitmap_realworld_offset_unit_out = opacity_bitmap_realworld_offset_unit_out;// Output connection
 	nodeTmp_opacity_bitmap_realworld_offset = opacity_bitmap_realworld_offset_unit_out;// Output connection
 }
 	//Temp input variables for opacity_bitmap_realworld_scale_unit 
 	vec2 nodeOutTmp_opacity_bitmap_realworld_scale_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_opacity_bitmap_realworld_scale_unit_in; //Temp input variable for in 
-	int nodeTmp_opacity_bitmap_realworld_scale_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_opacity_bitmap_realworld_scale_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_opacity_bitmap_realworld_scale_unit_in1; //Temp input variable for in1 
+	float nodeTmp_opacity_bitmap_realworld_scale_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/opacity_bitmap/realworld_scale
 	//{
-vec2 opacity_bitmap_realworld_scale_unit_in1//};
+vec2 opacity_bitmap_realworld_scale_unit_in11//};
  = material.opacity_bitmap_realworld_scale;
-	nodeTmp_opacity_bitmap_realworld_scale_unit_in = opacity_bitmap_realworld_scale_unit_in1;// Output connection
+	nodeTmp_opacity_bitmap_realworld_scale_unit_in1 = opacity_bitmap_realworld_scale_unit_in11;// Output connection
 	// Graph input 
 	//{
-int opacity_bitmap_realworld_scale_unit_unit_from1 = 3//};
+float opacity_bitmap_realworld_scale_unit_in21 = 1//};
 ;
-	nodeTmp_opacity_bitmap_realworld_scale_unit_unit_from = opacity_bitmap_realworld_scale_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int opacity_bitmap_realworld_scale_unit_unit_to//};
- = distance_unit;
-	nodeTmp_opacity_bitmap_realworld_scale_unit_unit_to = opacity_bitmap_realworld_scale_unit_unit_to;// Output connection
-	// Graph input function call realworld_scale (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_opacity_bitmap_realworld_scale_unit_in2 = opacity_bitmap_realworld_scale_unit_in21;// Output connection
+	// Graph input function call realworld_scale (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 opacity_bitmap_realworld_scale_unit_out = nodeTmp_opacity_bitmap_realworld_scale_unit_in * mx_distance_unit_ratio(nodeTmp_opacity_bitmap_realworld_scale_unit_unit_from, nodeTmp_opacity_bitmap_realworld_scale_unit_unit_to);
+    vec2 opacity_bitmap_realworld_scale_unit_out = nodeTmp_opacity_bitmap_realworld_scale_unit_in1 * nodeTmp_opacity_bitmap_realworld_scale_unit_in2;
 //};
 	nodeOutTmp_opacity_bitmap_realworld_scale_unit_out = opacity_bitmap_realworld_scale_unit_out;// Output connection
 	nodeTmp_opacity_bitmap_realworld_scale = opacity_bitmap_realworld_scale_unit_out;// Output connection
 }
 	//Temp input variables for opacity_bitmap_uv_offset_unit 
 	vec2 nodeOutTmp_opacity_bitmap_uv_offset_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_opacity_bitmap_uv_offset_unit_in; //Temp input variable for in 
-	int nodeTmp_opacity_bitmap_uv_offset_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_opacity_bitmap_uv_offset_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_opacity_bitmap_uv_offset_unit_in1; //Temp input variable for in1 
+	float nodeTmp_opacity_bitmap_uv_offset_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/opacity_bitmap/uv_offset
 	//{
-vec2 opacity_bitmap_uv_offset_unit_in1//};
+vec2 opacity_bitmap_uv_offset_unit_in11//};
  = material.opacity_bitmap_uv_offset;
-	nodeTmp_opacity_bitmap_uv_offset_unit_in = opacity_bitmap_uv_offset_unit_in1;// Output connection
+	nodeTmp_opacity_bitmap_uv_offset_unit_in1 = opacity_bitmap_uv_offset_unit_in11;// Output connection
 	// Graph input 
 	//{
-int opacity_bitmap_uv_offset_unit_unit_from1 = 3//};
+float opacity_bitmap_uv_offset_unit_in21 = 1//};
 ;
-	nodeTmp_opacity_bitmap_uv_offset_unit_unit_from = opacity_bitmap_uv_offset_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int opacity_bitmap_uv_offset_unit_unit_to//};
- = distance_unit;
-	nodeTmp_opacity_bitmap_uv_offset_unit_unit_to = opacity_bitmap_uv_offset_unit_unit_to;// Output connection
-	// Graph input function call uv_offset (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_opacity_bitmap_uv_offset_unit_in2 = opacity_bitmap_uv_offset_unit_in21;// Output connection
+	// Graph input function call uv_offset (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 opacity_bitmap_uv_offset_unit_out = nodeTmp_opacity_bitmap_uv_offset_unit_in * mx_distance_unit_ratio(nodeTmp_opacity_bitmap_uv_offset_unit_unit_from, nodeTmp_opacity_bitmap_uv_offset_unit_unit_to);
+    vec2 opacity_bitmap_uv_offset_unit_out = nodeTmp_opacity_bitmap_uv_offset_unit_in1 * nodeTmp_opacity_bitmap_uv_offset_unit_in2;
 //};
 	nodeOutTmp_opacity_bitmap_uv_offset_unit_out = opacity_bitmap_uv_offset_unit_out;// Output connection
 	nodeTmp_opacity_bitmap_uv_offset = opacity_bitmap_uv_offset_unit_out;// Output connection
 }
 	//Temp input variables for opacity_bitmap_uv_scale_unit 
 	vec2 nodeOutTmp_opacity_bitmap_uv_scale_unit_out; //Temp output variable for out 
-	vec2 nodeTmp_opacity_bitmap_uv_scale_unit_in; //Temp input variable for in 
-	int nodeTmp_opacity_bitmap_uv_scale_unit_unit_from; //Temp input variable for unit_from 
-	int nodeTmp_opacity_bitmap_uv_scale_unit_unit_to; //Temp input variable for unit_to 
+	vec2 nodeTmp_opacity_bitmap_uv_scale_unit_in1; //Temp input variable for in1 
+	float nodeTmp_opacity_bitmap_uv_scale_unit_in2; //Temp input variable for in2 
 	// Graph input TestMaskWithChromeKeyDecal_nodegraph/opacity_bitmap/uv_scale
 	//{
-vec2 opacity_bitmap_uv_scale_unit_in1//};
+vec2 opacity_bitmap_uv_scale_unit_in11//};
  = material.opacity_bitmap_uv_scale;
-	nodeTmp_opacity_bitmap_uv_scale_unit_in = opacity_bitmap_uv_scale_unit_in1;// Output connection
+	nodeTmp_opacity_bitmap_uv_scale_unit_in1 = opacity_bitmap_uv_scale_unit_in11;// Output connection
 	// Graph input 
 	//{
-int opacity_bitmap_uv_scale_unit_unit_from1 = 3//};
+float opacity_bitmap_uv_scale_unit_in21 = 1//};
 ;
-	nodeTmp_opacity_bitmap_uv_scale_unit_unit_from = opacity_bitmap_uv_scale_unit_unit_from1;// Output connection
-	// Graph input 
-	//{
-int opacity_bitmap_uv_scale_unit_unit_to//};
- = distance_unit;
-	nodeTmp_opacity_bitmap_uv_scale_unit_unit_to = opacity_bitmap_uv_scale_unit_unit_to;// Output connection
-	// Graph input function call uv_scale (See definition IM_distance_unit_vector2_genglsl)
+	nodeTmp_opacity_bitmap_uv_scale_unit_in2 = opacity_bitmap_uv_scale_unit_in21;// Output connection
+	// Graph input function call uv_scale (See definition IM_multiply_vector2FA_genglsl)
 {
 	//{
-    vec2 opacity_bitmap_uv_scale_unit_out = nodeTmp_opacity_bitmap_uv_scale_unit_in * mx_distance_unit_ratio(nodeTmp_opacity_bitmap_uv_scale_unit_unit_from, nodeTmp_opacity_bitmap_uv_scale_unit_unit_to);
+    vec2 opacity_bitmap_uv_scale_unit_out = nodeTmp_opacity_bitmap_uv_scale_unit_in1 * nodeTmp_opacity_bitmap_uv_scale_unit_in2;
 //};
 	nodeOutTmp_opacity_bitmap_uv_scale_unit_out = opacity_bitmap_uv_scale_unit_out;// Output connection
 	nodeTmp_opacity_bitmap_uv_scale = opacity_bitmap_uv_scale_unit_out;// Output connection

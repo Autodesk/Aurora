@@ -13,7 +13,7 @@
 #include <MaterialXCore/Generated.h>
 
 // Forward declare MaterialX types.
-namespace MaterialX_v1_38_7
+namespace MaterialX_v1_38_8
 {
 class Document;
 class FileSearchPath;
@@ -26,7 +26,7 @@ class UnitConverterRegistry;
 class UnitSystem;
 class ShaderNode;
 class TypeDesc;
-} // namespace MaterialX_v1_38_7
+} // namespace MaterialX_v1_38_8
 
 #include "Properties.h"
 

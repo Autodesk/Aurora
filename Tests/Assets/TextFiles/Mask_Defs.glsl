@@ -15,27 +15,14 @@
     
     void mx_image_color3(sampler2D tex_sampler, int layer, vec3 defaultval, vec2 texcoord, int uaddressmode, int vaddressmode, int filtertype, int framerange, int frameoffset, int frameendaction, vec2 uv_scale, vec2 uv_offset, out vec3 result)
     {
-        if (textureSize(tex_sampler, 0).x > 1)
-        {
-            vec2 uv = mx_transform_uv(texcoord, uv_scale, uv_offset);
-            result = texture(tex_sampler, uv).rgb;
-        }
-        else
-        {
-            result = defaultval;
-        }
+        vec2 uv = mx_transform_uv(texcoord, uv_scale, uv_offset);
+        result = texture(tex_sampler, uv).rgb;
     }
 
 //};
 
-// Definition for implementation IM_distance_unit_vector2_genglsl
+// Definition for implementation IM_multiply_vector2FA_genglsl
 //{
-    float mx_distance_unit_ratio(int unit_from, int unit_to)
-    {
-        const float u_distance_unit_scales[10] = float[10](0.000000001000000, 0.000000999999997, 0.001000000047497, 0.009999999776483, 0.025399999693036, 0.304800003767014, 0.914399981498718, 1.000000000000000, 1000.000000000000000, 1609.343994140625000);
-        return (u_distance_unit_scales[unit_from] / u_distance_unit_scales[unit_to]);
-    }
-
 //};
 
 // Definition for implementation adsk:NG_adsk_bitmap_color3

@@ -1,4 +1,4 @@
-struct Material_55c0082a3bf2c52a {
+struct Material_54a1fee27fdeec69 {
 	float base;
 	float metalness;
 	float specular;

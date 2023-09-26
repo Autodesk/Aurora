@@ -752,7 +752,7 @@ bool BSDFCodeGenerator::materialXValueToAuroraPropertyValue(
         *pValueOut     = valData;
         return true;
     }
-    AU_FAIL("Unrecognized MateriaLX value type:%s", glslType.c_str());
+    AU_FAIL("Unrecognized MaterialX value type:%s", glslType.c_str());
     return false;
 }
 
@@ -1014,7 +1014,11 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // Find renderable nodes.
     vector<MaterialX::TypedElementPtr> elements;
     unordered_set<MaterialX::ElementPtr> processedOutputs;
+    //TODO: This was deprecated in between MaterialX 1.38.7 and 1.38.8.  Work out the reasons for this and move to new API.
+#pragma warning(push)
+#pragma warning(disable : 4996)
     MaterialX::findRenderableMaterialNodes(mtlxDocument, elements, false, processedOutputs);
+#pragma warning(pop)
 
     // Return false if no renderable nodes.
     // TODO: Better error handling.

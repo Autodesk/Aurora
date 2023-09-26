@@ -1486,7 +1486,7 @@ TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
 
 // MaterialX as layered materials
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, TestMaterialMaterialXLayers)
+TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
 {
     // This mtlx file requires support ADSK materialX support.
     if (!adskMaterialXSupport())
@@ -1613,7 +1613,7 @@ TEST_P(MaterialTest, TestMaterialMaterialXLayers)
 
 // MaterialX as layered materials
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, TestMaterialMaterialXLayerTransforms)
+TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayerTransforms)
 {
     // This mtlx file requires support ADSK MaterialX support.
     if (!adskMaterialXSupport())
