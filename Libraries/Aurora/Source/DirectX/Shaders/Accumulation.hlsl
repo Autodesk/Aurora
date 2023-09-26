@@ -43,11 +43,21 @@ struct Accumulation
 ConstantBuffer<Accumulation> gSettings : register(b0);
 
 // A compute shader that accumulates path tracing results, optionally with denoising.
+// NOTE: The indicated thread group dimensions provide good occupancy for the current code, and
+// must match the values at the Dispatch() call.
 [RootSignature(ROOT_SIGNATURE)]
-[numthreads(1, 1, 1)]
+[numthreads(16, 8, 1)]
 void Accumulation(uint3 threadID : SV_DispatchThreadID)
 {
-    uint sampleIndex = gSettings.sampleIndex;
+    // Skip any shader invocation where the thread ID is outside the screen dimensions, as the
+    // shader will be invoked with more threads than pixels when the dimension are not evenly
+    // divided by the thread group dimensions.
+    uint2 screenDims;
+    gAccumulation.GetDimensions(screenDims.x, screenDims.y);
+    if (any(threadID.xy >= screenDims))
+    {
+        return;
+    }
 
     // Get the screen coordinates (2D) from the thread ID, and the color / alpha from the result of
     // the most recent sample. Treat the result as the "extra" shading value, optionally used below.
@@ -76,6 +86,7 @@ void Accumulation(uint3 threadID : SV_DispatchThreadID)
 
     // If the sample index is greater than zero, blend the new result color with the previous
     // accumulation color.
+    uint sampleIndex = gSettings.sampleIndex;
     if (sampleIndex > 0)
     {
         // Get the previous result. If it has an infinity component, then it represents an error
