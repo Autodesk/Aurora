@@ -1258,14 +1258,19 @@ void PTRenderer::submitAccumulation(uint32_t sampleIndex)
     pCommandList->SetPipelineState(_pAccumulationPipelineState.Get());
 
     // Set the root signature arguments for accumulation: the descriptor table and the accumulation
-    // settings. The descriptor table must start with the accumulation texture. Then dispatch the
-    // accumulation shader, which performs (optional) deferred shading and merges new path tracing
-    // samples with the previous results.
+    // settings. The descriptor table must start with the accumulation texture.
     CD3DX12_GPU_DESCRIPTOR_HANDLE handle(_pDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
         kAccumulationDescriptorOffset, _handleIncrementSize);
     pCommandList->SetComputeRootDescriptorTable(0, handle);
     pCommandList->SetComputeRoot32BitConstants(1, sizeof(Accumulation) / 4, &_accumData, 0);
-    pCommandList->Dispatch(_outputDimensions.x, _outputDimensions.y, 1);
+
+    // Dispatch the accumulation shader, which performs (optional) deferred shading and merges new
+    // path tracing samples with the previous results.
+    // NOTE: The dispatch is performed with thread group dimensions that provide good occupancy for
+    // the current compute shader code. This must match the values in the compute shader.
+    constexpr uvec2 kThreadGroupCount(16, 8);
+    pCommandList->Dispatch((_outputDimensions.x + kThreadGroupCount.x - 1) / kThreadGroupCount.x,
+        (_outputDimensions.y + kThreadGroupCount.y - 1) / kThreadGroupCount.y, 1);
 
     // Submit the command list.
     submitCommandList();
@@ -1291,17 +1296,23 @@ void PTRenderer::submitPostProcessing()
 
     // Set the root signature arguments for post-processing: the descriptor table (at the start of
     // the heap) and the post-processing settings. The descriptor table must start with the final
-    // texture. Then dispatch the post-processing shader, which tone maps (as needed) the
-    // accumulation texture (HDR) to the final texture (usually SDR).
-    // NOTE: Even if the settings mean no post-processing is performed, there is still an implicit
-    // format conversion, from the accumulation texture (UAV) format to the output texture format,
-    // e.g. floating-point to integer.
+    // texture.
     CD3DX12_GPU_DESCRIPTOR_HANDLE handle(_pDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
         kFinalDescriptorOffset, _handleIncrementSize);
     pCommandList->SetComputeRootDescriptorTable(0, handle);
     pCommandList->SetComputeRoot32BitConstants(
         1, sizeof(PostProcessing) / 4, &_postProcessingData, 0);
-    pCommandList->Dispatch(_outputDimensions.x, _outputDimensions.y, 1);
+
+    // Dispatch the post-processing shader, which tone maps(as needed) the accumulation texture
+    // (HDR) to the final texture (usually SDR).
+    // NOTE: This should be done even if the settings mean no post-processing is performed as there
+    // is still an implicit format conversion, from the accumulation texture (UAV) format to the
+    // output texture format, e.g. floating-point to integer.
+    // NOTE: The dispatch is performed with thread group dimensions that provide good occupancy for
+    // the current compute shader code. This must match the values in the compute shader.
+    constexpr uvec2 kThreadGroupCount(16, 8);
+    pCommandList->Dispatch((_outputDimensions.x + kThreadGroupCount.x - 1) / kThreadGroupCount.x,
+        (_outputDimensions.y + kThreadGroupCount.y - 1) / kThreadGroupCount.y, 1);
 
     // Copy the output textures to their associated targets, if any.
     copyTextureToTarget(_pTexFinal.Get(), _pTargetFinal.get());
