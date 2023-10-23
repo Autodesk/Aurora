@@ -49,6 +49,8 @@ struct InstanceRayPayload {
                            // materialX generated code.
     // Offset withing material buffer for instance.
     int instanceBufferOffset;
+    uint3 indices;
+    float2 bary2;
     // Did the ray hit?
     bool hit = false;
     // Distance from ray origin collision occurred.
@@ -76,7 +78,9 @@ ShadingData shadingDataFromInstanceResult(InstanceRayPayload result)
     shading.texCoord = result.texCoord;
     shading.objectNormal = result.objectNormal;
     shading.objectPosition = result.objectPosition;
-
+    shading.barycentrics = computeBarycentrics(result.bary2);
+    shading.indices = result.indices;
+   
     // Get transform matrix from instance buffer.
     shading.objToWorld = instanceTransformMatrix(result.instanceBufferOffset);
 

@@ -87,7 +87,7 @@ TEST_P(ImageTest, TestImageDefault)
 
 // Basic image test.
 // TODO: Re-enable once samplers working.
-TEST_P(ImageTest, DISABLED_TestImageSamplers)
+TEST_P(ImageTest, TestImageSamplers)
 {
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();

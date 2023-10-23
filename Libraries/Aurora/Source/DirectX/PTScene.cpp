@@ -28,6 +28,8 @@
 #include "MaterialX/MaterialGenerator.h"
 #endif
 
+#include <functional>
+
 #define AU_DEV_DUMP_MATERIALX_DOCUMENTS 0
 
 BEGIN_AURORA
@@ -35,18 +37,49 @@ BEGIN_AURORA
 #define kBuiltInMissShaderCount 2 // "built-in" miss shaders: null and shadow
 
 // Maximum number of textures per material from
-#define kMaterialMaxTextures 7
+#define kMaterialMaxTextures 8
 
 // Fixed instance data stride (transform matrix and material buffer offset.)
 #define kInstanceDataStride sizeof(InstanceDataHeader)
 
-// Fix-sized header that is
-// NOTE: Must be exactly 12 32-bit words long to match accessors in GlobalBufferAccessors.slang.
+// Fix-sized header that appears before material constants in gGlobalMaterialConstants buffer.
 struct MaterialHeader
 {
     int shaderIndex;
     int textureIndices[kMaterialMaxTextures];
+    int samplerIndices[kMaterialMaxTextures];
 };
+
+// Fixed size header size.
+// NOTE: Must match value in Material.slang and size of MaterialHeader.
+#define kMaterialHeaderSize 68
+
+bool cmpProperties(const pair<string, PropertyValue>& i, const pair<string, PropertyValue>& j)
+{
+    return (i.first < j.first);
+}
+
+// Compute hash from properties vector.
+size_t hashProperties(const Properties& properties)
+{
+    vector<pair<string, PropertyValue>> propVec;
+    for (auto prop : properties)
+    {
+        propVec.push_back(prop);
+    }
+    sort(propVec.begin(), propVec.end(), cmpProperties);
+    size_t res = hash<size_t> {}(propVec.size());
+    for (auto prop : propVec)
+    {
+        string val     = prop.second.toString();
+        size_t valHash = hash<string> {}(val);
+        Foundation::hashCombine(res, valHash);
+        size_t propHash = hash<string> {}(prop.first);
+        Foundation::hashCombine(res, propHash);
+    }
+
+    return res;
+}
 
 // Fixed size header for instance data in global buffer.
 // Followed by variable size array of layer information.
@@ -63,37 +96,6 @@ struct InstanceDataHeader
     // If non-zero, the information for each layer will be stored after this header in the buffer.
     int materialLayerCount;
 };
-
-PTLayerIndexTable::PTLayerIndexTable(PTRenderer* pRenderer, const vector<int>& indices) :
-    _pRenderer(pRenderer)
-{
-    if (!indices.empty())
-        set(indices);
-}
-
-void PTLayerIndexTable::set(const vector<int>& indices)
-{
-    // Create a constant buffer for the material data if it doesn't already exist.
-    static const size_t BUFFER_SIZE = sizeof(int) * kMaxMaterialLayers;
-    if (!_pConstantBuffer)
-    {
-        _pConstantBuffer = _pRenderer->createBuffer(BUFFER_SIZE);
-    }
-
-    _count = static_cast<int>(indices.size());
-
-    // Copy the indices to the constant buffer.
-    int* pMappedData = nullptr;
-    checkHR(_pConstantBuffer->Map(0, nullptr, (void**)&pMappedData));
-    for (int i = 0; i < kMaxMaterialLayers; i++)
-    {
-        if (i < indices.size())
-            pMappedData[i] = indices[i];
-        else
-            pMappedData[i] = kInvalidOffset;
-    }
-    _pConstantBuffer->Unmap(0, nullptr); // no HRESULT
-}
 
 // A structure that contains the properties for a hit group shader record, laid out for direct
 // copying to a shader table buffer.
@@ -260,6 +262,9 @@ PTScene::PTScene(PTRenderer* pRenderer, uint32_t numRendererDescriptors) : Scene
     // Create arbritary sized instance buffer (will be resized to fit instance constants for scene.)
     _globalInstanceBuffer = _pRenderer->createTransferBuffer(512, "GlobalInstanceBuffer");
 
+    // Create arbritary sized instance buffer (will be resized to fit layer geomtry for scene.)
+    _layerGeometryBuffer = _pRenderer->createTransferBuffer(512, "LayerGeometryBuffer");
+
     // Dusable layer shaders.
     // TODO: Reimplement layer shaders with non-recursive rendering.
     _pShaderLibrary->setOption("ENABLE_LAYERS", false);
@@ -419,16 +424,13 @@ IMaterialPtr PTScene::createMaterialPointer(
                 else
                 {
                     // Set the default image.
-                    pNewMtl->setImage(txtDef.name, pImage);
+                    pNewMtl->setImage(txtDef.name.image, pImage);
                 }
             }
         }
 
-        // If we have an address mode, create a sampler for texture.
-        // Currently only the first two hardcoded textures have samplers, so only do this for first
-        // two textures.
-        // TODO: Move to fully data driven textures and samplers.
-        if (i < 2 && (!txtDef.addressModeU.empty() || !txtDef.addressModeV.empty()))
+        // If we have an address mode, create a sampler for the texture.
+        if (!txtDef.addressModeU.empty() || !txtDef.addressModeV.empty())
         {
             Properties samplerProps;
 
@@ -450,10 +452,23 @@ IMaterialPtr PTScene::createMaterialPointer(
                 samplerProps[Names::SamplerProperties::kAddressModeV] =
                     Names::AddressModes::kMirror;
 
-            // Create a sampler and set in the material.
-            // TODO: Don't assume hardcoded _sampler prefix.
-            auto pSampler = _pRenderer->createSamplerPointer(samplerProps);
-            pNewMtl->setSampler(txtDef.name + "_sampler", pSampler);
+            // Compute hash from sampler properties, and use it to see if sampler already exists in
+            // the cache.
+            size_t propHash = hashProperties(samplerProps);
+            ISamplerPtr pSampler;
+            if (_samplerCache.find(propHash) == _samplerCache.end())
+            {
+                // Create new sampler, and add to cache, if none found.
+                pSampler                = _pRenderer->createSamplerPointer(samplerProps);
+                _samplerCache[propHash] = pSampler;
+            }
+            else
+            {
+                // Use sampler for cache if one exists.
+                pSampler = _samplerCache[propHash];
+            }
+            // Set the sampler on the material.
+            pNewMtl->setSampler(txtDef.name.sampler, pSampler);
         }
     }
 
@@ -568,11 +583,13 @@ void PTScene::update()
     SceneBase::update();
 }
 
-int PTScene::computeMaterialTextureCount()
+void PTScene::computeMaterialTextureCount(int& textureCountOut, int& samplerCountOut)
 {
     // Clear material texture vector and lookup map.
     _activeMaterialTextures.clear();
     _materialTextureIndexLookup.clear();
+    _activeMaterialSamplers.clear();
+    _materialSamplerIndexLookup.clear();
 
     // Create a SRV (descriptor) on the descriptor heap for the default texture (this ensures heap
     // never empty.)
@@ -580,27 +597,44 @@ int PTScene::computeMaterialTextureCount()
     _materialTextureIndexLookup[&defaultImage] = int(_activeMaterialTextures.size());
     _activeMaterialTextures.push_back(&defaultImage);
 
-    // Iterate through all active textures.
+    // Add the default sampler as the first sampler in array.
+    _activeMaterialSamplers.push_back(_pRenderer->defaultSampler().get());
+    _materialSamplerIndexLookup[_pRenderer->defaultSampler().get()] = 0;
+
+    // Iterate through all active materials.
     for (PTMaterial& mtl : _materials.active().resources<PTMaterial>())
     {
-        // Get the textures used by this material.
-        vector<PTImage*> textures;
-        mtl.getTextures(textures);
 
-        // Add the textures to material texture vector and lookup map.
-        for (int i = 0; i < textures.size(); i++)
+        // Iterate through all material's textures.
+        for (int i = 0; i < mtl.textures().count(); i++)
         {
-            if (textures[i] &&
-                _materialTextureIndexLookup.find(textures[i]) == _materialTextureIndexLookup.end())
+            // Add the texture to the active texture array and lookup (If we've not seen this
+            // texture before in this loop.)
+            const auto& txtProp = mtl.textures().get(i);
+            auto pTxt           = static_pointer_cast<PTImage>(txtProp.image);
+            if (pTxt &&
+                _materialTextureIndexLookup.find(pTxt.get()) == _materialTextureIndexLookup.end())
             {
-                _materialTextureIndexLookup[textures[i]] = int(_activeMaterialTextures.size());
-                _activeMaterialTextures.push_back(textures[i]);
+                _materialTextureIndexLookup[pTxt.get()] = int(_activeMaterialTextures.size());
+                _activeMaterialTextures.push_back(pTxt.get());
+            }
+
+            // Add the sampler to the active sampler array and lookup (If we've not seen this
+            // sampler before in this loop.)
+            auto pSampler = static_pointer_cast<PTSampler>(txtProp.sampler);
+            if (pSampler &&
+                _materialSamplerIndexLookup.find(pSampler.get()) ==
+                    _materialSamplerIndexLookup.end())
+            {
+                _materialSamplerIndexLookup[pSampler.get()] = int(_activeMaterialSamplers.size());
+                _activeMaterialSamplers.push_back(pSampler.get());
             }
         }
     }
 
     // Return count.
-    return int(_activeMaterialTextures.size());
+    textureCountOut = int(_activeMaterialTextures.size());
+    samplerCountOut = int(_activeMaterialSamplers.size());
 }
 
 void PTScene::updateResources()
@@ -701,7 +735,8 @@ void PTScene::updateResources()
         _materialOffsetLookup.clear();
 
         // Rebuild material texture lookup map.
-        computeMaterialTextureCount();
+        int globalTextureCount, globalSamplerCount;
+        computeMaterialTextureCount(globalTextureCount, globalSamplerCount);
 
         // Starting at beginning of buffer, work out where each material is global byte address
         // buffer.
@@ -718,6 +753,8 @@ void PTScene::updateResources()
 
             // Increment by size of fixed-length header.
             globalMaterialBufferSize += sizeof(MaterialHeader);
+
+            AU_ASSERT(sizeof(MaterialHeader) == kMaterialHeaderSize, "Header size mismatch");
 
             // Increment by size of this material's properties.
             globalMaterialBufferSize += mtl.uniformBuffer().size();
@@ -746,22 +783,32 @@ void PTScene::updateResources()
 
             // Add the material texture indices (fill in unused values as invalid)
             // TODO: No need for this to be fixed length.
-            vector<PTImage*> textures;
-            mtl.getTextures(textures);
-            for (int j = 0; j < textures.size() && j < kMaterialMaxTextures; j++)
+            for (int j = 0; j < mtl.textures().count() && j < kMaterialMaxTextures; j++)
             {
-                if (!textures[j])
+                if (!mtl.textures().get(j).image)
                 {
                     pHdr->textureIndices[j] = kInvalidOffset;
                 }
                 else
                 {
-                    pHdr->textureIndices[j] = _materialTextureIndexLookup[textures[j]];
+                    pHdr->textureIndices[j] =
+                        _materialTextureIndexLookup[mtl.textures().get(j).image.get()];
+                }
+
+                if (!mtl.textures().get(j).sampler)
+                {
+                    pHdr->samplerIndices[j] = 0;
+                }
+                else
+                {
+                    pHdr->samplerIndices[j] =
+                        _materialSamplerIndexLookup[mtl.textures().get(j).sampler.get()];
                 }
             }
-            for (int j = int(textures.size()); j < kMaterialMaxTextures; j++)
+            for (int j = int(mtl.textures().count()); j < kMaterialMaxTextures; j++)
             {
                 pHdr->textureIndices[j] = kInvalidOffset;
+                pHdr->samplerIndices[j] = 0;
             }
 
             // Move pointer past header.
@@ -854,10 +901,13 @@ void PTScene::updateAccelerationStructure()
     // TODO: If it was possible access the TLAS instance matrix from the ray generation shader we
     // could remove this copy of the transform data, and share hit groups between instances.
     _instanceOffsetLookup.clear();
+    _layerGeometryOffsetLookup.clear();
+    _layerGeometry.clear();
 
     // Iterate through all the active instances in the scene to compute offset within instance
     // buffer.
-    int instanceBufferOffset = 0;
+    int instanceBufferOffset     = 0;
+    int layerGeomtryBufferOffset = 0;
     for (PTInstance& instance : _instances.active().resources<PTInstance>())
     {
         // Set the offset in the lookup table.
@@ -868,10 +918,25 @@ void PTScene::updateAccelerationStructure()
 
         // Move offset past layer information.
         instanceBufferOffset += int(instance.materialLayers().size() * sizeof(int) * 2);
+
+        for (int j = 0; j < instance.materialLayers().size(); j++)
+        {
+            PTGeometryPtr pGeom = instance.materialLayers()[j].second;
+            auto iter           = _layerGeometryOffsetLookup.find(pGeom.get());
+            if (iter == _layerGeometryOffsetLookup.end())
+            {
+                _layerGeometry.push_back(pGeom.get());
+                AU_ASSERT(instance.dxGeometry()->vertexCount() == pGeom->vertexCount(),
+                    "Layer geometry vertex count does not match base geometry vertex count.");
+                _layerGeometryOffsetLookup[pGeom.get()] = layerGeomtryBufferOffset;
+                layerGeomtryBufferOffset += pGeom->vertexCount() * sizeof(float) * 2;
+            }
+        }
     }
 
     // Set the required instance buffer size.
-    _instanceBufferSize = instanceBufferOffset;
+    _instanceBufferSize      = instanceBufferOffset;
+    _layerGeometryBufferSize = layerGeomtryBufferOffset;
 
     // Build the top-level acceleration structure (TLAS).
     _pAccelStructure = buildTLAS();
@@ -905,7 +970,7 @@ void PTScene::updateDescriptorHeap()
         // TODO: Only the default sampler currentl support, should add full sampler support to
         // non-recursive renderer.
         D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = {};
-        samplerHeapDesc.NumDescriptors             = 1;
+        samplerHeapDesc.NumDescriptors             = int(_activeMaterialSamplers.size());
         samplerHeapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
         samplerHeapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         checkHR(pDevice->CreateDescriptorHeap(
@@ -946,9 +1011,13 @@ void PTScene::updateDescriptorHeap()
     UINT samplerHandleIncrement = _pRenderer->dxDevice()->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
-    // Add descriptor for default sampler.
-    PTSampler::createDescriptor(*_pRenderer, _pRenderer->defaultSampler().get(), samplerHandle);
-    handle.Offset(samplerHandleIncrement);
+    // Create the descriptors for the material samplers.
+    for (int i = 0; i < _activeMaterialSamplers.size(); i++)
+    {
+        // Add descriptor for default sampler.
+        PTSampler::createDescriptor(*_pRenderer, _activeMaterialSamplers[i], samplerHandle);
+        samplerHandle.Offset(samplerHandleIncrement);
+    }
 
     // Clear the dirty flags.
     _isEnvironmentDescriptorsDirty = false;
@@ -978,7 +1047,7 @@ void PTScene::updateShaderTables()
         int offset                  = 0;
         for (PTInstance& instance : _instances.active().resources<PTInstance>())
         {
-            // Validate offset witin buffer matches offset in instance lookup table.
+            // Validate offset within buffer matches offset in instance lookup table.
             AU_ASSERT(offset == _instanceOffsetLookup[&instance], "Offset incorrect");
 
             // Get pointer to instance data in buffer.
@@ -1003,15 +1072,15 @@ void PTScene::updateShaderTables()
             int* pLayerData = reinterpret_cast<int*>(pInstanceDataStart + offset);
             for (int j = 0; j < pData->materialLayerCount; j++)
             {
-                auto& pLayerMtl = instance.materialLayers()[j].first;
+                auto& pLayerMtl  = instance.materialLayers()[j].first;
+                auto& pLayerGeom = instance.materialLayers()[j].second;
 
                 // Copy layer material offset to buffer.
                 *pLayerData = _materialOffsetLookup[pLayerMtl.get()];
                 pLayerData++;
 
                 // Copy UV offset to buffer.
-                // TODO: Implement this.
-                *pLayerData = kInvalidOffset;
+                *pLayerData = _layerGeometryOffsetLookup[pLayerGeom.get()];
                 pLayerData++;
 
                 // Move offset past layer information.
@@ -1021,6 +1090,37 @@ void PTScene::updateShaderTables()
 
         // Unmap buffer.
         _globalInstanceBuffer.unmap();
+
+        if (_layerGeometryBufferSize)
+        {
+            // Resize the global instance buffer if too small for all the instances.
+            if (_layerGeometryBuffer.size < _layerGeometryBufferSize)
+            {
+                _layerGeometryBuffer = _pRenderer->createTransferBuffer(
+                    _layerGeometryBufferSize, "LayerGeometryBuffer");
+            }
+
+            // Fill in the layer geometry buffer.
+            uint8_t* pLayerGeometryDataStart = _layerGeometryBuffer.map();
+            int layerGeometryOffset          = 0;
+            for (int i = 0; i < _layerGeometry.size(); i++)
+            {
+                // Validate offset within buffer matches offset in instance lookup table.
+                AU_ASSERT(layerGeometryOffset == _layerGeometryOffsetLookup[_layerGeometry[i]],
+                    "Offset incorrect");
+                uint8_t* pLayerGeometryData = pLayerGeometryDataStart + layerGeometryOffset;
+
+                size_t uvBufferSize = _layerGeometry[i]->vertexCount() * 2 * sizeof(float);
+
+                const vector<float>& uvs = _layerGeometry[i]->texCoords();
+                AU_ASSERT(uvBufferSize <= sizeof(float) * 2 * uvs.size(), "Count mismatch");
+                ::memcpy_s(pLayerGeometryData, _layerGeometryBufferSize - layerGeometryOffset,
+                    uvs.data(), uvBufferSize);
+
+                layerGeometryOffset += int(uvBufferSize);
+            }
+            _layerGeometryBuffer.unmap();
+        }
 
         size_t recordStride = HitGroupShaderRecord::stride();
 

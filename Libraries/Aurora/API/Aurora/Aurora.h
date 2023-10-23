@@ -281,6 +281,56 @@ struct PropertyValue
         }
     }
 
+    /// Convert value to string.
+    string toString() const
+    {
+        // Compare based on type value.
+        switch (type)
+        {
+        case Type::Bool:
+            return to_string(_bool);
+        case Type::Int:
+            return to_string(_int);
+        case Type::Float:
+            return to_string(_float);
+        case Type::Float2:
+            return to_string(_float2.x) + ", " + to_string(_float2.y);
+        case Type::Float3:
+            return to_string(_float3.x) + ", " + to_string(_float3.y) + ", " + to_string(_float3.z);
+        case Type::Float4:
+            return to_string(_float4.x) + ", " + to_string(_float4.y) + ", " +
+                to_string(_float4.z) + ", " + to_string(_float4.w);
+        case Type::Matrix4:
+            return to_string(_matrix4[0][0]) + ", " + to_string(_matrix4[0][1]) + ", " +
+                to_string(_matrix4[0][2]) + ", " + to_string(_matrix4[0][3]) + ", " +
+                to_string(_matrix4[1][0]) + ", " + to_string(_matrix4[1][1]) + ", " +
+                to_string(_matrix4[1][2]) + ", " + to_string(_matrix4[1][3]) + ", " +
+                to_string(_matrix4[2][0]) + ", " + to_string(_matrix4[2][1]) + ", " +
+                to_string(_matrix4[2][2]) + ", " + to_string(_matrix4[2][3]) + ", " +
+                to_string(_matrix4[3][0]) + ", " + to_string(_matrix4[3][1]) + ", " +
+                to_string(_matrix4[3][2]) + ", " + to_string(_matrix4[3][3]);
+
+        case Type::String:
+            return _string;
+        case Type::Strings:
+        {
+            string res;
+            // If any string does not match equality is false.
+            for (size_t i = 0; i < _strings.size(); i++)
+            {
+                res += _strings[i];
+                if (i < _strings.size())
+                    res += ", ";
+            }
+
+            // Return true if all strings match.
+            return res;
+        }
+        default:
+            return "";
+        }
+    }
+
     union
     {
         bool _bool;

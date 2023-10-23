@@ -97,13 +97,4 @@ Material defaultMaterial()
     return material;
 }
 
-// Maxiumum number of textures per-material.
-// NOTE: Must match value defined in PTScene.cpp,
-#define kMaterialMaxTextures 7
-
-// Total size of fixed-length material header in bytes.
-// Material header occurs before each material's properties in the gGlobalMaterialConstants buffer.
-// NOTE: Must match size of MaterialHeader in PTScene.cpp.
-#define kMaterialHeaderSize 32
-
 #endif // __MATERIAL_H__

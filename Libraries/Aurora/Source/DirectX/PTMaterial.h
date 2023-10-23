@@ -47,20 +47,10 @@ public:
 
     /*** Functions ***/
 
-    // The total number of sampler descriptors for each material instance.
-    static uint32_t samplerDescriptorCount()
-    {
-        // Base color + opacity only for now.
-        // TODO: Support samplers for other textures.
-        return 2;
-    }
-
     // Gets the constant buffer for this material.
     ID3D12Resource* buffer() const { return _constantBuffer.pGPUBuffer.Get(); }
 
     bool update();
-    void getTextures(vector<PTImage*>& texturesOut) const;
-    size_t computeSamplerHash() const;
 
 private:
     /*** Private Types ***/

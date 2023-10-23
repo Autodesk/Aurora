@@ -191,7 +191,13 @@ TEST_F(MaterialGeneratorTest, BasicTest)
     ASSERT_EQ(pMtlDef2->defaults().propertyDefinitions.size(), 6);
     ASSERT_EQ(pMtlDef2->defaults().textureNames.size(), 2);
     ASSERT_EQ(pMtlDef2->defaults().textures.size(), 2);
-    ASSERT_STREQ(pMtlDef2->defaults().textureNames[1].c_str(), "opacity_image");
+    ASSERT_STREQ(pMtlDef2->defaults().textureNames[0].image.c_str(), "base_color_image");
+    ASSERT_STREQ(pMtlDef2->defaults().textureNames[0].sampler.c_str(), "base_color_image_sampler");
+    ASSERT_STREQ(
+        pMtlDef2->defaults().textures[0].defaultFilename.c_str(), "../Textures/CoatOfArms.bmp");
+    ASSERT_STREQ(pMtlDef2->defaults().textureNames[1].image.c_str(), "specular_roughness_image");
+    ASSERT_STREQ(
+        pMtlDef2->defaults().textureNames[1].sampler.c_str(), "specular_roughness_image_sampler");
     ASSERT_STREQ(pMtlDef2->defaults().textures[1].defaultFilename.c_str(),
         "../Textures/fishscale_roughness.png");
 

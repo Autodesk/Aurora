@@ -171,7 +171,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     map<string, int> textures;
     for (int i = 0; i < res.textures.size(); i++)
     {
-        textures[res.textures[i]] = i;
+        textures[res.textures[i].image] = i;
     }
 
     // Normal modified if the normal BSDF input is active.
@@ -210,94 +210,16 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // Reset material to default values.
     generatedMtlxSetupFunction += "\tMaterial material = defaultMaterial();\n";
 
-
-    // Add code to create local texture variables for the textures used by generated code, based on
-    // hard-code texture names from Standard Surface.
-    // TODO: Data-driven textures that are not mapped to hard coded texture names.
-    // The hard-coded texture indices (must match order in PTMaterial::getTextures).
-    const int kDiffuseTextureIndex           = 0;
-    const int kSpecularRoughnessTextureIndex = 1;
-    const int kNormalTextureIndex            = 2;
-    const int kEmissionTextureIndex          = 3;
-    const int kOpacityTextureIndex           = 4;
-    vector<TextureDefinition> textureVars;
-    if (res.textures.size() >= 1)
+    // Create sampler structs for each of the textures in the materialX material.
+    vector<string> samplerNames;
+    for (int i = 0; i < res.textureDefaults.size(); i++)
     {
-        // Map first texture to the base_color_image and sampler.
-        generatedMtlxSetupFunction +=
-            "\tsampler2D base_color_image = createSampler2D(materialTexture(headerOffset, " + to_string(kDiffuseTextureIndex) + "), gDefaultSampler);\n";
-
-        // Add to the texture array.
-        TextureDefinition txtDef = res.textureDefaults[0];
-        txtDef.name              = "base_color_image";
-        textureVars.push_back(txtDef);
-    }
-
-    if (res.textures.size() >= 2)
-    {
-        // Map second texture to the opacity_image and sampler.
-        generatedMtlxSetupFunction +=
-            "\tsampler2D opacity_image = createSampler2D(materialTexture(headerOffset, " +
-            to_string(kOpacityTextureIndex) +
-            "), "
-            "gDefaultSampler);\n";
-
-        // Add to the texture array.
-        TextureDefinition txtDef = res.textureDefaults[1];
-        txtDef.name              = "opacity_image";
-        textureVars.push_back(txtDef);
-    }
-
-    if (res.textures.size() >= 3)
-    {
-        // Map third texture to the normal_image and the default sampler.
-        generatedMtlxSetupFunction +=
-            "\tsampler2D normal_image = createSampler2D(materialTexture(headerOffset, " +
-            to_string(kNormalTextureIndex) +
-            "), "
-            "gDefaultSampler);\n";
-
-        // Add to the texture array.
-        TextureDefinition txtDef = res.textureDefaults[2];
-        txtDef.name              = "normal_image";
-        textureVars.push_back(txtDef);
-    }
-
-    if (res.textures.size() >= 4)
-    {
-        // Map fourth texture to the specular_roughness_image and the default sampler.
-        generatedMtlxSetupFunction +=
-            "\tsampler2D specular_roughness_image = createSampler2D(materialTexture(headerOffset, "
-            + to_string(kSpecularRoughnessTextureIndex) + "), "
-            "gDefaultSampler);\n";
-
-        // Add to the texture array.
-        TextureDefinition txtDef = res.textureDefaults[3];
-        txtDef.name              = "specular_roughness_image";
-        textureVars.push_back(txtDef);
-    }
-
-    if (res.textures.size() >= 5)
-    {
-        // Map fifth texture to the emission_color_image and the default sampler.
-        generatedMtlxSetupFunction +=
-            "\tsampler2D emission_color_image = createSampler2D(materialTexture(offset, " +
-            to_string(kEmissionTextureIndex) +
-            "), "
-            "gDefaultSampler);\n";
-
-        // Add to the texture array.
-        TextureDefinition txtDef = res.textureDefaults[4];
-        txtDef.name              = "emission_color_image";
-        textureVars.push_back(txtDef);
-    }
-
-    // Map any additional textures to base color image.
-    for (size_t i = textureVars.size(); i < res.textures.size(); i++)
-    {
-        TextureDefinition txtDef = textureVars[0];
-        txtDef.name              = "base_color_image";
-        textureVars.push_back(txtDef);
+        string samplerName = "sampler" + to_string(i);
+        // Create sampler from Nth texture and sampler.
+        generatedMtlxSetupFunction += "\tsampler2D " + samplerName +
+            " = createSampler2D( materialTexture(headerOffset, " + to_string(i) +
+            "), materialSampler(headerOffset, " + to_string(i) + ") );\n";
+        samplerNames.push_back(samplerName);
     }
 
     // Use the define DISTANCE_UNIT which is set in the shader library options.
@@ -322,13 +244,13 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     generatedMtlxSetupFunction += "setupMaterialStruct";
 
     // Add code for all the texture arguments.
-    for (int i = 0; i < textureVars.size(); i++)
+    for (int i = 0; i < samplerNames.size(); i++)
     {
         // Add texture name.
         generatedMtlxSetupFunction += ",\n";
 
         // Add texture name.
-        generatedMtlxSetupFunction += textureVars[i].name;
+        generatedMtlxSetupFunction += samplerNames[i];
     }
 
     // Add distance unit parameter, if used.
@@ -369,15 +291,6 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // maybe remove it?
     generatedMtlxSetupFunction += "material.metalColor = material.baseColor;\n";
 
-    /*
-    if (res.textures.size() >= 1)
-    {
-        generatedMtlxSetupFunction +=
-            "material.baseColor =  materialTexture(headerOffset, 0).SampleLevel(gDefaultSampler,
-    shading.texCoord, 0).xyz;"; //texture(base_color_image, shading.texCoord).xyz\n;";
-    }
-    */
-
     // Return the generated material struct.
     generatedMtlxSetupFunction += "\treturn material;\n";
 
@@ -403,7 +316,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
 
     // Create the default values object from the generated properties and textures.
     MaterialDefaultValues defaults(
-        res.materialProperties, res.materialPropertyDefaults, textureVars);
+        res.materialProperties, res.materialPropertyDefaults, res.textureDefaults);
 
     // Material is opaque if neither opacity or transmission input is used.
     bool isOpaque = bsdfInputs.find("opacity") == bsdfInputs.end() &&

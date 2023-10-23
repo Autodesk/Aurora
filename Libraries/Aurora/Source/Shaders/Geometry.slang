@@ -43,6 +43,8 @@ struct ShadingData
     float3 objectPosition; // the shading normal in object space (not world space). Used only in
                            // materialX generated code.
     float3x4 objToWorld;
+    uint3 indices;
+    float3 barycentrics;
 };
 
 
@@ -53,6 +55,11 @@ float3 computeBarycentrics(BuiltInTriangleIntersectionAttributes attribs)
     return float3(1.0f - bary2.x - bary2.y, bary2.x, bary2.y);
 }
 
+// Computes the barycentric coordinates from the specified triangle intersection.
+float3 computeBarycentrics(float2 bary2)
+{
+    return float3(1.0f - bary2.x - bary2.y, bary2.x, bary2.y);
+}
 // Projects the specified position (point) onto the plane with the specified origin and normal.
 float3 projectOnPlane(float3 position, float3 origin, float3 normal)
 {
@@ -87,8 +94,11 @@ float3 computeShadingPosition(float3 geomPosition, float3 shadingNormal, float3 
 // Computes the shading data (e.g. interpolated vertex data) for the triangle with the specified
 // (primitive) index, at the specified barycentric coordinates.
 ShadingData computeShadingData<GeometryType : IGeometry>(
-    GeometryType geometry, uint triangleIndex, float3 barycentrics, float3x4 objToWorld)
+    GeometryType geometry, uint triangleIndex, float2 bary2, float3x4 objToWorld)
 {
+    // Expand barycentrics to 3d.
+    float3 barycentrics = computeBarycentrics(bary2);
+
     // Initialize a result structure.
     ShadingData shading;
     shading.position     = float3(0.0f, 0.0f, 0.0f);
@@ -170,6 +180,10 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
     shading.bitangent = computeBitangent(shading.normal, shading.tangent);
 
     shading.objToWorld = objToWorld;
+
+    shading.indices = indices;
+
+    shading.barycentrics = barycentrics;
 
     return shading;
 }

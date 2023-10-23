@@ -382,16 +382,17 @@ ID3D12RootSignaturePtr PTShaderLibrary::createRootSignature(const D3D12_ROOT_SIG
     return pSignature;
 }
 
-void PTShaderLibrary::initRootSignatures(int globalTextureCount)
+void PTShaderLibrary::initRootSignatures(int globalTextureCount, int globalSamplerCount)
 {
     // Specify the global root signature for all shaders. This includes a global static sampler
     // which shaders can use by default, as well as dynamic samplers per-material.
     CD3DX12_DESCRIPTOR_RANGE texRange;
+    CD3DX12_DESCRIPTOR_RANGE samplerRange;
 
     // Create the global root signature.
     // Must match the root signature data setup in PTRenderer::submitRayDispatch and the GPU
     // version in GlobalRootSignature.slang.
-    array<CD3DX12_ROOT_PARAMETER, 11> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 13> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
     globalRootParameters[0].InitAsShaderResourceView(0);         // gScene: acceleration structure
     globalRootParameters[1].InitAsConstants(2, 0);               // sampleIndex + seedOffset
     globalRootParameters[2].InitAsConstantBufferView(1); // gFrameData: per-frame constant buffer
@@ -406,22 +407,30 @@ void PTShaderLibrary::initRootSignatures(int globalTextureCount)
     globalRootParameters[8].InitAsShaderResourceView(
         5); // gGlobalMaterialConstants: global material constants.
     globalRootParameters[9].InitAsShaderResourceView(
-        6); // gGlobalInstanceConstants: global instance constants.
+        6); // gGlobalInstanceBuffer: global instance data.
+    globalRootParameters[10].InitAsShaderResourceView(
+        7); // gLayerGeometryBuffer: UVs for geometry layers.
 
     texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, globalTextureCount,
-        7); // gGlobalMaterialTextures: Global scene textures.
+        8); // gGlobalMaterialTextures: Global scene textures.
     CD3DX12_DESCRIPTOR_RANGE sceneTextureRanges[] = {
         texRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    globalRootParameters[10].InitAsDescriptorTable(
+    globalRootParameters[11].InitAsDescriptorTable(
         _countof(sceneTextureRanges), sceneTextureRanges);
 
-    // gDefault sampler.
-    CD3DX12_STATIC_SAMPLER_DESC samplerDesc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR);
+    // Sampler descriptors in gGlobalMaterialSamplers array starting at register(s0)
+    samplerRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, globalSamplerCount, 0);
+    CD3DX12_DESCRIPTOR_RANGE globalSamplerRanges[] = {
+        samplerRange
+    }; // NOLINT(modernize-avoid-c-arrays)
+    globalRootParameters[12].InitAsDescriptorTable(
+        _countof(globalSamplerRanges), globalSamplerRanges);
 
-    // Create the global root signature object.
-    CD3DX12_ROOT_SIGNATURE_DESC globalDesc(static_cast<UINT>(globalRootParameters.size()),
-        globalRootParameters.data(), 1, &samplerDesc);
+    // Create the global root signature object, there are no static samplers (all the samplers
+    // including default sampler are stored in gSamplerArray.)
+    CD3DX12_ROOT_SIGNATURE_DESC globalDesc(
+        static_cast<UINT>(globalRootParameters.size()), globalRootParameters.data(), 0, nullptr);
     _pGlobalRootSignature = createRootSignature(globalDesc);
     _pGlobalRootSignature->SetName(L"Global Root Signature");
 
@@ -643,11 +652,14 @@ void PTShaderLibrary::generateEvaluateMaterialFunction(CompileJob& job)
         for (int i = 1; i < _compiledShaders.size(); i++)
         {
             auto& compiledShader = _compiledShaders[i];
-            job.code += "\t\tcase " + to_string(i) + ":\n";
-            job.code += "\t\t\treturn  evaluateMaterial_" + compiledShader.id +
-                "(shading, offset, "
-                "materialNormal, "
-                "isGeneratedNormal);\n";
+            if (compiledShader.valid())
+            {
+                job.code += "\t\tcase " + to_string(i) + ":\n";
+                job.code += "\t\t\treturn  evaluateMaterial_" + compiledShader.id +
+                    "(shading, offset, "
+                    "materialNormal, "
+                    "isGeneratedNormal);\n";
+            }
         }
 
         // Complete switch statement and call default evaluate material function in default case.
@@ -679,14 +691,14 @@ void PTShaderLibrary::generateEvaluateMaterialFunction(CompileJob& job)
     job.index = -1;
 }
 
-void PTShaderLibrary::rebuild(int globalTextureCount)
+void PTShaderLibrary::rebuild(int globalTextureCount, int globalSamplerCount)
 {
 
     // Start timer.
     _timer.reset();
 
     // Initialize root signatures (these are shared by all shaders, and don't change.)
-    initRootSignatures(globalTextureCount);
+    initRootSignatures(globalTextureCount, globalSamplerCount);
 
     // Should only be called if required (rebuilding requires stalling the GPU pipeline.)
     AU_ASSERT(rebuildRequired(), "Rebuild not needed");
@@ -1006,7 +1018,7 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
     // "ShadowRayPayload") and intersection attributes (UV barycentric coordinates).
     // If the structures used in the shader exceed these values the result will be a rendering
     // failure.
-    const unsigned int kRayPayloadSize   = 14 * sizeof(float);
+    const unsigned int kRayPayloadSize   = 19 * sizeof(float);
     const unsigned int kIntersectionSize = 2 * sizeof(float);
     auto* pShaderConfigSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();

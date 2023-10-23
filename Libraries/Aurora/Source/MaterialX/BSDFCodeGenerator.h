@@ -82,7 +82,7 @@ public:
         /// function.
         vector<UniformBufferPropertyDefinition> materialProperties;
         /// \brief Vector of textures used by this material in the setup function.
-        vector<string> textures;
+        vector<TextureIdentifier> textures;
         /// \brief Vector of BSDF inputs output by the setup function.
         vector<BSDFInput> bsdfInputs;
         /// \desc True if the setup fuction takes an integer unit parameter (index into unit names

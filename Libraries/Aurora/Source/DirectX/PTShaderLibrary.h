@@ -43,7 +43,10 @@ struct CompiledShader
         destroyBinary();
         entryPoints.clear();
         id.clear();
+        hlslFilename.clear();
+        setupFunctionDeclaration.clear();
     }
+    bool valid() { return !id.empty(); }
 };
 
 // Shader options represented as set of HLSL #define statements.
@@ -150,7 +153,7 @@ public:
     ID3D12RootSignaturePtr globalRootSignature() const { return _pGlobalRootSignature; }
 
     /// Rebuild the shader library and its pipeline state. GPU must be idle before calling this.
-    void rebuild(int globalTextureCount);
+    void rebuild(int globalTextureCount, int globalSamplerCount);
 
     // Get the DirectX shader reflection for library.
     ID3D12LibraryReflection* reflection() const { return _pShaderLibraryReflection; }
@@ -192,7 +195,7 @@ private:
     ID3D12RootSignaturePtr createRootSignature(const D3D12_ROOT_SIGNATURE_DESC& desc);
 
     // Initialize the shared root signatures.
-    void initRootSignatures(int globalTextureCount);
+    void initRootSignatures(int globalTextureCount, int globalSamplerCount);
 
     // Remove the HLSL source for the associated index.  Called by friend class MaterialShader.
     void removeSource(int sourceIndex);

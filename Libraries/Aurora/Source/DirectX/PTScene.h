@@ -18,6 +18,7 @@
 #include "PTGroundPlane.h"
 #include "PTLight.h"
 #include "PTMaterial.h"
+#include "PTSampler.h"
 #include "SceneBase.h"
 
 #include <mutex>
@@ -36,32 +37,10 @@ class MaterialGenerator;
 class PTRenderer;
 class PTScene;
 class PTShaderLibrary;
+class PTSampler;
 
 // Definition of a layer material (material+geometry)
 using PTLayerDefinition = pair<PTMaterialPtr, PTGeometryPtr>;
-
-// An internal implementation for the table of layer material indices.
-class PTLayerIndexTable
-{
-public:
-    /*** Lifetime Management ***/
-
-    PTLayerIndexTable(PTRenderer* pRenderer, const vector<int>& indices = {});
-    void set(const vector<int>& indices);
-
-    // The maximum number of supported material layers, must match value in PathTracingCommon.hlsl
-    // shader.
-    static const int kMaxMaterialLayers = 64;
-
-    int count() { return _count; }
-    ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
-
-private:
-    int _count             = 0;
-    PTRenderer* _pRenderer = nullptr;
-    ID3D12ResourcePtr _pConstantBuffer;
-};
-MAKE_AURORA_PTR(PTLayerIndexTable);
 
 // An internal implementation for IInstance.
 class PTInstance : public IInstance
@@ -124,7 +103,7 @@ public:
     void updateResources();
 
     /*** Functions ***/
-    int computeMaterialTextureCount();
+    void computeMaterialTextureCount(int& textureCountOut, int& samplerCountOut);
     int instanceCount() const { return static_cast<int>(_instances.active().count()); }
     PTEnvironmentPtr environment() const { return _pEnvironment; }
     PTGroundPlanePtr groundPlane() const { return _pGroundPlane; }
@@ -139,6 +118,7 @@ public:
 
     const TransferBuffer& globalMaterialBuffer() { return _globalMaterialBuffer; }
     const TransferBuffer& globalInstanceBuffer() { return _globalInstanceBuffer; }
+    const TransferBuffer& layerGeometryBuffer() { return _layerGeometryBuffer; }
     PTShaderLibrary& shaderLibrary() { return *_pShaderLibrary.get(); }
     IMaterialPtr createMaterialPointer(
         const string& materialType, const string& document, const string& name);
@@ -162,9 +142,14 @@ private:
     unique_ptr<PTShaderLibrary> _pShaderLibrary;
     map<PTMaterial*, int> _materialOffsetLookup;
     map<PTInstance*, int> _instanceOffsetLookup;
-    size_t _instanceBufferSize = 0;
-    map<PTImage*, int> _materialTextureIndexLookup;
+    map<PTGeometry*, int> _layerGeometryOffsetLookup;
+    vector<PTGeometry*> _layerGeometry;
+    size_t _instanceBufferSize      = 0;
+    size_t _layerGeometryBufferSize = 0;
+    map<IImage*, int> _materialTextureIndexLookup;
+    map<ISampler*, int> _materialSamplerIndexLookup;
     vector<PTImage*> _activeMaterialTextures;
+    vector<PTSampler*> _activeMaterialSamplers;
     PTGroundPlanePtr _pGroundPlane;
     PTEnvironmentPtr _pEnvironment;
     uint32_t _numRendererDescriptors = 0;
@@ -172,6 +157,7 @@ private:
     int _currentLightIndex = 0;
     TransferBuffer _globalMaterialBuffer;
     TransferBuffer _globalInstanceBuffer;
+    TransferBuffer _layerGeometryBuffer;
 
     /*** DirectX 12 Objects ***/
 
@@ -187,6 +173,7 @@ private:
     bool _isHitGroupDescriptorsDirty    = true;
     std::mutex _mutex;
 
+    map<size_t, ISamplerPtr> _samplerCache;
     // Code generator used to generate MaterialX files.
 #if ENABLE_MATERIALX
     unique_ptr<MaterialXCodeGen::MaterialGenerator> _pMaterialXGenerator;

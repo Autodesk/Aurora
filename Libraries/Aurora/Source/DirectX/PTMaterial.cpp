@@ -55,44 +55,4 @@ bool PTMaterial::update()
     return true;
 }
 
-size_t PTMaterial::computeSamplerHash() const
-{
-    PTSamplerPtr pSampler;
-
-    // Compute hash for base color image sampler.
-    pSampler   = dynamic_pointer_cast<PTSampler>(_values.asSampler("base_color_image_sampler"));
-    size_t res = pSampler ? pSampler->hash() : _pRenderer->defaultSampler()->hash();
-
-    // Combine with hash for opacity sampler.
-    pSampler = dynamic_pointer_cast<PTSampler>(_values.asSampler("opacity_image_sampler"));
-    Foundation::hashCombine(
-        res, pSampler ? pSampler->hash() : _pRenderer->defaultSampler()->hash());
-
-    return res;
-}
-
-void PTMaterial::getTextures(vector<PTImage*>& texturesOut) const
-{
-    texturesOut.clear();
-    // Create a SRV (descriptor) on the descriptor heap for the base color image, if any.
-    PTImagePtr pImage = dynamic_pointer_cast<PTImage>(_values.asImage("base_color_image"));
-    texturesOut.push_back(pImage.get());
-
-    // Create a SRV (descriptor) on the descriptor heap for the specular roughness image, if any.
-    pImage = dynamic_pointer_cast<PTImage>(_values.asImage("specular_roughness_image"));
-    texturesOut.push_back(pImage.get());
-
-    // Create a SRV (descriptor) on the descriptor heap for the normal image, if any.
-    pImage = dynamic_pointer_cast<PTImage>(_values.asImage("normal_image"));
-    texturesOut.push_back(pImage.get());
-
-    // Create a SRV (descriptor) on the descriptor heap for the emission color image, if any.
-    pImage = dynamic_pointer_cast<PTImage>(_values.asImage("emission_color_image"));
-    texturesOut.push_back(pImage.get());
-
-    // Create a SRV (descriptor) on the descriptor heap for the opacity image, if any.
-    pImage = dynamic_pointer_cast<PTImage>(_values.asImage("opacity_image"));
-    texturesOut.push_back(pImage.get());
-}
-
 END_AURORA

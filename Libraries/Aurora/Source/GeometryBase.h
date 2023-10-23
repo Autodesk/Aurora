@@ -34,6 +34,11 @@ public:
     // Is the geometry complete (has posiitons can be used as primary geometry for instance.)
     bool isIncomplete() { return _incomplete; }
 
+    const vector<float>& positions() { return _positions; }
+    const vector<float>& normals() { return _normals; }
+    const vector<float>& tangents() { return _tangents; }
+    const vector<float>& texCoords() { return _texCoords; }
+
 protected:
     /*** Private Functions ***/
 

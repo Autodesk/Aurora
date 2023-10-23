@@ -212,15 +212,22 @@ struct Output {
                     // Were any layers hit?  If this remains false, ray was not absorbed by any of the layer, including base layer..
                     bool hitLayer = false;
 
+                    float2 baseLayerUV = shading.texCoord;
                     // Iterate through all the layers in reverse order, ending with base layer.
                     for(int layerIndex = layerCount; layerIndex>=0; layerIndex--) {
 
                         // Compute material buffer offset, either for layer material or base layer.
                         int materialBufferOffset;
-                        if(layerIndex==0)
+                        if (layerIndex == 0)
+                        {
                             materialBufferOffset = instanceMaterialBufferOffset(rayPayload.instanceBufferOffset);
-                        else 
-                            materialBufferOffset = instanceLayerMaterialBufferOffset(rayPayload.instanceBufferOffset, layerIndex);
+                            shading.texCoord = baseLayerUV;
+                        }
+                        else
+                        {
+                            materialBufferOffset = instanceLayerMaterialBufferOffset(rayPayload.instanceBufferOffset, layerIndex);                            
+                            shading.texCoord = computeLayerUV(rayPayload.instanceBufferOffset, layerIndex, shading);
+                        }
 
                         // Retrieve the shader index for the layer material.
                         // This is stored in the material header in the global material byte buffer,
@@ -483,11 +490,13 @@ struct Output {
     rayPayload.hit = true;
     
     // Return the shading data in the ray payload.
-    ShadingData shading = computeShadingData(gGeometry, triangleIndex, barycentrics, ObjectToWorld3x4());
+    ShadingData shading = computeShadingData(gGeometry, triangleIndex, hit.barycentrics, ObjectToWorld3x4());
     rayPayload.geomPosition = shading.geomPosition;
     rayPayload.texCoord = shading.texCoord;
     rayPayload.objectNormal = shading.objectNormal;
     rayPayload.objectPosition = shading.objectPosition;
+    rayPayload.indices = shading.indices;
+    rayPayload.bary2 = hit.barycentrics;
     
     // Return the ray distance from the collision t.
     rayPayload.distance = RayTCurrent();
@@ -511,9 +520,8 @@ struct Output {
 
     // Get the interpolated vertex data for the hit triangle, at the hit barycentric coordinates.
     uint triangleIndex = PrimitiveIndex();
-    float3 barycentrics = computeBarycentrics(hit);
     ShadingData shading =
-        computeShadingData(gGeometry, triangleIndex, barycentrics, ObjectToWorld3x4());
+        computeShadingData(gGeometry, triangleIndex, hit.barycentrics, ObjectToWorld3x4());
 
     // Get material buffer offset from instance data header.
     int materialBufferOffset = instanceMaterialBufferOffset(gInstanceBufferOffset);

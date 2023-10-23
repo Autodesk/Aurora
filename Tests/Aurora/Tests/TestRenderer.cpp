@@ -457,7 +457,7 @@ TEST_P(RendererTest, TestRendererEmptySceneBounds)
 
 // Test ground plane.
 // TODO: Re-enable once ground plane re-enabled.
-TEST_P(RendererTest, DISABLED_TestRendererGroundPlane)
+TEST_P(RendererTest, TestRendererGroundPlane)
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -656,7 +656,7 @@ TEST_P(RendererTest, TestRendererRemoveInstance)
 
 // Test instance with layer materials
 // TODO: Re-enable test when layers are working.
-TEST_P(RendererTest, DISABLED_TestRendererMaterialLayers)
+TEST_P(RendererTest, TestRendererMaterialLayers)
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -748,7 +748,7 @@ TEST_P(RendererTest, DISABLED_TestRendererMaterialLayers)
 
 // Test instance with invalid layer material paths
 // TODO: Re-enable test when layers are working.
-TEST_P(RendererTest, DISABLED_TestRendererInvalidMaterialLayerPaths)
+TEST_P(RendererTest, TestRendererInvalidMaterialLayerPaths)
 {
     // No layers on HGI currently.
     if (!isDirectX())
@@ -852,7 +852,7 @@ TEST_P(RendererTest, DISABLED_TestRendererInvalidMaterialLayerPaths)
 }
 
 // TODO: Re-enable test when layers are working.
-TEST_P(RendererTest, DISABLED_TestRendererInvalidGeometryLayers)
+TEST_P(RendererTest, TestRendererInvalidGeometryLayers)
 {
     // No layers on HGI backed.
     if(!isDirectX())
@@ -969,7 +969,7 @@ TEST_P(RendererTest, DISABLED_TestRendererInvalidGeometryLayers)
 
 // Test instance with layer materials
 // TODO: Re-enable test when layers are working.
-TEST_P(RendererTest, DISABLED_TestRendererMultipleMaterialLayers)
+TEST_P(RendererTest, TestRendererMultipleMaterialLayers)
 {
     if (!isDirectX())
         return;

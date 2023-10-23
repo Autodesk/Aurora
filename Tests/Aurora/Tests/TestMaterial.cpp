@@ -1443,7 +1443,7 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
 
 // Disabled as this testcase fails with error in MaterialGenerator::generate
 // TODO: Re-enable once samplers working.
-TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
+TEST_P(MaterialTest, TestMtlXSamplers)
 {
     // This mtlx file requires support ADSK materialX support.
     if (!adskMaterialXSupport())
@@ -1486,7 +1486,7 @@ TEST_P(MaterialTest, DISABLED_TestMtlXSamplers)
 
 // MaterialX as layered materials
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
+TEST_P(MaterialTest, TestMaterialMaterialXLayers)
 {
     // This mtlx file requires support ADSK materialX support.
     if (!adskMaterialXSupport())
@@ -1613,7 +1613,7 @@ TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayers)
 
 // MaterialX as layered materials
 // Disabled as this testcase fails with error in MaterialGenerator::generate
-TEST_P(MaterialTest, DISABLED_TestMaterialMaterialXLayerTransforms)
+TEST_P(MaterialTest, TestMaterialMaterialXLayerTransforms)
 {
     // This mtlx file requires support ADSK MaterialX support.
     if (!adskMaterialXSupport())

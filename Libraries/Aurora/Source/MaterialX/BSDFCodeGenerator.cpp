@@ -892,7 +892,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
                 // Create the texture definition for this parameter.
                 TextureDefinition tex;
-                tex.name            = param.path;
+                tex.name            = TextureIdentifier(param.path, param.path + "_sampler");
                 tex.defaultFilename = valueElem->getValue()->asA<string>();
 
                 // Set linearize to if no color space or srgb_texture color space.
@@ -949,7 +949,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
                     // Create the texture definition for this parameter.
                     TextureDefinition tex;
-                    tex.name            = param.path;
+                    tex.name            = TextureIdentifier(param.path, param.path + "_sampler");
                     tex.defaultFilename = elem->getAttribute("value");
 
                     // Set linearize to if no color space or srgb_texture color space.
@@ -1014,7 +1014,10 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // Find renderable nodes.
     vector<MaterialX::TypedElementPtr> elements;
     unordered_set<MaterialX::ElementPtr> processedOutputs;
-    //TODO: This was deprecated in between MaterialX 1.38.7 and 1.38.8.  Work out the reasons for this and move to new API.
+    // TODO: This was deprecated in between MaterialX 1.38.7 and 1.38.8.  Work out the reasons for
+    // this and move to new API.
+    // See
+    // https://github.com/AcademySoftwareFoundation/MaterialX/commit/f49359877ea41e7fc8ced47d3334e1d608b35a1a
 #pragma warning(push)
 #pragma warning(disable : 4996)
     MaterialX::findRenderableMaterialNodes(mtlxDocument, elements, false, processedOutputs);
@@ -1233,7 +1236,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
         // Add the code for this input to the prototype.
         pResultOut->materialSetupCode.append(
-            "\tsampler2D " + _textures[i].name + "_image_parameter");
+            "\tsampler2D " + _textures[i].name.image + "_image_parameter");
 
         numParams++;
     }

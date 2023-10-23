@@ -730,7 +730,9 @@ void PTRenderer::renderInternal(uint32_t sampleStart, uint32_t sampleCount)
     {
         // If shader rebuild required, wait for GPU to be idle, then rebuild.
         waitForTask();
-        shaderLibrary().rebuild(dxScene()->computeMaterialTextureCount());
+        int globalTextureCount, globalSamplerCount;
+        dxScene()->computeMaterialTextureCount(globalTextureCount, globalSamplerCount);
+        shaderLibrary().rebuild(globalTextureCount, globalSamplerCount);
 
         // Update the ray gen shader table after rebuild.
         updateRayGenShaderTable();
@@ -1195,9 +1197,18 @@ void PTRenderer::submitRayDispatch(
         pCommandList->SetComputeRootShaderResourceView(
             9, dxScene()->globalInstanceBuffer().pGPUBuffer->GetGPUVirtualAddress());
 
-        // 10) The global material texture buffer
+        // 10) The layer geometry buffer
+        pCommandList->SetComputeRootShaderResourceView(
+            10, dxScene()->layerGeometryBuffer().pGPUBuffer->GetGPUVirtualAddress());
+
+        // 11) The global material texture array
         handle.Offset(dxScene()->environment()->descriptorCount(), _handleIncrementSize);
-        pCommandList->SetComputeRootDescriptorTable(10, handle);
+        pCommandList->SetComputeRootDescriptorTable(11, handle);
+
+        // 12) The global material sampler array
+        CD3DX12_GPU_DESCRIPTOR_HANDLE samplerHandle(
+            _pSamplerDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+        pCommandList->SetComputeRootDescriptorTable(12, samplerHandle);
     }
 
     // Launch the ray generation shader with the dispatch, which performs path tracing.

@@ -43,7 +43,7 @@ Environment prepareEnvironmentValues()
     Environment values;
     values.constants         = gEnvironmentConstants;
     values.backgroundTexture = gEnvironmentBackgroundTexture;
-    values.sampler           = gDefaultSampler;
+    values.sampler           = gSamplerArray[0];
     values.lightTexture      = gEnvironmentLightTexture;
 #if DIRECTX
     values.aliasMap = gEnvironmentAliasMap;

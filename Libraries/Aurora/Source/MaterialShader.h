@@ -84,7 +84,7 @@ struct MaterialShaderDefinition
     // Definitions of properties for this shader (without the default values.)
     UniformBufferDefinition propertyDefinitions;
     // Names of the textures defined by this shader.
-    vector<string> textureNames;
+    vector<TextureIdentifier> textureNames;
     // Is this shader always opaque regardless of properties.
     bool isAlwaysOpaque;
 
