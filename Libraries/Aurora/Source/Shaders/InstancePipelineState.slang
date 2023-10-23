@@ -19,16 +19,6 @@
 // Must match CPU version in HitGroupShaderRecord in PTScene.cpp.
 // =================================================================================================
 
-// The maximum number of supported material layers, must match value in
-// PTLayerIndexTable::kMaxMaterialLayers C++ code.
-#define kMaxMaterialLayers 64
-
-// The layer material shader IDs. (Not currently used, layers are currently disabled)
-struct MaterialLayerShaderIDs
-{
-    // Shader indices (must be stored as floattors due to HLSL packing rules).
-    int4 shaderIDs[kMaxMaterialLayers / WORD_SIZE];
-};
 
 #if DIRECTX
 // Geometry data, for the current instance only.
@@ -45,9 +35,8 @@ cbuffer gInstanceData : register(b0, space1)
     bool gHasNormals;           // Are there normals?
     bool gHasTangents;         // Are there tangents?
     bool gHasTexCoords;        // Are there texture coordinates?
-    int gMaterialLayerCount;   // Number of material layer miss shaders. (Not currently used, layers are currently disabled)
     bool gIsOpaque;            // Is the geometry opaque?
-    int gMaterialBufferOffset; // Offset of instance's material within global material byte buffer.
+    int gInstanceBufferOffset; // Offset of instance's data within global instance byte buffer.
 }
 
 // To hide DX-Vulkan differences, expose geometry access using functions.
@@ -116,16 +105,5 @@ struct Geometry : IGeometry
     bool hasNormals() { return instanceHasNormals(); }
     bool hasTangents() { return instanceHasTangents(); }
 } gGeometry;
-
-// Constant buffer for layer material shader IDs. (Not currently used, layers are currently disabled)
-ConstantBuffer<MaterialLayerShaderIDs> gMaterialLayerIDs : register(b1, space1);
-
-// Get the layer material index for given layer. (Not currently used, layers are currently disabled)
-int getMaterialLayerIndex(int layer)
-{
-    // TODO: Optimize the float->scalar look-up.
-    return gMaterialLayerIDs.shaderIDs[layer / 4][layer % 4];
-}
-
 
 #endif

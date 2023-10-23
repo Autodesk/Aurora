@@ -1191,9 +1191,13 @@ void PTRenderer::submitRayDispatch(
         pCommandList->SetComputeRootShaderResourceView(
             8, dxScene()->globalMaterialBuffer().pGPUBuffer->GetGPUVirtualAddress());
 
-        // 9) The global material texture buffer
+        // 9) The global instance buffer
+        pCommandList->SetComputeRootShaderResourceView(
+            9, dxScene()->globalInstanceBuffer().pGPUBuffer->GetGPUVirtualAddress());
+
+        // 10) The global material texture buffer
         handle.Offset(dxScene()->environment()->descriptorCount(), _handleIncrementSize);
-        pCommandList->SetComputeRootDescriptorTable(9, handle);
+        pCommandList->SetComputeRootDescriptorTable(10, handle);
     }
 
     // Launch the ray generation shader with the dispatch, which performs path tracing.

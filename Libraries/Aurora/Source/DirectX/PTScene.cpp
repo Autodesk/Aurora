@@ -37,12 +37,31 @@ BEGIN_AURORA
 // Maximum number of textures per material from
 #define kMaterialMaxTextures 7
 
+// Fixed instance data stride (transform matrix and material buffer offset.)
+#define kInstanceDataStride sizeof(InstanceDataHeader)
+
 // Fix-sized header that is
-// NOTE: Must be exactly 8 32-bit words long to match
+// NOTE: Must be exactly 12 32-bit words long to match accessors in GlobalBufferAccessors.slang.
 struct MaterialHeader
 {
     int shaderIndex;
     int textureIndices[kMaterialMaxTextures];
+};
+
+// Fixed size header for instance data in global buffer.
+// Followed by variable size array of layer information.
+// NOTE: Must be exactly 14 32-bit words long to match accessors in GlobalBufferAccessors.slang.
+struct InstanceDataHeader
+{
+    // Transposed row-major 4x3 transform matrix.
+    float transform[3][4];
+
+    // Offset within material buffer for this instance's material.
+    int materialBufferOffset;
+
+    // Number of material layers for this instance.
+    // If non-zero, the information for each layer will be stored after this header in the buffer.
+    int materialLayerCount;
 };
 
 PTLayerIndexTable::PTLayerIndexTable(PTRenderer* pRenderer, const vector<int>& indices) :
@@ -71,7 +90,7 @@ void PTLayerIndexTable::set(const vector<int>& indices)
         if (i < indices.size())
             pMappedData[i] = indices[i];
         else
-            pMappedData[i] = -1;
+            pMappedData[i] = kInvalidOffset;
     }
     _pConstantBuffer->Unmap(0, nullptr); // no HRESULT
 }
@@ -83,8 +102,7 @@ struct HitGroupShaderRecord
 {
     // Constructor.
     HitGroupShaderRecord(const void* pShaderIdentifier, const PTGeometry::GeometryBuffers& geometry,
-        int materialBufferOffset, bool isOpaque, ID3D12Resource* pMaterialLayerIndexBuffer,
-        int materialLayerCount)
+        int instanceBufferOffset, bool isOpaque)
     {
         ::memcpy_s(&ShaderIdentifier, SHADER_ID_SIZE, pShaderIdentifier, SHADER_ID_SIZE);
         IndexBufferAddress    = geometry.IndexBuffer;
@@ -97,11 +115,7 @@ struct HitGroupShaderRecord
         TexCoordBufferAddress = HasTexCoords ? geometry.TexCoordBuffer : 0;
         IsOpaque              = isOpaque;
 
-        MaterialBufferOffset           = materialBufferOffset;
-        MaterialLayerCount             = materialLayerCount;
-        MaterialLayerIndexTableAddress = pMaterialLayerIndexBuffer
-            ? pMaterialLayerIndexBuffer->GetGPUVirtualAddress()
-            : (D3D12_GPU_VIRTUAL_ADDRESS) nullptr;
+        InstanceBufferOffset = instanceBufferOffset;
     }
 
     // Copies the contents of the shader record to the specified mapped buffer.
@@ -117,31 +131,28 @@ struct HitGroupShaderRecord
     }
 
     // These are the hit group arguments, in the order declared in the associated local root
-    // signature. These must be aligned by their size, e.g. a root descriptor must be aligned on an
-    // 8-byte (its size) boundary.
+    // signature and the layout in InstancePipelineState.slang. These must be aligned by their size,
+    // e.g. a root descriptor must be aligned on an 8-byte (its size) boundary.
 
-    // Shader identifier part of the hit group record, not the user defined root signature.
+    // Shader identifier which is part of the hit group record, not the user defined root signature.
     array<uint8_t, SHADER_ID_SIZE> ShaderIdentifier;
 
-    // Instance data defined in cbuffer gInstanceData.
+    // Geometry data defined in ByteAddressBuffers: registers t0-t4, space 1.
     D3D12_GPU_VIRTUAL_ADDRESS IndexBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS PositionBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS NormalBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS TangentBufferAddress;
     D3D12_GPU_VIRTUAL_ADDRESS TexCoordBufferAddress;
+    // Instance data defined in cbuffer gInstanceData: register c0, space 1.
     uint32_t HasNormals;
     uint32_t HasTangents;
     uint32_t HasTexCoords;
-    uint32_t MaterialLayerCount;
     uint32_t IsOpaque;
-    uint32_t MaterialBufferOffset;
-
-    // Material layer index defined in gMaterialLayerIDs.
-    D3D12_GPU_VIRTUAL_ADDRESS MaterialLayerIndexTableAddress;
+    uint32_t InstanceBufferOffset;
 };
 
 PTInstance::PTInstance(PTScene* pScene, const PTGeometryPtr& pGeometry,
-    const PTMaterialPtr& pMaterial, const mat4& transform, const LayerDefinitions& /* layers*/)
+    const PTMaterialPtr& pMaterial, const mat4& transform, const LayerDefinitions& layers)
 {
     AU_ASSERT(pGeometry, "Geometry assigned to an cannot be null.");
 
@@ -150,16 +161,11 @@ PTInstance::PTInstance(PTScene* pScene, const PTGeometryPtr& pGeometry,
     _pGeometry = pGeometry;
     _transform = transform;
     setMaterial(pMaterial);
-    // TODO: Re-enable layers.
-#if 0
     for (size_t i = 0; i < layers.size(); i++)
     {
         _layers.push_back(make_pair(dynamic_pointer_cast<PTMaterial>(layers[i].first),
             dynamic_pointer_cast<PTGeometry>(layers[i].second)));
-
-        _layers[i].first->shader()->incrementRefCount(EntryPointTypes::kLayerMiss);
     }
-#endif
 }
 
 PTInstance::~PTInstance()
@@ -242,7 +248,7 @@ PTScene::PTScene(PTRenderer* pRenderer, uint32_t numRendererDescriptors) : Scene
 
     // Compute the shader record strides.
     _missShaderRecordStride     = HitGroupShaderRecord::stride(); // shader ID, no other parameters
-    _missShaderRecordCount      = kBuiltInMissShaderCount; // background, radiance, and shadow
+    _missShaderRecordCount      = kBuiltInMissShaderCount;        // null, and shadow
     _hitGroupShaderRecordStride = HitGroupShaderRecord::stride();
 
     // Use the default environment and ground plane.
@@ -250,6 +256,9 @@ PTScene::PTScene(PTRenderer* pRenderer, uint32_t numRendererDescriptors) : Scene
 
     // Create arbritary sized material buffer (will be resized to fit material constants for scene.)
     _globalMaterialBuffer = _pRenderer->createTransferBuffer(512, "GlobalMaterialBuffer");
+
+    // Create arbritary sized instance buffer (will be resized to fit instance constants for scene.)
+    _globalInstanceBuffer = _pRenderer->createTransferBuffer(512, "GlobalInstanceBuffer");
 
     // Dusable layer shaders.
     // TODO: Reimplement layer shaders with non-recursive rendering.
@@ -542,7 +551,7 @@ ID3D12Resource* PTScene::getHitGroupShaderTable(size_t& recordStride, uint32_t& 
 {
     // Set the shader record size and count.
     recordStride = HitGroupShaderRecord::stride();
-    recordCount  = static_cast<uint32_t>(_lstInstanceData.size());
+    recordCount  = static_cast<uint32_t>(_instances.active().count());
 
     return _pHitGroupShaderTable.Get();
 }
@@ -735,7 +744,7 @@ void PTScene::updateResources()
             MaterialHeader* pHdr = (MaterialHeader*)pMtlData;
             pHdr->shaderIndex    = mtl.shader()->libraryIndex();
 
-            // Add the material texture indices (fill in unused values as -1)
+            // Add the material texture indices (fill in unused values as invalid)
             // TODO: No need for this to be fixed length.
             vector<PTImage*> textures;
             mtl.getTextures(textures);
@@ -743,7 +752,7 @@ void PTScene::updateResources()
             {
                 if (!textures[j])
                 {
-                    pHdr->textureIndices[j] = -1;
+                    pHdr->textureIndices[j] = kInvalidOffset;
                 }
                 else
                 {
@@ -752,7 +761,7 @@ void PTScene::updateResources()
             }
             for (int j = int(textures.size()); j < kMaterialMaxTextures; j++)
             {
-                pHdr->textureIndices[j] = -1;
+                pHdr->textureIndices[j] = kInvalidOffset;
             }
 
             // Move pointer past header.
@@ -839,48 +848,33 @@ void PTScene::updateAccelerationStructure()
         return;
     }
 
-    // Build a list of *unique* instance data objects, i.e. unique combinations of geometry and
-    // material (but not transform). This can be used to build a minimal set of shader records, e.g.
-    // a large assembly with hundreds of identical screws can have the same shader record for all of
-    // the screws. At the same time, assign an identifier (index) so that each instance in the TLAS
-    // (built later) can refer to the correct shader record.
-    uint32_t nextIndex = 0;
-    InstanceDataMap instanceDataMap;
-    LayerIndicesMap layerIndicesMap;
-    vector<uint32_t> instanceDataIndices;
-    map<size_t, uint32_t> materialSamplerIndicesMap;
-    instanceDataIndices.reserve(_instances.active().count());
-    _lstInstanceData.clear();
+    // Build a list of instance data in the global instance buffer.  As the buffer contains a copy
+    // of the transform matrix, there must be an entry (and a hit group) for every instance, even if
+    // they share all the same data other than transform matrix.
+    // TODO: If it was possible access the TLAS instance matrix from the ray generation shader we
+    // could remove this copy of the transform data, and share hit groups between instances.
+    _instanceOffsetLookup.clear();
 
-    // Iterate through all the active instances in the scene.
+    // Iterate through all the active instances in the scene to compute offset within instance
+    // buffer.
+    int instanceBufferOffset = 0;
     for (PTInstance& instance : _instances.active().resources<PTInstance>())
     {
-        // Find the index of this instance's material within list of active materials.
-        uint32_t mtlIndex = _materials.active().findActiveIndex(instance.material());
-        AU_ASSERT(mtlIndex != -1, "Material not active");
+        // Set the offset in the lookup table.
+        _instanceOffsetLookup[&instance] = instanceBufferOffset;
 
-        // If there is no matching instance data in the map, create a new index, add a new instance
-        // data object to the map, and add to the (ordered) list of instance data. Otherwise, use
-        // the the index for the existing instance data.
-        uint32_t instanceDataIndex = 0;
-        InstanceData instanceData(instance, nullptr, mtlIndex);
-        if (instanceDataMap.find(instanceData) == instanceDataMap.end())
-        {
-            instanceDataIndex             = nextIndex++;
-            instanceDataMap[instanceData] = instanceDataIndex;
-            _lstInstanceData.push_back(instanceData);
-        }
-        else
-        {
-            instanceDataIndex = instanceDataMap[instanceData];
-        }
+        // Move offset past header.
+        instanceBufferOffset += kInstanceDataStride;
 
-        // Add the instance data index to the list, i.e. one per instance in the scene.
-        instanceDataIndices.push_back(instanceDataIndex);
+        // Move offset past layer information.
+        instanceBufferOffset += int(instance.materialLayers().size() * sizeof(int) * 2);
     }
 
+    // Set the required instance buffer size.
+    _instanceBufferSize = instanceBufferOffset;
+
     // Build the top-level acceleration structure (TLAS).
-    _pAccelStructure = buildTLAS(instanceDataIndices);
+    _pAccelStructure = buildTLAS();
 
     // If the acceleration structure was rebuilt, then the descriptor heap, as well as the miss and
     // hit group shader tables must likewise be rebuilt, as they rely on the instance data.
@@ -970,11 +964,64 @@ void PTScene::updateShaderTables()
     // Texture and sampler descriptors for unique materials in the scene.
     vector<CD3DX12_GPU_DESCRIPTOR_HANDLE> lstUniqueMaterialSamplerDescriptors;
 
-    // Get currently active materials.
-    auto& activeMaterialResources = _materials.active().resources<PTMaterial>();
-
     if (!_pHitGroupShaderTable && instanceCount > 0)
     {
+        // Resize the global instance buffer if too small for all the instances.
+        if (_globalInstanceBuffer.size < _instanceBufferSize)
+        {
+            _globalInstanceBuffer =
+                _pRenderer->createTransferBuffer(_instanceBufferSize, "GlobalInstanceBuffer");
+        }
+
+        // Fill in the global instance data buffer.
+        uint8_t* pInstanceDataStart = _globalInstanceBuffer.map();
+        int offset                  = 0;
+        for (PTInstance& instance : _instances.active().resources<PTInstance>())
+        {
+            // Validate offset witin buffer matches offset in instance lookup table.
+            AU_ASSERT(offset == _instanceOffsetLookup[&instance], "Offset incorrect");
+
+            // Get pointer to instance data in buffer.
+            uint8_t* pInstanceData    = pInstanceDataStart + offset;
+            InstanceDataHeader* pData = (InstanceDataHeader*)pInstanceData;
+
+            // Copy transposed transform matrix into buffer.
+            mat4 matrix = transpose(instance.transform());
+            ::memcpy_s(
+                pData->transform, sizeof(pData->transform), &matrix, sizeof(pData->transform));
+
+            // Set material buffer offset from value in material lookup table.
+            pData->materialBufferOffset = _materialOffsetLookup[instance.material().get()];
+
+            // Set layer count.
+            pData->materialLayerCount = int(instance.materialLayers().size());
+
+            // Move offset past header.
+            offset += kInstanceDataStride;
+
+            // Fill in layer information.
+            int* pLayerData = reinterpret_cast<int*>(pInstanceDataStart + offset);
+            for (int j = 0; j < pData->materialLayerCount; j++)
+            {
+                auto& pLayerMtl = instance.materialLayers()[j].first;
+
+                // Copy layer material offset to buffer.
+                *pLayerData = _materialOffsetLookup[pLayerMtl.get()];
+                pLayerData++;
+
+                // Copy UV offset to buffer.
+                // TODO: Implement this.
+                *pLayerData = kInvalidOffset;
+                pLayerData++;
+
+                // Move offset past layer information.
+                offset += sizeof(int) * 2;
+            }
+        }
+
+        // Unmap buffer.
+        _globalInstanceBuffer.unmap();
+
         size_t recordStride = HitGroupShaderRecord::stride();
 
         // Create a transfer buffer for the shader table, and map it for writing.
@@ -987,27 +1034,21 @@ void PTScene::updateShaderTables()
         // renderer once upload complete.
         _pHitGroupShaderTable = hitGroupTransferBuffer.pGPUBuffer;
 
-        // Iterate the instance data objects, creating a hit group shader record for each one, and
+        // Iterate the instances, creating a hit group shader record for each one, and
         // copying the shader record data to the shader table.
-        for (int i = 0; i < _lstInstanceData.size(); i++)
+        for (PTInstance& instance : _instances.active().resources<PTInstance>())
         {
-            const auto& instanceData = _lstInstanceData[i];
             // Get the hit group shader ID from the material shader, which will change if the shader
             // library is rebuilt.
-            PTMaterial& instanceMtl = activeMaterialResources[instanceData.mtlIndex];
             const DirectXShaderIdentifier hitGroupShaderID =
                 _pShaderLibrary->getShaderID(PTShaderLibrary::kInstanceHitGroupName);
 
-            // Shader record data includes the geometry buffers, the material constant buffer, and
-            // the descriptor table (offset into the SRV heap) needed for textures.
-            PTGeometry::GeometryBuffers geometryBuffers = instanceData.pGeometry->buffers();
-            ID3D12Resource* pMaterialLayerIndexBuffer =
-                instanceData.pLayerIndices ? instanceData.pLayerIndices->buffer() : nullptr;
-            int materialLayerCount =
-                instanceData.pLayerIndices ? instanceData.pLayerIndices->count() : 0;
-            int globalMaterialOffset = _materialOffsetLookup[&instanceMtl];
-            HitGroupShaderRecord record(hitGroupShaderID, geometryBuffers, globalMaterialOffset,
-                instanceMtl.isOpaque(), pMaterialLayerIndexBuffer, materialLayerCount);
+            // Shader record data includes the geometry buffers, the instance constant buffer
+            // offset, and opaque flag.
+            PTGeometry::GeometryBuffers geometryBuffers = instance.dxGeometry()->buffers();
+            int instanceBufferOffset                    = _instanceOffsetLookup[&instance];
+            HitGroupShaderRecord record(hitGroupShaderID, geometryBuffers, instanceBufferOffset,
+                instance.material()->isOpaque());
             record.copyTo(pShaderTableMappedData);
             pShaderTableMappedData += recordStride;
         }
@@ -1015,6 +1056,7 @@ void PTScene::updateShaderTables()
         // Close the shader table buffer.
         hitGroupTransferBuffer.unmap();
     }
+
     // Create and populate the miss shader table if necessary.
     if (!_pMissShaderTable)
     {
@@ -1052,11 +1094,13 @@ void PTScene::updateShaderTables()
         // Unmap the table.
         missShaderTableTransferBuffer.unmap(); // no HRESULT
 
+        // Upload any transfer buffers that have changed to GPU, so they can be accessed by GPU
+        // commands.
         _pRenderer->uploadTransferBuffers();
     }
 }
 
-ID3D12ResourcePtr PTScene::buildTLAS(const vector<uint32_t>& instanceDataIndices)
+ID3D12ResourcePtr PTScene::buildTLAS()
 {
     // Create and populate a buffer with instance data, if there are any instances.
     auto instanceCount = static_cast<uint32_t>(_instances.active().count());
@@ -1095,7 +1139,7 @@ ID3D12ResourcePtr PTScene::buildTLAS(const vector<uint32_t>& instanceDataIndices
             instanceDesc.AccelerationStructure               = pBLAS->GetGPUVirtualAddress();
             instanceDesc.InstanceID                          = 0;
             instanceDesc.InstanceMask                        = 0xFF;
-            instanceDesc.InstanceContributionToHitGroupIndex = instanceDataIndices[instanceIndex++];
+            instanceDesc.InstanceContributionToHitGroupIndex = instanceIndex++;
             ::memcpy_s(instanceDesc.Transform, sizeof(instanceDesc.Transform), &matrix,
                 sizeof(instanceDesc.Transform));
             instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;

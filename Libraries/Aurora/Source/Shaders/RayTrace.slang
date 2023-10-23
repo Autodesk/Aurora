@@ -41,34 +41,54 @@ struct IndirectOutput
 
 // Instance ray payload.  Used by all closest hit shaders.
 struct InstanceRayPayload {
-    float3 tangent; // the geometric position, interpolated from adjancent vertices
     float3 geomPosition; // the geometric position, interpolated from adjancent vertices
     float2 texCoord; // the shading texture coordinates, interpolated from adjancent vertices
     float3 objectNormal; // the shading position in object space (not world space). Used only in
                            // materialX generated code.
     float3 objectPosition; // the shading normal in object space (not world space). Used only in
                            // materialX generated code.
-    float3x4 objToWorld;
     // Offset withing material buffer for instance.
-    int materialBufferOffset;
+    int instanceBufferOffset;
     // Did the ray hit?
     bool hit = false;
     // Distance from ray origin collision occurred.
     float distance = INFINITY;
+    
+        // Clears the indirect output to values expected for a miss.
+    [mutating]
+    void clear()
+    {
+        distance = INFINITY;
+        hit = false;
+        geomPosition = 0.0;
+        texCoord = 0.0;
+        objectNormal = 0.0;
+        objectPosition = 0.0;
+    }
+
 };
 
 ShadingData shadingDataFromInstanceResult(InstanceRayPayload result)
 {
+    // Fill in the shading data from hit result.
     ShadingData shading;
     shading.geomPosition = result.geomPosition;
     shading.texCoord = result.texCoord;
     shading.objectNormal = result.objectNormal;
     shading.objectPosition = result.objectPosition;
-    shading.objToWorld = result.objToWorld;
+
+    // Get transform matrix from instance buffer.
+    shading.objToWorld = instanceTransformMatrix(result.instanceBufferOffset);
+
+    // Transform object space attributes.
     shading.position = mul(shading.objToWorld, float4(shading.objectPosition, 1.0f));
     shading.normal = normalize(mul((float3x3) shading.objToWorld, shading.objectNormal));
-    shading.tangent = result.tangent;
-
+    
+    // As we don't currently support user-supplied tangents, we always use arbitrary tangent computed from normal.
+    float3 up =
+        abs(shading.normal.y) < 0.999f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
+    shading.tangent = normalize(cross(shading.normal, up));
+ 
     // Generate bitangent from normal and tangent.
     shading.bitangent = computeBitangent(shading.normal, shading.tangent);
 

@@ -210,16 +210,22 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     // Reset material to default values.
     generatedMtlxSetupFunction += "\tMaterial material = defaultMaterial();\n";
 
+
     // Add code to create local texture variables for the textures used by generated code, based on
     // hard-code texture names from Standard Surface.
     // TODO: Data-driven textures that are not mapped to hard coded texture names.
+    // The hard-coded texture indices (must match order in PTMaterial::getTextures).
+    const int kDiffuseTextureIndex           = 0;
+    const int kSpecularRoughnessTextureIndex = 1;
+    const int kNormalTextureIndex            = 2;
+    const int kEmissionTextureIndex          = 3;
+    const int kOpacityTextureIndex           = 4;
     vector<TextureDefinition> textureVars;
     if (res.textures.size() >= 1)
     {
         // Map first texture to the base_color_image and sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D base_color_image = createSampler2D(materialTexture(headerOffset, 0), "
-            "gDefaultSampler);\n";
+            "\tsampler2D base_color_image = createSampler2D(materialTexture(headerOffset, " + to_string(kDiffuseTextureIndex) + "), gDefaultSampler);\n";
 
         // Add to the texture array.
         TextureDefinition txtDef = res.textureDefaults[0];
@@ -231,7 +237,9 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map second texture to the opacity_image and sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D opacity_image = createSampler2D(materialTexture(headerOffset, 1), "
+            "\tsampler2D opacity_image = createSampler2D(materialTexture(headerOffset, " +
+            to_string(kOpacityTextureIndex) +
+            "), "
             "gDefaultSampler);\n";
 
         // Add to the texture array.
@@ -244,7 +252,9 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map third texture to the normal_image and the default sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D normal_image = createSampler2D(materialTexture(headerOffset, 2), "
+            "\tsampler2D normal_image = createSampler2D(materialTexture(headerOffset, " +
+            to_string(kNormalTextureIndex) +
+            "), "
             "gDefaultSampler);\n";
 
         // Add to the texture array.
@@ -258,7 +268,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
         // Map fourth texture to the specular_roughness_image and the default sampler.
         generatedMtlxSetupFunction +=
             "\tsampler2D specular_roughness_image = createSampler2D(materialTexture(headerOffset, "
-            "3), "
+            + to_string(kSpecularRoughnessTextureIndex) + "), "
             "gDefaultSampler);\n";
 
         // Add to the texture array.
@@ -271,7 +281,9 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     {
         // Map fifth texture to the emission_color_image and the default sampler.
         generatedMtlxSetupFunction +=
-            "\tsampler2D emission_color_image = createSampler2D(materialTexture(offset, 4), "
+            "\tsampler2D emission_color_image = createSampler2D(materialTexture(offset, " +
+            to_string(kEmissionTextureIndex) +
+            "), "
             "gDefaultSampler);\n";
 
         // Add to the texture array.
@@ -384,7 +396,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     source.definitions += "#include \"MaterialXCommon.slang\"\n";
     source.definitions += (GLSLToHLSL(definitionGLSL));
     source.definitions += "#include \"GlobalPipelineState.slang\"\n";
-    source.definitions += "#include \"MaterialHeader.slang\"\n";
+    source.definitions += "#include \"GlobalBufferAccessors.slang\"\n";
     source.definitions += "#include \"Material.slang\"\n";
 
     source.setupFunctionDeclaration = functionInterface;

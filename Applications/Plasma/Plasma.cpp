@@ -430,12 +430,12 @@ bool Plasma::initialize()
         return false;
     }
 
-    // Setup asset search paths. Including the path to the ProteinX test folder (if running within
+    // Setup asset search paths. Including the path to the unit test assets folder (if running within
     // the Github repo).
     // TODO: A more reliable solution would be to set based on the loaded MaterialX file path.
-    _assetPaths = { "",
+    _assetPaths = { "", Foundation::getModulePath() + "../../../Tests/Assets/Materials/",
         Foundation::getModulePath() +
-            "../../../Renderers/Tests/Data/Materials/mtlx_ProteinSubset/" };
+            "../../../Tests/Assets/Textures/" };
 
     // Setup the resource loading function to use asset search paths.
     auto loadResourceFunc = [this](const string& uri, vector<unsigned char>* pBufferOut,

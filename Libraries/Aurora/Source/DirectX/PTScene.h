@@ -29,6 +29,9 @@ namespace MaterialXCodeGen
 class MaterialGenerator;
 } // namespace MaterialXCodeGen
 
+// -1 is used to indicate an invalid offset in offset buffers passed to GPU.
+#define kInvalidOffset -1
+
 // Forward declarations.
 class PTRenderer;
 class PTScene;
@@ -135,6 +138,7 @@ public:
     PTRenderer* renderer() { return _pRenderer; }
 
     const TransferBuffer& globalMaterialBuffer() { return _globalMaterialBuffer; }
+    const TransferBuffer& globalInstanceBuffer() { return _globalInstanceBuffer; }
     PTShaderLibrary& shaderLibrary() { return *_pShaderLibrary.get(); }
     IMaterialPtr createMaterialPointer(
         const string& materialType, const string& document, const string& name);
@@ -145,77 +149,20 @@ public:
 private:
     /*** Private Types ***/
 
-    // A structure containing the contents of instance that uniquely identify it, for purposes
-    // of using it in a shader table.
-    struct InstanceData
-    {
-        InstanceData() : pGeometry(nullptr), mtlIndex((uint32_t)-1), pLayerIndices(nullptr) {}
-
-        InstanceData(
-            const PTInstance& instance, PTLayerIndexTablePtr pLayerIndices, uint32_t mtlIndex) :
-            pGeometry(instance.dxGeometry()), mtlIndex(mtlIndex), pLayerIndices(pLayerIndices)
-        {
-        }
-
-        bool operator==(const InstanceData& other) const
-        {
-            return pGeometry == other.pGeometry && mtlIndex == other.mtlIndex &&
-                pLayerIndices == other.pLayerIndices;
-        }
-
-        PTGeometryPtr pGeometry;
-        PTLayerIndexTablePtr pLayerIndices;
-        // Index into array of unique materials for scsne.
-        uint32_t mtlIndex;
-    };
-
-    // Structure containing the contents of material layer, and an index back to parent instance
-    // data.
-    struct LayerData
-    {
-        LayerData(const PTLayerDefinition& def, uint32_t mtlIndex, int idx = -1) : index(idx)
-        {
-            instanceData.mtlIndex  = mtlIndex;
-            instanceData.pGeometry = def.second;
-        }
-
-        InstanceData instanceData;
-        int index;
-    };
-
-    // A functor that hashes the contents of an instance, i.e. the pointers to the geometry and
-    // material.
-    struct HashInstanceData
-    {
-        size_t operator()(const InstanceData& object) const
-        {
-            hash<const PTGeometry*> hasher1;
-            hash<uint32_t> hasher2;
-            hash<const PTLayerIndexTable*> hasher3;
-            return hasher1(object.pGeometry.get()) ^ (hasher2(object.mtlIndex) << 1) ^
-                (hasher3(object.pLayerIndices.get()) << 2);
-        }
-    };
-
-    using InstanceList     = set<PTInstancePtr>;
-    using InstanceDataMap  = unordered_map<InstanceData, uint32_t, HashInstanceData>;
-    using LayerIndicesMap  = map<vector<int>, PTLayerIndexTablePtr>;
-    using InstanceDataList = vector<InstanceData>; // <set> not needed; known to be unique
-    using LayerDataList    = vector<LayerData>;
-
     /*** Private Functions ***/
 
     void updateAccelerationStructure();
     void updateDescriptorHeap();
     void updateShaderTables();
-    ID3D12ResourcePtr buildTLAS(const vector<uint32_t>& instanceDataIndices);
+    ID3D12ResourcePtr buildTLAS();
 
     /*** Private Variables ***/
 
     PTRenderer* _pRenderer = nullptr;
     unique_ptr<PTShaderLibrary> _pShaderLibrary;
-    InstanceDataList _lstInstanceData;
     map<PTMaterial*, int> _materialOffsetLookup;
+    map<PTInstance*, int> _instanceOffsetLookup;
+    size_t _instanceBufferSize = 0;
     map<PTImage*, int> _materialTextureIndexLookup;
     vector<PTImage*> _activeMaterialTextures;
     PTGroundPlanePtr _pGroundPlane;
@@ -224,6 +171,7 @@ private:
     map<int, weak_ptr<PTLight>> _distantLights;
     int _currentLightIndex = 0;
     TransferBuffer _globalMaterialBuffer;
+    TransferBuffer _globalInstanceBuffer;
 
     /*** DirectX 12 Objects ***/
 

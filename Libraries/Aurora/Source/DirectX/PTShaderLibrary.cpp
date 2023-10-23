@@ -391,7 +391,7 @@ void PTShaderLibrary::initRootSignatures(int globalTextureCount)
     // Create the global root signature.
     // Must match the root signature data setup in PTRenderer::submitRayDispatch and the GPU
     // version in GlobalRootSignature.slang.
-    array<CD3DX12_ROOT_PARAMETER, 10> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 11> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
     globalRootParameters[0].InitAsShaderResourceView(0);         // gScene: acceleration structure
     globalRootParameters[1].InitAsConstants(2, 0);               // sampleIndex + seedOffset
     globalRootParameters[2].InitAsConstantBufferView(1); // gFrameData: per-frame constant buffer
@@ -405,13 +405,16 @@ void PTShaderLibrary::initRootSignatures(int globalTextureCount)
     globalRootParameters[7].InitAsShaderResourceView(4); // gNullScene: null acceleration structure
     globalRootParameters[8].InitAsShaderResourceView(
         5); // gGlobalMaterialConstants: global material constants.
+    globalRootParameters[9].InitAsShaderResourceView(
+        6); // gGlobalInstanceConstants: global instance constants.
 
     texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, globalTextureCount,
-        6); // Global scene textures.
+        7); // gGlobalMaterialTextures: Global scene textures.
     CD3DX12_DESCRIPTOR_RANGE sceneTextureRanges[] = {
         texRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    globalRootParameters[9].InitAsDescriptorTable(_countof(sceneTextureRanges), sceneTextureRanges);
+    globalRootParameters[10].InitAsDescriptorTable(
+        _countof(sceneTextureRanges), sceneTextureRanges);
 
     // gDefault sampler.
     CD3DX12_STATIC_SAMPLER_DESC samplerDesc(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR);
@@ -452,8 +455,8 @@ void PTShaderLibrary::initRootSignatures(int globalTextureCount)
     instanceHitParameters[4].InitAsShaderResourceView(4, 1); // gTexCoords
 
     // Constants from HitGroupShaderRecord: gHasNormals, gHasTangents, gHasTexCoords,
-    // gLayerMissShaderIndex, gIsOpaque, and gMaterialBufferOffset.
-    instanceHitParameters[5].InitAsConstants(6, 0, 1);
+    // gIsOpaque, and gInstanceBufferOffset.
+    instanceHitParameters[5].InitAsConstants(5, 0, 1);
 
     // gMaterialLayerIDs: indices for layer material shaders.
     instanceHitParameters[6].InitAsConstantBufferView(1, 1);
@@ -1003,14 +1006,14 @@ void PTShaderLibrary::rebuild(int globalTextureCount)
     // "ShadowRayPayload") and intersection attributes (UV barycentric coordinates).
     // If the structures used in the shader exceed these values the result will be a rendering
     // failure.
-    const unsigned int kRayPayloadSize   = 30 * sizeof(float);
+    const unsigned int kRayPayloadSize   = 14 * sizeof(float);
     const unsigned int kIntersectionSize = 2 * sizeof(float);
     auto* pShaderConfigSubobject =
         pipelineStateDesc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
     pShaderConfigSubobject->Config(kRayPayloadSize, kIntersectionSize);
 
     // NOTE: The shader configuration is assumed to apply to all shaders, so it is *not* associated
-    // kydwith specific shaders (which would use
+    // with specific shaders (which would use
     // CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT).
 
     // Create the global root signature subobject.

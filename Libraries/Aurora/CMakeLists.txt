@@ -125,7 +125,7 @@ set(COMMON_SHADERS
     "Source/Shaders/GlobalPipelineState.slang"
     "Source/Shaders/MainEntryPoints.slang"
     "Source/Shaders/Material.slang"
-    "Source/Shaders/MaterialHeader.slang"
+    "Source/Shaders/GlobalBufferAccessors.slang"
     "Source/Shaders/MaterialXCommon.slang"
     "Source/Shaders/Options.slang"
     "Source/Shaders/PathTracingCommon.slang"
