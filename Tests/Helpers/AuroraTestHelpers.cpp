@@ -169,75 +169,78 @@ uint32_t TeapotModel::indicesCount()
 #define ASSERT_VALUE_FAIL(_expr) ASSERT_ANY_THROW(_expr)
 #endif
 
-// Helper function to load an image from disk.
-void FixtureBase::loadImage(const string& filename, ImageData* pImageOut)
+// Helper function to load an image from disk, the image will be created with the filename used as
+// the Aurora path.
+Aurora::Path FixtureBase::loadImage(const string& filename, bool linearize)
 {
-    // Use STB to load image file.
-    int width, height, components;
-    unsigned char* pPixels = stbi_load(filename.c_str(), &width, &height, &components, 0);
-    AU_ASSERT(pPixels != nullptr, "Failed to load image:%s", filename.c_str());
-
-    // Create Aurora image data struct from the pixels.
-    ImageDescriptor& imageDesc = pImageOut->descriptor;
-    imageDesc.width            = width;
-    imageDesc.height           = height;
-    imageDesc.linearize        = true;
-    imageDesc.format           = ImageFormat::Integer_RGBA;
-    size_t numPixels           = static_cast<size_t>(width * height * 4);
-    pImageOut->buffer.resize(numPixels * 4);
-    unsigned char* pImageData = &(pImageOut->buffer)[0];
-
-    // STB usually provides RGB, pad to RGBA if needed.
-    if (components == 3)
-    {
-        // Flip vertically as STB loads upside down.
-        for (int i = 0; i < height; i++)
-        {
-            int flippedRow      = (height - 1 - i);
-            unsigned char* pIn  = pPixels + (flippedRow * width * 3);
-            unsigned char* pOut = ((unsigned char*)pImageData) + (i * width * 4);
-            for (int j = 0; j < width; j++)
-            {
-                *(pOut++) = *(pIn++);
-                *(pOut++) = *(pIn++);
-                *(pOut++) = *(pIn++);
-                *(pOut++) = 255;
-            }
-        }
-    }
-    else if (components == 4)
-    {
-        // Flip vertically as STB loads upside down.
-        for (int i = 0; i < height; i++)
-        {
-            int flippedRow      = (height - 1 - i);
-            unsigned char* pIn  = pPixels + (flippedRow * width * 4);
-            unsigned char* pOut = ((unsigned char*)pImageData) + (i * width * 4);
-            for (int j = 0; j < width; j++)
-            {
-                *(pOut++) = *(pIn++);
-                *(pOut++) = *(pIn++);
-                *(pOut++) = *(pIn++);
-                *(pOut++) = *(pIn++);
-            }
-        }
-    }
-    else
-    {
-        AU_FAIL("%s invalid number of components %d", filename.c_str(), components);
-    }
-
-    free(pPixels);
+    ImageDescriptor imageDesc;
+    imageDesc.linearize = linearize;
+    Path path           = "TestImage:" + filename + "-linearize=" + to_string(linearize);
 
     // Set up the pixel data callback
-    imageDesc.getPixelData = [pImageOut](PixelData& dataOut, glm::ivec2, glm::ivec2) {
-        // Get address and size from buffer (assumes will be called from scope of test, so buffer
-        // still valid)
-        dataOut.address = pImageOut->buffer.data();
-        dataOut.size    = pImageOut->buffer.size();
+    imageDesc.getData = [this, path, filename](ImageData& dataOut, AllocateBufferFunction alloc) {
+        // Use STB to load image file.
+        int width, height, components;
+        unsigned char* pReadPixels = stbi_load(filename.c_str(), &width, &height, &components, 0);
+        AU_ASSERT(pReadPixels != nullptr, "Failed to load image:%s", filename.c_str());
+
+        size_t numPixels          = static_cast<size_t>(width * height);
+        size_t numBytes           = numPixels * 4;
+        unsigned char* pImageData = static_cast<unsigned char*>(alloc(numBytes));
+
+        // Create Aurora image data struct from the pixels.
+        dataOut.dimensions   = { width, height };
+        dataOut.format       = ImageFormat::Integer_RGBA;
+        dataOut.pPixelBuffer = pImageData;
+        dataOut.bufferSize   = numBytes;
+
+        // STB usually provides RGB, pad to RGBA if needed.
+        if (components == 3)
+        {
+            // Flip vertically as STB loads upside down.
+            for (int i = 0; i < height; i++)
+            {
+                int flippedRow      = (height - 1 - i);
+                unsigned char* pIn  = pReadPixels + (flippedRow * width * 3);
+                unsigned char* pOut = ((unsigned char*)pImageData) + (i * width * 4);
+                for (int j = 0; j < width; j++)
+                {
+                    *(pOut++) = *(pIn++);
+                    *(pOut++) = *(pIn++);
+                    *(pOut++) = *(pIn++);
+                    *(pOut++) = 255;
+                }
+            }
+        }
+        else if (components == 4)
+        {
+            // Flip vertically as STB loads upside down.
+            for (int i = 0; i < height; i++)
+            {
+                int flippedRow      = (height - 1 - i);
+                unsigned char* pIn  = pReadPixels + (flippedRow * width * 4);
+                unsigned char* pOut = ((unsigned char*)pImageData) + (i * width * 4);
+                for (int j = 0; j < width; j++)
+                {
+                    *(pOut++) = *(pIn++);
+                    *(pOut++) = *(pIn++);
+                    *(pOut++) = *(pIn++);
+                    *(pOut++) = *(pIn++);
+                }
+            }
+        }
+        else
+        {
+            AU_FAIL("%s invalid number of components %d", filename.c_str(), components);
+        }
+        free(pReadPixels);
+
         return true;
     };
-};
+    _pDefaultScene->setImageDescriptor(path, imageDesc);
+
+    return path;
+}
 
 // Convenience function to test a float3 value.
 void FixtureBase::testFloat3Value(

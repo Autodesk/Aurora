@@ -119,6 +119,7 @@ public:
     const TransferBuffer& globalMaterialBuffer() { return _globalMaterialBuffer; }
     const TransferBuffer& globalInstanceBuffer() { return _globalInstanceBuffer; }
     const TransferBuffer& layerGeometryBuffer() { return _layerGeometryBuffer; }
+    const TransferBuffer& transformMatrixBuffer() { return _transformMatrixBuffer; }
     PTShaderLibrary& shaderLibrary() { return *_pShaderLibrary.get(); }
     IMaterialPtr createMaterialPointer(
         const string& materialType, const string& document, const string& name);
@@ -129,23 +130,94 @@ public:
 private:
     /*** Private Types ***/
 
+    // A structure containing the contents of instance that uniquely identify it, for purposes
+    // of using it in a shader table.
+    struct InstanceData
+    {
+        InstanceData(const PTInstance& instance) :
+            pGeometry(nullptr),
+            mtlBufferOffset((int)-1),
+            layers({}),
+            bufferOffset(-1),
+            isOpaque(true),
+            pInstance(&instance)
+        {
+        }
+
+        bool operator==(const InstanceData& other) const
+        {
+            if (pGeometry != other.pGeometry || mtlBufferOffset != other.mtlBufferOffset ||
+                layers.size() != other.layers.size())
+                return false;
+
+            for (int i = 0; i < layers.size(); i++)
+            {
+                if (layers[i].first != other.layers[i].first)
+                    return false;
+                if (layers[i].second != other.layers[i].second)
+                    return false;
+            }
+            return true;
+        }
+
+        // Properties used to compute hash.
+        // Geometry for instance
+        PTGeometryPtr pGeometry;
+        // Offset in global material buffer and layer geometry buffer for each layer.
+        vector<pair<int, int>> layers;
+        // Offset into global material buffer for base layer material.
+        int mtlBufferOffset;
+
+        // Convenience properties, do not effect hash.
+        const PTInstance* pInstance;
+        bool isOpaque;
+        int bufferOffset;
+    };
+
+    // A functor that hashes the contents of an instance, i.e. the pointers to the geometry and
+    // material.
+    struct HashInstanceData
+    {
+        size_t operator()(const InstanceData& object) const
+        {
+            hash<const PTGeometry*> geomHasher;
+            hash<int> indexHasher;
+            size_t res =
+                geomHasher(object.pGeometry.get()) ^ (indexHasher(object.mtlBufferOffset) << 1);
+            for (int i = 0; i < object.layers.size(); i++)
+            {
+                size_t layerHash = indexHasher(object.layers[i].first) ^
+                    (indexHasher(object.layers[i].second) << 1);
+                res = res ^ (layerHash << (i + 1));
+            }
+            return res;
+        }
+    };
+
+    using InstanceList     = set<PTInstancePtr>;
+    using InstanceDataMap  = unordered_map<InstanceData, int, HashInstanceData>;
+    using InstanceDataList = vector<InstanceData>; // <set> not needed; known to be unique
+
     /*** Private Functions ***/
 
     void updateAccelerationStructure();
     void updateDescriptorHeap();
     void updateShaderTables();
     ID3D12ResourcePtr buildTLAS();
+    InstanceData createInstanceData(const PTInstance& instance);
 
     /*** Private Variables ***/
 
     PTRenderer* _pRenderer = nullptr;
     unique_ptr<PTShaderLibrary> _pShaderLibrary;
-    map<PTMaterial*, int> _materialOffsetLookup;
-    map<PTInstance*, int> _instanceOffsetLookup;
-    map<PTGeometry*, int> _layerGeometryOffsetLookup;
+    InstanceDataList _lstInstanceData;
+    map<const PTMaterial*, int> _materialOffsetLookup;
+    map<const PTInstance*, int> _instanceDataIndexLookup;
+    map<const PTGeometry*, int> _layerGeometryOffsetLookup;
     vector<PTGeometry*> _layerGeometry;
-    size_t _instanceBufferSize      = 0;
-    size_t _layerGeometryBufferSize = 0;
+    size_t _instanceBufferSize        = 0;
+    size_t _layerGeometryBufferSize   = 0;
+    size_t _transformMatrixBufferSize = 0;
     map<IImage*, int> _materialTextureIndexLookup;
     map<ISampler*, int> _materialSamplerIndexLookup;
     vector<PTImage*> _activeMaterialTextures;
@@ -158,6 +230,7 @@ private:
     TransferBuffer _globalMaterialBuffer;
     TransferBuffer _globalInstanceBuffer;
     TransferBuffer _layerGeometryBuffer;
+    TransferBuffer _transformMatrixBuffer;
 
     /*** DirectX 12 Objects ***/
 
@@ -174,6 +247,7 @@ private:
     std::mutex _mutex;
 
     map<size_t, ISamplerPtr> _samplerCache;
+    map<string, weak_ptr<IImage>> _imageCache;
     // Code generator used to generate MaterialX files.
 #if ENABLE_MATERIALX
     unique_ptr<MaterialXCodeGen::MaterialGenerator> _pMaterialXGenerator;

@@ -162,7 +162,7 @@ public:
 
     void setString(const string& /* name*/, const string& /* value*/) override
     {
-        AU_FAIL("Cannot set arbritary string on material.");
+        AU_FAIL("Cannot set arbitrary string on material.");
     }
     IValues::Type type(const std::string& name) override
     {

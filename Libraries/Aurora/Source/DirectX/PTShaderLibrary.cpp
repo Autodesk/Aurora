@@ -392,7 +392,7 @@ void PTShaderLibrary::initRootSignatures(int globalTextureCount, int globalSampl
     // Create the global root signature.
     // Must match the root signature data setup in PTRenderer::submitRayDispatch and the GPU
     // version in GlobalRootSignature.slang.
-    array<CD3DX12_ROOT_PARAMETER, 13> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
+    array<CD3DX12_ROOT_PARAMETER, 14> globalRootParameters = {}; // NOLINT(modernize-avoid-c-arrays)
     globalRootParameters[0].InitAsShaderResourceView(0);         // gScene: acceleration structure
     globalRootParameters[1].InitAsConstants(2, 0);               // sampleIndex + seedOffset
     globalRootParameters[2].InitAsConstantBufferView(1); // gFrameData: per-frame constant buffer
@@ -410,13 +410,15 @@ void PTShaderLibrary::initRootSignatures(int globalTextureCount, int globalSampl
         6); // gGlobalInstanceBuffer: global instance data.
     globalRootParameters[10].InitAsShaderResourceView(
         7); // gLayerGeometryBuffer: UVs for geometry layers.
+    globalRootParameters[11].InitAsShaderResourceView(
+        8); // gTransformMatrixBuffer: Tranform matrices for all instances.
 
     texRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, globalTextureCount,
-        8); // gGlobalMaterialTextures: Global scene textures.
+        9); // gGlobalMaterialTextures: Global scene textures.
     CD3DX12_DESCRIPTOR_RANGE sceneTextureRanges[] = {
         texRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    globalRootParameters[11].InitAsDescriptorTable(
+    globalRootParameters[12].InitAsDescriptorTable(
         _countof(sceneTextureRanges), sceneTextureRanges);
 
     // Sampler descriptors in gGlobalMaterialSamplers array starting at register(s0)
@@ -424,7 +426,7 @@ void PTShaderLibrary::initRootSignatures(int globalTextureCount, int globalSampl
     CD3DX12_DESCRIPTOR_RANGE globalSamplerRanges[] = {
         samplerRange
     }; // NOLINT(modernize-avoid-c-arrays)
-    globalRootParameters[12].InitAsDescriptorTable(
+    globalRootParameters[13].InitAsDescriptorTable(
         _countof(globalSamplerRanges), globalSamplerRanges);
 
     // Create the global root signature object, there are no static samplers (all the samplers
@@ -873,10 +875,11 @@ void PTShaderLibrary::rebuild(int globalTextureCount, int globalSamplerCount)
         // If development flag set dump transpiled library to a file.
         if (AU_DEV_DUMP_TRANSPILED_CODE)
         {
-            if (Foundation::writeStringToFile(transpiledHLSL, job.libName))
-                AU_INFO("Dumping transpiled code to:%s", job.libName.c_str());
+            string transpFilename = job.libName + ".transpiled";
+            if (Foundation::writeStringToFile(transpiledHLSL, transpFilename))
+                AU_INFO("Dumping transpiled code to:%s", transpFilename.c_str());
             else
-                AU_WARN("Failed to write transpiled code to:%s", job.libName.c_str());
+                AU_WARN("Failed to write transpiled code to:%s", transpFilename.c_str());
         }
 
         // Compile the HLSL source for this shader.

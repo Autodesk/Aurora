@@ -587,13 +587,10 @@ TEST_P(MaterialTest, TestMaterialEmission)
 
     // Load a test image from disk as an Aurora image.
     const std::string imageFilePath = dataPath() + "/Textures/Mr._Smiley_Face.png";
-    TestHelpers::ImageData imageData;
-    loadImage(imageFilePath, &imageData);
-    const Path kImagePath = "EmissionColorImage";
-    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+    const Path imagePath            = loadImage(imageFilePath);
 
     // Set the image as the emission color image on the material.
-    pScene->setMaterialProperties(material, { { "emission_color_image", kImagePath } });
+    pScene->setMaterialProperties(material, { { "emission_color_image", imagePath } });
 
     // Render and compare against the baseline image.
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "EmissionImage", "Materials");
@@ -1389,14 +1386,7 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
 
     // Load pixels for test image file.
     const std::string txtName = dataPath() + "/Textures/Triangle.png";
-
-    // Load image
-    TestHelpers::ImageData imageData;
-    loadImage(txtName, &imageData);
-
-    // Create the image.
-    const Path kImagePath = "OpacityImage";
-    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+    Path imagePath            = loadImage(txtName);
 
     // Constant colors.
     vec3 color0(0.5f, 1.0f, 0.3f);
@@ -1431,7 +1421,7 @@ TEST_P(MaterialTest, TestMaterialShadowTransparency)
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "Transmission", "Materials");
 
     // Render baseline image with transmission and thin_walled flag set.
-    pScene->setMaterialProperties(transpMtl, { { "opacity_image", kImagePath } });
+    pScene->setMaterialProperties(transpMtl, { { "opacity_image", imagePath } });
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "OpacityImage", "Materials");
 
     // Render baseline image with opacity, no transmission and thin_walled flag not set.

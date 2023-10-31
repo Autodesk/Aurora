@@ -17,8 +17,6 @@
 
 BEGIN_AURORA
 
-static PropertySetPtr g_pPropertySet;
-
 // A shortcut macro for defining a uniform buffer property definition.
 #define PROPERTY_DEF(NAME1, NAME2, TYPE)                                                           \
     UniformBufferPropertyDefinition(NAME1, NAME2, PropertyValue::Type::TYPE)

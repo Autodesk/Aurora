@@ -101,16 +101,13 @@ void SceneBase::createDefaultResources()
     _resources[kDefaultInstanceName] = _pDefaultInstanceResource;
 
     ImageDescriptor imageDesc;
-    imageDesc.width         = 2;
-    imageDesc.height        = 2;
     imageDesc.isEnvironment = false;
     imageDesc.linearize     = true;
-    imageDesc.format        = ImageFormat::Integer_RGBA;
-    imageDesc.getPixelData  = [this](PixelData& dataOut, glm::ivec2, glm::ivec2) {
-        // Get address and size from buffer (assumes will be called from scope of test, so buffer
-        // still valid)
-        dataOut.address = _defaultImagePixels.data();
-        dataOut.size    = _defaultImagePixels.size();
+    imageDesc.getData       = [this](ImageData& dataOut, AllocateBufferFunction alloc) {
+        dataOut.pPixelBuffer = _defaultImagePixels.data();
+        dataOut.bufferSize   = _defaultImagePixels.size();
+        dataOut.dimensions   = { 2, 2 };
+        dataOut.format       = ImageFormat::Integer_RGBA;
         return true;
     };
 
@@ -210,42 +207,48 @@ void SceneBase::setImageFromFilePath(
     if (imagePath.empty())
         imagePath = atPath;
 
-    // Lookup in loaded images map, return
-    shared_ptr<ImageAsset> pImageAsset;
-    auto iter = _loadedImages.find(filePath);
-    if (iter != _loadedImages.end())
-    {
-        pImageAsset = iter->second;
-    }
-    else
-    {
-        pImageAsset = rendererBase()->assetManager()->acquireImage(imagePath);
-        if (!pImageAsset)
-        {
-            pImageAsset = _pErrorImageData;
-            AU_ERROR("Failed to load image %s", imagePath.c_str());
-        }
-        _loadedImages[filePath] = pImageAsset;
-    }
-
     Aurora::ImageDescriptor imageDesc;
-    imageDesc.format        = pImageAsset->data.format;
-    imageDesc.width         = pImageAsset->data.width;
-    imageDesc.height        = pImageAsset->data.height;
-    imageDesc.linearize     = forceLinear ? false : pImageAsset->data.linearize;
+    imageDesc.linearize     = forceLinear;
     imageDesc.isEnvironment = isEnvironment;
 
     // Setup pixel data callback to get address and size from buffer from cache entry.
-    string pathToLoad      = filePath;
-    imageDesc.getPixelData = [this, pathToLoad](
-                                 Aurora::PixelData& dataOut, glm::ivec2, glm::ivec2) {
-        shared_ptr<ImageAsset> pAsset = _loadedImages[pathToLoad];
-        dataOut.address               = pAsset->pixels.get();
-        dataOut.size                  = pAsset->sizeBytes;
+    string pathToLoad = filePath;
+    imageDesc.getData = [this, forceLinear, pathToLoad](
+                            Aurora::ImageData& dataOut, AllocateBufferFunction /* alloc*/) {
+        shared_ptr<ImageAsset> pImageAsset;
+
+        // Lookup in loaded images map, return
+        auto iter = _loadedImages.find(pathToLoad);
+        if (iter != _loadedImages.end())
+        {
+            pImageAsset = iter->second;
+        }
+        else
+        {
+            pImageAsset = rendererBase()->assetManager()->acquireImage(pathToLoad);
+
+            if (!pImageAsset)
+            {
+                pImageAsset = _pErrorImageData;
+                AU_ERROR("Failed to load image %s", pathToLoad.c_str());
+            }
+            _loadedImages[pathToLoad] = pImageAsset;
+        }
+
+        // Fill in output data.
+        dataOut.format       = pImageAsset->data.format;
+        dataOut.dimensions   = { pImageAsset->data.width, pImageAsset->data.height };
+        dataOut.pPixelBuffer = pImageAsset->pixels.get();
+        dataOut.bufferSize   = pImageAsset->sizeBytes;
+
+        // Override the linearize value with the one inferred from the image file, unless client
+        // passed forceLinear flag.
+        dataOut.overrideLinearize = !forceLinear;
+        dataOut.linearize         = pImageAsset->data.linearize;
+
         return true;
     };
-    imageDesc.pixelUpdateComplete = [this, pathToLoad](const Aurora::PixelData&, glm::ivec2,
-                                        glm::ivec2) { _loadedImages.erase(pathToLoad); };
+    imageDesc.updateComplete = [this, pathToLoad]() { _loadedImages.erase(pathToLoad); };
 
     setImageDescriptor(atPath, imageDesc);
 }

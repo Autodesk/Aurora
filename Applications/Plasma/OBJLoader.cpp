@@ -17,6 +17,8 @@
 #include "Loaders.h"
 #include "SceneContents.h"
 
+bool gEnableMaterialXMaterials = false;
+
 uint32_t ImageCache::whitePixels[1] = { 0xFFFFFFFF };
 
 #define PLASMA_HAS_TANGENTS 0
@@ -62,6 +64,11 @@ struct hashOBJIndex
 // An unordered (hash) map from an OBJIndex (with vertex channel indices) to a single index.
 using OBJIndexMap = unordered_map<OBJIndex, uint32_t, hashOBJIndex>;
 
+void loadMaterialXForOBJMaterials(bool enabled)
+{
+    gEnableMaterialXMaterials = enabled;
+}
+
 // Loads a Wavefront OBJ file into the specified renderer and scene, from the specified file path.
 bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const string& filePath,
     SceneContents& sceneContents)
@@ -103,9 +110,40 @@ bool loadOBJFile(Aurora::IRenderer* /*pRenderer*/, Aurora::IScene* pScene, const
     int mtlCount = 0;
     for (auto& objMaterial : objMaterials)
     {
+        // Flag is set try and load a materialX file with the OBJ material name.
+        if (gEnableMaterialXMaterials && !objMaterial.name.empty())
+        {
+            // Build MaterialX file path from OBJ material name and OBJ path.
+            std::string directory = std::filesystem::path(filePath).parent_path().u8string();
+            string mtlxFilename   = directory + "/" + objMaterial.name + ".mtlx";
+            ifstream is(mtlxFilename, ifstream::binary);
+            if (is.good())
+            {
+                // If the file exists load it into a string.
+                string mtlString;
+                is.seekg(0, is.end);
+                size_t length = is.tellg();
+                is.seekg(0, is.beg);
+                mtlString.resize(length + 1);
+                is.read((char*)&mtlString[0], length);
+
+                // Create a material from the MaterialX string, and use it in place of the OBJ
+                // material.
+                Aurora::Path materialPath =
+                    filePath + "-" + objMaterial.name + ":MaterialX-" + to_string(mtlCount++);
+                pScene->setMaterialType(materialPath, Names::MaterialTypes::kMaterialX, mtlString);
+                lstMaterials.push_back(materialPath);
+                AU_INFO("Found materialX document %s for OBJ material %s", mtlxFilename.c_str(),
+                    objMaterial.name.c_str());
+                continue;
+            }
+        }
+
         // Collect material properties.
         // NOTE: This includes support for some of the properties in the PBR extension here:
         // http://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
+        // See TinyOBJ parsing code for mapping from OBJ mtl values to ObjMaterial properties:
+        // https://github.com/tinyobjloader/tinyobjloader/blob/ee45fb41db95bf9563f2a41bc63adfa18475c2ee/tiny_obj_loader.h#L2127
         // > We use the Standard Surface IOR default of 1.5 when no IOR is specified in the file,
         //   which is parsed as 1.0.
         // > Transmission is derived from the "dissolve" property. This is normally intended for

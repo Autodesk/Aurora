@@ -100,8 +100,11 @@ ByteAddressBuffer gGlobalInstanceBuffer : register(t6);
 // Instance properties for all scene instances are stored in this ByteAddressBuffer.  This is the instance transform matrix and layer properties, if any.
 ByteAddressBuffer gLayerGeometryBuffer : register(t7);
 
+// Transform matrices for all the instances.
+ByteAddressBuffer gTransformMatrixBuffer : register(t8);
+
 // Material textures for all the scene materials.  Looked up using indices stored in material header.
-Texture2D<float4> gGlobalMaterialTextures[] : register(t8);
+Texture2D<float4> gGlobalMaterialTextures[] : register(t9);
 
 // Material textures for all the scene materials.  Looked up using indices stored in material header.
 SamplerState gSamplerArray[] : register(s0);

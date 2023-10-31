@@ -95,6 +95,8 @@ private:
     void saveImage(const wstring& filePath, const uvec2& dimensions);
     bool applyMaterialXFile(const string& mtlxPath);
     Aurora::Path loadMaterialXFile(const string& filePath);
+    void addAssetPath(const string& path);
+    void addAssetPathContainingFile(const string& filePath);
 
     void resetMaterials();
     bool addDecal(const string& decalMtlXPath);

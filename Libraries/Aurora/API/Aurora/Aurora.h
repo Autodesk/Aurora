@@ -517,60 +517,64 @@ struct GeometryDescriptor
     AttributeUpdateCompleteFunction attributeUpdateComplete = nullptr;
 };
 
-/// \struct Image pixel data desription, filed in by getPixelData callback when IImage is activated.
-struct PixelData
+/// \struct Image data description, filed in by getData callback when IImage is activated.
+struct ImageData
 {
-    /// Buffer address.
-    const void* address = nullptr;
+    /// Pixel buffer address.
+    const void* pPixelBuffer = nullptr;
 
     /// Size of one row of pixels.
     size_t bytesPerRow = 0;
 
-    /// The total size in bytes of the buffer.
-    size_t size = 0;
+    /// The total size in bytes of the pixel buffer.
+    size_t bufferSize = 0;
+
+    /// Size of the image.
+    glm::ivec2 dimensions = glm::ivec2(0, 0);
+
+    /// The format of the image.
+    ImageFormat format = ImageFormat::Integer_RGBA;
+
+    /// Should we override the linearize flag the image was created with.
+    bool overrideLinearize = false;
+
+    /// Whether the image should be linearized from sRGB to linear color space.
+    /// Ignored unless overrideLinearize is set.
+    bool linearize = true;
 };
 
-/// Callback function to get the pixel data for an image object from the
+/// Callback function, passed to the getData callback functions to allocate buffers to use in the
+/// returned data (e.g. pixel buffers).
+///
+/// \param size  The size of buffer to be allocated.
+using AllocateBufferFunction = std::function<void*(size_t size)>;
+
+/// Callback function to get the data, including size and pixel buffer, for an image object from the
 /// client.
 ///
-/// \param dataOut  The pixel data, including pointer to actual pixels, to be filled in by client.
-/// \param bottomLeft The bottom left of the image region to be filled in. Currently always the
-/// bottom left corner of entire image. \param topRight The top right of the image region to be
-/// filled in. Currently always the top right corner of entire image. \return false if client was
-/// not able to create image data.
-using GetPixelDataFunction =
-    std::function<bool(PixelData& dataOut, glm::ivec2 bottomLeft, glm::ivec2 topRight)>;
+/// \param dataOut  The image data, including pointer to actual pixels, to be filled in by client.
+using GetImageDataFunction = std::function<bool(ImageData& dataOut, AllocateBufferFunction alloc)>;
 
 /// Callback function to signal the vertex and index attribute data for the geometry object has been
 /// updated, and the pointers provided by the GetAttributeDataFunction can be freed by the client.
 /// Provides the same arguments that were provided by getAttributeData.
-using PixelUpdateCompleteFunction =
-    std::function<void(const PixelData& data, glm::ivec2 bottomLeft, glm::ivec2 topRight)>;
+using ImageUpdateCompleteFunction = std::function<void()>;
 
 /// Input image description.
 struct ImageDescriptor
 {
-    /// The format of the image.
-    ImageFormat format = ImageFormat::Integer_RGBA;
-
     /// Whether the image should be linearized from sRGB to linear color space.
-    bool linearize;
+    bool linearize = true;
 
     /// Whether the image is to be used to represent an environment.
     bool isEnvironment = false;
 
-    /// The width of image in pixels.
-    uint32_t width = 0;
-
-    /// The height of image in pixels.
-    uint32_t height = 0;
-
     /// Callback for getting the pixel data, called when geometry resource is activated.
-    GetPixelDataFunction getPixelData = nullptr;
+    GetImageDataFunction getData = nullptr;
 
-    /// Optional completion callback, called after image resource is activated and pixel data is no
-    /// longer in use by the renderer.
-    PixelUpdateCompleteFunction pixelUpdateComplete = nullptr;
+    /// Optional completion callback, called after image resource is activated and image pixel data
+    /// is no longer in use by the renderer.
+    ImageUpdateCompleteFunction updateComplete = nullptr;
 };
 
 /// Instance definition, all the data required to create an instance resource.

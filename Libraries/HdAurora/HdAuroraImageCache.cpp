@@ -34,22 +34,24 @@ Aurora::Path HdAuroraImageCache::acquireImage(
     if (iter != _cache.end())
         return auroraImagePath;
 
-    _cache[auroraImagePath]           = HdAuroraImageCacheEntry();
-    HdAuroraImageCacheEntry& newEntry = _cache[auroraImagePath];
-    newEntry.imageDesc.getPixelData   = [this, auroraImagePath](
-                                          Aurora::PixelData& dataOut, glm::ivec2, glm::ivec2) {
-        const HdAuroraImageCacheEntry& entry = _cache[auroraImagePath];
-        dataOut.address                      = entry.pPixelData.get();
-        dataOut.size                         = entry.sizeInBytes;
-        return true;
-    };
-    newEntry.imageDesc.isEnvironment = isEnvironmentImage;
-    newEntry.imageDesc.linearize     = !forceLinear;
+    _cache.insert(auroraImagePath);
 
-    std::string resolvedPath           = ArGetResolver().CreateIdentifier(sFilePath);
-    pxr::HioImageSharedPtr const image = pxr::HioImage::OpenForReading(resolvedPath);
-    if (image)
-    {
+    Aurora::ImageDescriptor descriptor;
+    descriptor.getData = [this, auroraImagePath, sFilePath, forceLinear](
+                             Aurora::ImageData& dataOut, Aurora::AllocateBufferFunction alloc) {
+        // Get resolved image path from ArResolver.
+        std::string resolvedPath = ArGetResolver().CreateIdentifier(sFilePath);
+
+        // Load image using resolved path, return false if none found.
+        pxr::HioImageSharedPtr const image = pxr::HioImage::OpenForReading(resolvedPath);
+        if (!image)
+        {
+            AU_ERROR("Failed to open image file %s with resolved path %s", sFilePath.c_str(),
+                resolvedPath.c_str());
+            return false;
+        }
+
+        // Fill in HIO storage struct.
         pxr::HioImage::StorageSpec imageData;
         auto hioFormat    = image->GetFormat();
         imageData.width   = image->GetWidth();
@@ -59,82 +61,87 @@ Aurora::Path HdAuroraImageCache::acquireImage(
         imageData.format  = image->GetFormat();
         bool paddingRequired =
             hioFormat == HioFormatUNorm8Vec3srgb || hioFormat == HioFormatUNorm8Vec3;
-        unique_ptr<uint8_t[]> pTempPixels;
+
+        // If we need padding create working buffer to read into, otherwise read straight into the
+        // pixel buffer.
+        unique_ptr<uint8_t[]> pUnpaddedPixels;
+        // Get temp pixels for image.
+        uint8_t* pPixelData;
         if (paddingRequired)
         {
-            hioFormat            = hioFormat == HioFormatUNorm8Vec3srgb ? HioFormatUNorm8Vec4srgb
-                                                                        : HioFormatUNorm8Vec4;
-            newEntry.sizeInBytes = image->GetWidth() * image->GetHeight() * 4;
-            pTempPixels.reset(
+            hioFormat          = hioFormat == HioFormatUNorm8Vec3srgb ? HioFormatUNorm8Vec4srgb
+                                                                      : HioFormatUNorm8Vec4;
+            dataOut.bufferSize = image->GetWidth() * image->GetHeight() * 4;
+            pUnpaddedPixels.reset(
                 new uint8_t[image->GetWidth() * image->GetHeight() * image->GetBytesPerPixel()]);
-            newEntry.pPixelData.reset(new uint8_t[newEntry.sizeInBytes]);
-            imageData.data = pTempPixels.get();
+            imageData.data = pUnpaddedPixels.get();
+            pPixelData     = static_cast<uint8_t*>(alloc(dataOut.bufferSize));
         }
         else
         {
-            newEntry.sizeInBytes =
-                image->GetWidth() * image->GetHeight() * image->GetBytesPerPixel();
-            newEntry.pPixelData.reset(new uint8_t[newEntry.sizeInBytes]);
-            imageData.data = newEntry.pPixelData.get();
+            dataOut.bufferSize = image->GetWidth() * image->GetHeight() * image->GetBytesPerPixel();
+            pPixelData         = static_cast<uint8_t*>(alloc(dataOut.bufferSize));
+            imageData.data     = pPixelData;
         }
 
+        // Set output data point to the pixel buffer.
+        dataOut.pPixelBuffer = pPixelData;
+
+        // Set output image dimensions.
+        dataOut.dimensions = { image->GetWidth(), image->GetHeight() };
+
+        // Read the pixels.
         bool res = image->Read(imageData);
-        if (res)
+        if (!res)
         {
-            newEntry.imageDesc.width  = image->GetWidth();
-            newEntry.imageDesc.height = image->GetHeight();
-            if (paddingRequired)
-            {
-                for (size_t idx = 0; idx < newEntry.imageDesc.width * newEntry.imageDesc.height;
-                     idx++)
-                {
-                    newEntry.pPixelData[idx * 4 + 0] = pTempPixels[idx * 3 + 0];
-                    newEntry.pPixelData[idx * 4 + 1] = pTempPixels[idx * 3 + 1];
-                    newEntry.pPixelData[idx * 4 + 2] = pTempPixels[idx * 3 + 2];
-                    newEntry.pPixelData[idx * 4 + 3] = 0xFF;
-                }
-            }
+            AU_ERROR("Failed to read image file %s with resolved path %s", sFilePath.c_str(),
+                resolvedPath.c_str());
+            return false;
+        }
 
-            switch (hioFormat)
+        // Pad to RGBA if required.
+        if (paddingRequired)
+        {
+            for (size_t idx = 0; idx < image->GetWidth() * image->GetWidth(); idx++)
             {
-            case HioFormatUNorm8Vec4srgb:
-                // Set linearize flag, unless force linear is true.
-                newEntry.imageDesc.linearize = !forceLinear;
-                // Fall through...
-            case HioFormatUNorm8Vec4:
-                newEntry.imageDesc.format = Aurora::ImageFormat::Integer_RGBA;
-                break;
-            case HioFormatFloat32Vec3:
-                newEntry.imageDesc.format = Aurora::ImageFormat::Float_RGB;
-                break;
-            case HioFormatFloat32Vec4:
-                newEntry.imageDesc.format = Aurora::ImageFormat::Float_RGBA;
-                break;
-            case HioFormatUNorm8:
-                newEntry.imageDesc.format = Aurora::ImageFormat::Byte_R;
-                break;
-            default:
-                AU_ERROR("%s: Unsupported image format:%x", sFilePath.c_str(), image->GetFormat());
-                newEntry.pPixelData.reset();
-                break;
+                pPixelData[idx * 4 + 0] = pUnpaddedPixels[idx * 3 + 0];
+                pPixelData[idx * 4 + 1] = pUnpaddedPixels[idx * 3 + 1];
+                pPixelData[idx * 4 + 2] = pUnpaddedPixels[idx * 3 + 2];
+                pPixelData[idx * 4 + 3] = 0xFF;
             }
         }
-        else
-            newEntry.pPixelData.reset();
-    }
-    if (!newEntry.pPixelData)
-    {
-        AU_ERROR("Failed to load image image :%s, using placeholder", sFilePath.c_str());
-        newEntry.sizeInBytes = 8;
-        newEntry.pPixelData.reset(new uint8_t[8]);
-        memset(newEntry.pPixelData.get(), 0xff, newEntry.sizeInBytes);
-        newEntry.pPixelData[0]    = 0xff;
-        newEntry.imageDesc.width  = 2;
-        newEntry.imageDesc.height = 1;
-        newEntry.imageDesc.format = Aurora::ImageFormat::Integer_RGBA;
-    }
 
-    _pAuroraScene->setImageDescriptor(auroraImagePath, newEntry.imageDesc);
+        switch (hioFormat)
+        {
+        case HioFormatUNorm8Vec4srgb:
+            // Set linearize flag, unless force linear is true.
+            dataOut.overrideLinearize = !forceLinear;
+            dataOut.linearize         = true;
+            // Fall through...
+        case HioFormatUNorm8Vec4:
+            dataOut.format = Aurora::ImageFormat::Integer_RGBA;
+            break;
+        case HioFormatFloat32Vec3:
+            dataOut.format = Aurora::ImageFormat::Float_RGB;
+            break;
+        case HioFormatFloat32Vec4:
+            dataOut.format = Aurora::ImageFormat::Float_RGBA;
+            break;
+        case HioFormatUNorm8:
+            dataOut.format = Aurora::ImageFormat::Byte_R;
+            break;
+        default:
+            AU_ERROR("%s: Unsupported image format:%x", sFilePath.c_str(), image->GetFormat());
+            return false;
+            break;
+        }
+
+        return true;
+    };
+    descriptor.isEnvironment = isEnvironmentImage;
+    descriptor.linearize     = forceLinear;
+
+    _pAuroraScene->setImageDescriptor(auroraImagePath, descriptor);
 
     return auroraImagePath;
 }

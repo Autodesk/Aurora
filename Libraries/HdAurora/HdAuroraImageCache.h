@@ -14,17 +14,6 @@
 
 #pragma once
 
-// Cache entry, use in cache map lookup.
-struct HdAuroraImageCacheEntry
-{
-    // The pixels for the image.
-    std::unique_ptr<uint8_t[]> pPixelData;
-    // Total bytes of pixel data.
-    size_t sizeInBytes;
-    // The Aurora descriptor describing the image.
-    Aurora::ImageDescriptor imageDesc;
-};
-
 // Image cache used by materials and environments to load Aurora images.
 class HdAuroraImageCache
 {
@@ -41,7 +30,7 @@ public:
         const string& sFilePath, bool isEnvironmentImage = false, bool linearize = false);
 
 private:
-    map<string, HdAuroraImageCacheEntry> _cache;
+    set<Aurora::Path> _cache;
     Aurora::IScenePtr _pAuroraScene;
     bool _isYFlipped = true;
 };

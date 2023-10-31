@@ -33,6 +33,6 @@ public:
     bool IsSupported() const override;
 #endif
 private:
-    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&) = delete;
+    HdAuroraRendererPlugin(const HdAuroraRendererPlugin&)            = delete;
     HdAuroraRendererPlugin& operator=(const HdAuroraRendererPlugin&) = delete;
 };

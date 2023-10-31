@@ -151,7 +151,6 @@ struct Output {
             bool absorbedByGroundPlane = false;
 
             // Trace an instance ray that will return the instance shading result from the closest hit, if any.
-            rayPayload.clear();
             traceInstanceRay(gScene, rayOrigin, rayDirection, minT, rayPayload);
 
             // Add the contribution of the ground plane, if enabled.
@@ -194,7 +193,7 @@ struct Output {
             if (!absorbedByGroundPlane)
             {
                 // Did the ray segment hit any geometry?
-                if (rayPayload.hit)
+                if (rayPayload.hit())
                 {
          
                     // Increment t by the distance of the ray hit.
@@ -206,26 +205,36 @@ struct Output {
                     // Shading data and normal are taken from ray hit results.
                     ShadingData shading = shadingDataFromInstanceResult(rayPayload);
 
-                    // Get layer count from the instance header.
-                    int layerCount = instanceLayerCount(rayPayload.instanceBufferOffset);
-
                     // Were any layers hit?  If this remains false, ray was not absorbed by any of the layer, including base layer..
                     bool hitLayer = false;
 
+                    // Get the UV for the base layer (as the UVs in the shading struct will be over-written in layer loop.)
                     float2 baseLayerUV = shading.texCoord;
+
+// Only include code for layer loop if ENABLE_LAYERS is set to 1 (otherwise just set layerIndex to zero.)
+#if ENABLE_LAYERS
+                    // Get layer count from the instance header.
+                    int layerCount = instanceLayerCount(rayPayload.instanceBufferOffset);
+                        
                     // Iterate through all the layers in reverse order, ending with base layer.
-                    for(int layerIndex = layerCount; layerIndex>=0; layerIndex--) {
+                    for(int li = layerCount; li>=0; li--) {
+#else
+                    int li = 0;
+                    {
+#endif
+
 
                         // Compute material buffer offset, either for layer material or base layer.
                         int materialBufferOffset;
-                        if (layerIndex == 0)
+                        if (li == 0)
                         {
                             materialBufferOffset = instanceMaterialBufferOffset(rayPayload.instanceBufferOffset);
                             shading.texCoord = baseLayerUV;
                         }
                         else
                         {
-                            materialBufferOffset = instanceLayerMaterialBufferOffset(rayPayload.instanceBufferOffset, layerIndex);                            
+                            int layerIndex = li-1;
+                            materialBufferOffset = instanceLayerMaterialBufferOffset(rayPayload.instanceBufferOffset, layerIndex);  
                             shading.texCoord = computeLayerUV(rayPayload.instanceBufferOffset, layerIndex, shading);
                         }
 
@@ -342,8 +351,10 @@ struct Output {
                             // This is no longer a primary ray.
                             isPrimaryRay = false;
 
-                            // The ray was absorbed by this layer, so break out of the layer loop.
-                            break;                        
+                            // Break out of loop when ray is absorbed by a layer (if we are in a loop.)
+#if ENABLE_LAYERS
+                            break;
+#endif
                         }
                         // Scale the ray contribution (for this ray segment and subsequent ones) by transparency, and normalized
                         // by the probability of this layer being considered transparent.
@@ -486,8 +497,8 @@ struct Output {
     // Compute barycentrics for hit.
     float3 barycentrics = computeBarycentrics(hit);
 
-    // Set hit flag to true.
-    rayPayload.hit = true;
+    // Set the instance index.
+    rayPayload.instanceIndex = InstanceID();
     
     // Return the shading data in the ray payload.
     ShadingData shading = computeShadingData(gGeometry, triangleIndex, hit.barycentrics, ObjectToWorld3x4());

@@ -353,6 +353,7 @@ void Plasma::parseOptions(int argc, char* argv[])
         ("fov", "Camera field of view in degrees.", cxxopts::value<float>())
         ("env", "Environment map path to load (lat-long format .HDR file)", cxxopts::value<string>())
         ("mtlx", "MaterialX document path to apply.",cxxopts::value<string>())
+        ("loadMtlXForObj", "Try and load MaterialX documents for each OBJ material.",  cxxopts::value<bool>())
         ("h,help", "Print help");
     // clang-format on
 
@@ -430,12 +431,11 @@ bool Plasma::initialize()
         return false;
     }
 
-    // Setup asset search paths. Including the path to the unit test assets folder (if running within
-    // the Github repo).
+    // Setup asset search paths. Including the path to the unit test assets folder (if running
+    // within the Github repo).
     // TODO: A more reliable solution would be to set based on the loaded MaterialX file path.
     _assetPaths = { "", Foundation::getModulePath() + "../../../Tests/Assets/Materials/",
-        Foundation::getModulePath() +
-            "../../../Tests/Assets/Textures/" };
+        Foundation::getModulePath() + "../../../Tests/Assets/Textures/" };
 
     // Setup the resource loading function to use asset search paths.
     auto loadResourceFunc = [this](const string& uri, vector<unsigned char>* pBufferOut,
@@ -471,6 +471,12 @@ bool Plasma::initialize()
         return false;
     };
     _pRenderer->setLoadResourceFunction(loadResourceFunc);
+
+    // The load materialX flag for OBJ loader if argument set.
+    if (_pArguments->count("loadMtlXForObj") > 0)
+    {
+        loadMaterialXForOBJMaterials(true);
+    }
 
     // Set reference flag.
     if (_pArguments->count("reference") > 0)
@@ -998,11 +1004,29 @@ void Plasma::selectFile(
     // works as desired here because the load blocks the application.
     ::SetCursor(::LoadCursor(nullptr, IDC_WAIT));
 
-    // Load the file.
+    addAssetPathContainingFile(Foundation::w2s(filePath.data()));
     loadFunc(Foundation::w2s(filePath.data()));
 }
 
 #endif
+
+void Plasma::addAssetPathContainingFile(const string& filePath)
+{
+    string directory = filesystem::path(filePath).parent_path().u8string();
+    if (directory.empty())
+        return;
+    addAssetPath(directory + "/");
+}
+
+void Plasma::addAssetPath(const string& filePath)
+{
+    for (int i = 0; i < _assetPaths.size(); i++)
+    {
+        if (_assetPaths[i].compare(filePath) == 0)
+            return;
+    }
+    _assetPaths.push_back(filePath);
+}
 
 // Loads an environment image file with the specified path.
 bool Plasma::loadEnvironmentImageFile(const string& filePath)
@@ -1055,6 +1079,7 @@ bool Plasma::loadSceneFile(const string& filePath)
 
     // Create a new scene and load the scene file into it. If that fails, return immediately.
     _sceneContents.reset();
+    addAssetPathContainingFile(filePath);
     if (!loadSceneFunc(_pRenderer.get(), _pScene.get(), filePath, _sceneContents))
     {
         ::errorMessage("Unable to load the specified scene file: \"" + filePath + "\"");
@@ -1326,6 +1351,7 @@ void Plasma::onFilesDropped(HDROP hDrop)
     }
     else
     {
+        addAssetPathContainingFile(filePath);
         (*funcIt).second(filePath);
     }
 }

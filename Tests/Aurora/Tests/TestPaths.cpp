@@ -51,27 +51,29 @@ public:
     PathTest() {}
     ~PathTest() {}
 
-    GetPixelDataFunction createImageFunction(
+    GetImageDataFunction createImageFunction(
         int w, int h, int s, vec3 color0, vec3 color1, string name)
     {
         _imageFunctionInvocations[name] = 0;
-        return [this, w, h, s, color0, color1, name](PixelData& dataOut, glm::ivec2, glm::ivec2) {
-            _pPixelData = make_unique<vector<uint8_t>>();
-            _pPixelData->resize(w * h * 4);
-            int idx = 0;
+        return [this, w, h, s, color0, color1, name](
+                   ImageData& dataOut, AllocateBufferFunction alloc) {
+            uint8_t* pPixelData = static_cast<uint8_t*>(alloc(w * h * 4));
+            int idx             = 0;
             for (int i = 0; i < w; i++)
             {
                 for (int j = 0; j < h; j++)
                 {
-                    vec3 color             = ((i / s) % 2 == (j / s) % 2) ? color0 : color1;
-                    _pPixelData->at(idx++) = static_cast<uint8_t>(color.x * 255.0f);
-                    _pPixelData->at(idx++) = static_cast<uint8_t>(color.y * 255.0f);
-                    _pPixelData->at(idx++) = static_cast<uint8_t>(color.z * 255.0f);
-                    _pPixelData->at(idx++) = 255;
+                    vec3 color        = ((i / s) % 2 == (j / s) % 2) ? color0 : color1;
+                    pPixelData[idx++] = static_cast<uint8_t>(color.x * 255.0f);
+                    pPixelData[idx++] = static_cast<uint8_t>(color.y * 255.0f);
+                    pPixelData[idx++] = static_cast<uint8_t>(color.z * 255.0f);
+                    pPixelData[idx++] = 255;
                 }
             }
-            dataOut.address = _pPixelData->data();
-            dataOut.size    = _pPixelData->size();
+            dataOut.pPixelBuffer = pPixelData;
+            dataOut.bufferSize   = w * h * 4;
+            dataOut.dimensions   = { w, h };
+            dataOut.format       = Aurora::ImageFormat::Integer_RGBA;
             _imageFunctionInvocations[name]++;
             return true;
         };
@@ -79,7 +81,6 @@ public:
 
     map<string, int> _imageFunctionInvocations;
     unique_ptr<GeomData> _pGeometryDataP;
-    unique_ptr<vector<uint8_t>> _pPixelData;
 };
 
 // Basic path test.
@@ -93,49 +94,29 @@ TEST_P(PathTest, TestPathDefault)
     if (!pRenderer)
         return;
 
-    auto pixelUpdateCompleteFunction = [this](const PixelData&, glm::ivec2, glm::ivec2) {
-        ASSERT_TRUE(_pPixelData);
-        _pPixelData.reset();
-    };
-
     // Create the first image.
     const Path kImagePath0 = nextPath("Image");
     ImageDescriptor imageDesc0;
-    imageDesc0.width     = 4;
-    imageDesc0.height    = 4;
     imageDesc0.linearize = true;
-    imageDesc0.format    = ImageFormat::Integer_RGBA;
-    imageDesc0.getPixelData =
-        createImageFunction(4, 4, 2, vec3(1, 0, 0), vec3(0, 1, 0), kImagePath0);
-    imageDesc0.pixelUpdateComplete = pixelUpdateCompleteFunction;
+    imageDesc0.getData   = createImageFunction(4, 4, 2, vec3(1, 0, 0), vec3(0, 1, 0), kImagePath0);
     pScene->setImageDescriptor(kImagePath0, imageDesc0);
 
     // Create the second simage.
     const Path kImagePath1 = nextPath("Image");
     ImageDescriptor imageDesc1;
-    imageDesc1.width     = 8;
-    imageDesc1.height    = 8;
     imageDesc1.linearize = true;
-    imageDesc1.format    = ImageFormat::Integer_RGBA;
-    imageDesc1.getPixelData =
+    imageDesc1.getData =
         createImageFunction(8, 8, 2, vec3(0, 1, 0.8), vec3(0.2, 0.0, 0.75), kImagePath1);
-    imageDesc1.pixelUpdateComplete = pixelUpdateCompleteFunction;
     pScene->setImageDescriptor(kImagePath1, imageDesc1);
 
     // Create the third image.
     const Path kImagePath2 = nextPath("Image");
     ImageDescriptor imageDesc2;
-    imageDesc2.width     = 16;
-    imageDesc2.height    = 16;
     imageDesc2.linearize = true;
-    imageDesc2.format    = ImageFormat::Integer_RGBA;
-    imageDesc2.getPixelData =
-        createImageFunction(16, 16, 4, vec3(0, 0, 0), vec3(1, 1, 1), kImagePath2);
-    imageDesc2.pixelUpdateComplete = pixelUpdateCompleteFunction;
+    imageDesc2.getData = createImageFunction(16, 16, 4, vec3(0, 0, 0), vec3(1, 1, 1), kImagePath2);
     pScene->setImageDescriptor(kImagePath2, imageDesc2);
 
     // Pixel data yet, only created when activated.
-    ASSERT_TRUE(!_pPixelData);
     // No renderer data has been created yet, nothing has been activated.
     ASSERT_EQ(_imageFunctionInvocations[kImagePath0], 0);
 
@@ -168,7 +149,7 @@ TEST_P(PathTest, TestPathDefault)
 
     ASSERT_EQ(instPaths.size(), 3);
 
-    // Now the image getPixelData function should have been invoced once.
+    // Now the image getData function should have been invoced once.
     ASSERT_EQ(_imageFunctionInvocations[kImagePath0], 1);
 
     // Render the scene and check baseline image.
@@ -177,7 +158,7 @@ TEST_P(PathTest, TestPathDefault)
     pScene->setInstanceProperties(
         instPaths[1], { { Names::InstanceProperties::kMaterial, kMaterialPath1 } });
 
-    // Now the image getPixelData function should have been invoced for first two images.
+    // Now the image getData function should have been invoced for first two images.
     ASSERT_EQ(_imageFunctionInvocations[kImagePath0], 1);
     ASSERT_EQ(_imageFunctionInvocations[kImagePath1], 1);
 
@@ -185,7 +166,7 @@ TEST_P(PathTest, TestPathDefault)
 
     pScene->setMaterialProperties(kMaterialPath0, { { "base_color_image", kImagePath2 } });
 
-    // Now the image getPixelData function should have been invoced for all the images.
+    // Now the image getData function should have been invoced for all the images.
     ASSERT_EQ(_imageFunctionInvocations[kImagePath0], 1);
     ASSERT_EQ(_imageFunctionInvocations[kImagePath1], 1);
     ASSERT_EQ(_imageFunctionInvocations[kImagePath2], 1);

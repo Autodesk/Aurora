@@ -168,11 +168,11 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
     shading.geomPosition = mul(objToWorld, float4(shading.geomPosition, 1.0f));
     shading.normal       = normalize(mul((float3x3)objToWorld, shading.objectNormal));
     
-    // Arbritary up vector used to calculate tangents, if none provided.
+    // arbitrary up vector used to calculate tangents, if none provided.
     float3 up =
         abs(shading.normal.y) < 0.999f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
 
-    // Compute arbritary shading tangent from up vector, or use provided one transformed in world space.
+    // Compute arbitrary shading tangent from up vector, or use provided one transformed in world space.
     shading.tangent = normalize(geometry.hasTangents() ? normalize(mul((float3x3)objToWorld, shading.tangent))
                                             : cross(shading.normal, up));
 

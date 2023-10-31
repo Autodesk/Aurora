@@ -47,25 +47,30 @@ struct InstanceRayPayload {
                            // materialX generated code.
     float3 objectPosition; // the shading normal in object space (not world space). Used only in
                            // materialX generated code.
-    // Offset withing material buffer for instance.
+    // Offset withing instance data buffer for instance.
     int instanceBufferOffset;
+    // Triangle indices for hit.
     uint3 indices;
+    // Barycentric coordinates for hit.
     float2 bary2;
-    // Did the ray hit?
-    bool hit = false;
     // Distance from ray origin collision occurred.
     float distance = INFINITY;
+    // BLAS index of instance that was hit (or -1 if not hit)
+    int instanceIndex;
     
-        // Clears the indirect output to values expected for a miss.
+    // Clears the indirect output to values expected for a miss.
     [mutating]
     void clear()
     {
+        instanceIndex = -1;
         distance = INFINITY;
-        hit = false;
         geomPosition = 0.0;
         texCoord = 0.0;
         objectNormal = 0.0;
         objectPosition = 0.0;
+    }
+    bool hit() {
+        return instanceIndex>=0;
     }
 
 };
@@ -82,7 +87,7 @@ ShadingData shadingDataFromInstanceResult(InstanceRayPayload result)
     shading.indices = result.indices;
    
     // Get transform matrix from instance buffer.
-    shading.objToWorld = instanceTransformMatrix(result.instanceBufferOffset);
+    shading.objToWorld = transformMatrixForBLAS(result.instanceIndex);
 
     // Transform object space attributes.
     shading.position = mul(shading.objToWorld, float4(shading.objectPosition, 1.0f));
@@ -172,7 +177,7 @@ bool traceInstanceRay(RaytracingAccelerationStructure scene,
     ray.TMin      = tMin;
     ray.TMax      = INFINITY;
 
-    rayPayload.hit = false;
+    rayPayload.clear();
 
     // Trace the ray.
     TraceRay(scene,      // acceleration structure to be traced against
@@ -184,7 +189,7 @@ bool traceInstanceRay(RaytracingAccelerationStructure scene,
         ray,             // ray to be traced
         rayPayload);     // in/out data for shaders invoked during tracing
 
-    return rayPayload.hit;
+    return rayPayload.hit();
 }
 
 
@@ -246,63 +251,5 @@ float3 traceShadowRay(RaytracingAccelerationStructure scene, float3 origin, floa
     // Return the shadow ray visibility.
     return rayPayload.visibility;
 }
-
-// =================================================================================================
-// Layer material code
-// =================================================================================================
-#if 0
-// Shade the layer material for provided miss shader index.
-// Returns true if absorbed by layer.
-bool shadeMaterialLayer(RaytracingAccelerationStructure nullScene, int layerMissShaderIdx,
-    in out RadianceRayPayload rayPayload, ShadingData shading,
-    BuiltInTriangleIntersectionAttributes hit, int depth, int maxDepth)
-{
-    // If the maximum trace recursion depth has been reached, don't shade the layer.
-    if (depth == maxDepth)
-    {
-        return false;
-    }
-
-    // Create a dummy ray, as we use a null scene this is never actuall intersected with anything.
-    RayDesc ray;
-    ray.Origin    = float3(0, 0, 0);
-    ray.Direction = float3(0, 0, 1);
-    ray.TMin      = 0;
-    ray.TMax      = 0;
-
-    // Create the layer data from the current intersection.
-    RayPayload layerData;
-    layerData.hit             = hit;
-    layerData.radianceRay     = rayPayload;
-    layerData.currentT        = RayTCurrent();
-    layerData.viewDirection   = -WorldRayDirection();
-    layerData.absorbedByLayer = false;
-    layerData.primitiveIndex  = PrimitiveIndex();
-
-    // Increment ray depth.
-    layerData.radianceRay.depth = depth + 1;
-
-    // "trace" the ray (this will go straight to the miss shader)
-    TraceRay(nullScene,     // Null scene (so ray goes straight to miss)
-        0,                  // flags to control ray behavior
-        0xFF,               // instance mask
-        0,                  // ray contribution to hit group index
-        0,                  // multiplier for geometry contribution to hit group index
-        layerMissShaderIdx, // miss shader index for layer material shader.
-        ray,                // ray to be traced
-        layerData);         // The layer data including details of current intersection.
-
-    // If the ray is absorbed by the layer, then update the ray payload and return true.
-    if (layerData.absorbedByLayer)
-    {
-        rayPayload = layerData.radianceRay;
-        return true;
-    }
-
-    // Return false (as not absorbed and ray payload unaffected)
-    return false;
-}
-
-#endif
 
 #endif // __RAY_TRACE_H__

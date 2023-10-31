@@ -25,6 +25,13 @@
 // NOTE: Must match size of MaterialHeader in PTScene.cpp.
 #define kMaterialHeaderSize 68
 
+// Total size of fixed-length instance header in bytes.
+// Instance header occurs before the layer data in the gGlobalInstanceArray buffer.
+// NOTE: Must match size of InstanceDataHeader in PTScene.cpp.
+#define kInstanceDataHeaderSize (2*4)
+
+// Size of a 3x4 transform matrix,
+#define kTransformMatrixSize (12*4)
 
 // =================================================================================================
 // Instance buffer accessor functions
@@ -33,40 +40,39 @@
 // Get the material offset from instance header.
 int instanceMaterialBufferOffset(int instanceOffset)
 {
-    return gGlobalInstanceBuffer.Load(instanceOffset + 4 * 12);
+    return gGlobalInstanceBuffer.Load(instanceOffset + 4 * 0);
 }
 
 // Get the layer count from instance header.
 int instanceLayerCount(int instanceOffset)
 {
-    return gGlobalInstanceBuffer.Load(instanceOffset + 4 * 13);
+    return gGlobalInstanceBuffer.Load(instanceOffset + 4 * 1);
 }
 
 // Get the layer material buffer offset for Nth layer.
 // Layer data is stored after the header in the instance buffer.
 int instanceLayerMaterialBufferOffset(int instanceOffset, int layerIdx)
 {
-    return gGlobalInstanceBuffer.Load(instanceOffset + 4 * (14 + layerIdx * 2));
+    return gGlobalInstanceBuffer.Load(instanceOffset + kInstanceDataHeaderSize + 4 * (0 + layerIdx * 2));
 }
 
 // Get the layer UV buffer offset for Nth layer.
 // Layer data is stored after the header in the instance buffer.
-// TODO: Not currently implemented.
 int instanceLayerUVBufferOffset(int instanceOffset, int layerIdx)
 {
-    return gGlobalInstanceBuffer.Load(instanceOffset + 4 * (15 + layerIdx * 2));
+    return gGlobalInstanceBuffer.Load(instanceOffset + kInstanceDataHeaderSize + 4 * (1 + layerIdx * 2));
 }
 
-// Get row-major 4x3 world transform matrix for the instance from the buffer.
-float3x4 instanceTransformMatrix(int instanceOffset)
+// Get row-major 4x3 world transform matrix for the BLAS indicated by index
+float3x4 transformMatrixForBLAS(int blasIndex)
 {
+    int startOffset = blasIndex * kTransformMatrixSize;
     return float3x4(
-        asfloat(gGlobalInstanceBuffer.Load4(instanceOffset + 4 * 0)),
-        asfloat(gGlobalInstanceBuffer.Load4(instanceOffset + 4 * 4)),
-        asfloat(gGlobalInstanceBuffer.Load4(instanceOffset + 4 * 8))
+        asfloat(gTransformMatrixBuffer.Load4(startOffset + 4 * 0)),
+        asfloat(gTransformMatrixBuffer.Load4(startOffset + 4 * 4)),
+        asfloat(gTransformMatrixBuffer.Load4(startOffset + 4 * 8))
     );
 }
-
 
 float2 getLayerUV(int offset, int index)
 {
