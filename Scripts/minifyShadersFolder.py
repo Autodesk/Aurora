@@ -10,18 +10,23 @@ import subprocess
 
 # Dump usage and exit if we have incorrect number of args.
 if(len(sys.argv)<3 or len(sys.argv)>4):
-    print("Usage: python minifyHLSLFolder.py inputFolder outputFile [outputNamespace]")
-    print("  inputFolder - Folder containing HLSL and HLSLI files")
-    print("  outputFile - Output C++ header file")
-    print("  outputNamespace - Namespace wrapping output C++ header file (if omitted, generated from outputFile)")
+    print("Usage: python minifyHLSLFolder.py inputFolder outputFile [outputNamespace] [slangCompiler] [slangCompiler]")
+    print("  inputFolder - Folder containing Slang files")
+    print("  outputMinifiedFile - Output minified C++ header file")
+    print("  slangCompiler - Folder for slang executable to compile main entryPoint file (if omitted, just minifies no compilation)")
+    print("  mainEntryPoint - Main entry point filename, also used for precompiled DXIL C++ header filename (if omitted, assumes MainEntryPoint)")
     sys.exit(-1)
 
 # Parse the command line arguments.
 hlslFolder = sys.argv[1]
 outputFile = sys.argv[2]
 nameSpaceName =  os.path.splitext(os.path.basename(outputFile))[0] # Default namespace is output filename without extension or path.
+slangc = ""
 if(len(sys.argv)==4):
-    nameSpaceName = sys.argv[3]
+    slangc = sys.argv[3]
+mainEntryPoint = "MainEntryPoints"
+if(len(sys.argv)==5):
+    mainEntryPoint = sys.argv[4]
 
 # Build list of files
 files = glob.glob(hlslFolder+'/*.*sl*')
@@ -37,16 +42,49 @@ except:
 numFiles = len(files)
 n = 0
 rebuildNeeded = False
+entryPointFile = ""
 for hlslFile in files:
+    if(mainEntryPoint in hlslFile):
+        entryPointFile = hlslFile
     fileModTime = os.stat(hlslFile).st_mtime
     if(fileModTime>outputModTime):
         rebuildNeeded=True
-        break
 
 # Early out, if nothing to be done.
 if(not rebuildNeeded):
     print("Nothing to be done, output header file %s up to date" % (outputFile))
     sys.exit(0)
+    
+# If we have a slang compiler and entry point filename, then precompile it.
+if(len(slangc)>0 and len(entryPointFile)>0):
+    compiledFile = os.path.dirname(outputFile) + "/"+mainEntryPoint +".h"
+    print("Compiling main entry point %s with Slang compiler %s to DXIL in header %s"%(entryPointFile, slangc, compiledFile))
+    compiledTempFile = os.path.dirname(outputFile) +"/"+ mainEntryPoint +".dxil"
+    variableName =  "g_s"+mainEntryPoint+"DXIL";
+    cmd = [slangc,  entryPointFile, "-DDIRECTX=1", "-DRUNTIME_COMPILE_EVALUATE_MATERIAL_FUNCTION=1", "-target", "dxil",   "-profile","lib_6_3","-o", compiledTempFile];
+    result = subprocess.run( cmd, capture_output=True)
+    if(result.returncode!=0):
+        print("Compliation failed on "+entryPointFile)
+        print(result.stderr.decode())
+        sys.exit(-1)        
+    f = open(compiledTempFile, mode="rb")
+    data = bytearray(f.read())
+    numBytes = len(data)
+    numWords = int(numBytes/4)
+    if(numWords*4 !=numBytes):
+        numWords=numWords+1;
+    headerStr = "static const array<unsigned int, "+str(numWords)+"> "+variableName+" = {\n";
+    for i in range(numWords):
+        wordBytes = bytes([data[i*4+3],data[i*4+2],data[i*4+1],data[i*4+0]])
+        headerStr += "0x"+str(wordBytes.hex());
+        if(i<numWords-1):
+            headerStr+=", "
+        if(i%8==7):
+            headerStr+="\n"
+    headerStr+="};\n"
+    with open(compiledFile, 'w') as f:
+        f.write(headerStr)    
+
 
 print("Minifying %d files from %s" % (numFiles, hlslFolder))
 

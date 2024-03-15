@@ -19,6 +19,7 @@
 #include "PTMaterial.h"
 #include "PTSampler.h"
 #include "PTScene.h"
+#include "PTShaderLibrary.h"
 #include "PTTarget.h"
 #include "RendererBase.h"
 
@@ -28,11 +29,6 @@
 #endif
 
 BEGIN_AURORA
-
-namespace MaterialXCodeGen
-{
-class MaterialGenerator;
-} // namespace MaterialXCodeGen
 
 // Forward references.
 class AssetManager;
@@ -145,9 +141,8 @@ private:
     void createUAV(ID3D12Resource* pTexture, CD3DX12_CPU_DESCRIPTOR_HANDLE& handle);
     void copyTextureToTarget(ID3D12Resource* pTexture, PTTarget* pTarget);
     bool isDenoisingAOVsEnabled() const;
-    shared_ptr<MaterialShader> generateMaterialX(
-        const string& document, shared_ptr<MaterialDefinition>* pDefOut);
     PTScenePtr dxScene() { return static_pointer_cast<PTScene>(_pScene); }
+    PTShaderLibrary& shaderLibrary();
 
     /*** Private Variables ***/
 
@@ -163,14 +158,6 @@ private:
     bool _isDescriptorHeapChanged = true;
     PTSamplerPtr _pDefaultSampler;
     PTGroundPlanePtr _pDefaultGroundPlane;
-
-    // The shader library used to compile DXIL shader libraries.
-    unique_ptr<PTShaderLibrary> _pShaderLibrary;
-
-    // Code generator used to generate MaterialX files.
-#if ENABLE_MATERIALX
-    unique_ptr<MaterialXCodeGen::MaterialGenerator> _pMaterialXGenerator;
-#endif
 
     /*** DirectX 12 Objects ***/
 

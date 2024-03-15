@@ -33,6 +33,11 @@
 #define SHEEN_LOBE 6        // sheen_brdf
 #define DIFFUSE_LOBE 7      // diffuse_brdf
 
+// Ray types (in addition to the lobe IDs defined above.)
+#define NO_SECONDARY_RAY    -1
+#define CAMERA_RAY         -2
+#define GROUND_PLANE_REFLECTION_RAY         -3
+
 // =================================================================================================
 // Vector Conventions
 // =================================================================================================

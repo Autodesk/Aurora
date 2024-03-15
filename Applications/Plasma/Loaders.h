@@ -47,6 +47,9 @@ private:
 using LoadSceneFunc = function<bool(Aurora::IRenderer* pRenderer, Aurora::IScene* pScene,
     const string& filePath, SceneContents& sceneContents)>;
 
+// If true OBJ loader will try and load a materialX file for each OBJ material.
+void loadMaterialXForOBJMaterials(bool enabled);
+
 // Loads a Wavefront OBJ (.obj) file into the specified renderer and scene, from the specified file
 // path.
 bool loadOBJFile(Aurora::IRenderer* pRenderer, Aurora::IScene* pScene, const string& filePath,

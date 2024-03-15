@@ -17,35 +17,7 @@
 #include "Colors.slang"
 #include "Globals.slang"
 #include "Sampling.slang"
-
-// Layout of environment constant properties.
-struct EnvironmentConstants
-{
-    float3 lightTop;
-    float _padding1;
-    float3 lightBottom;
-    float lightTexLuminanceIntegral;
-    float4x4 lightTransform;
-    float4x4 lightTransformInv;
-    float3 backgroundTop;
-    float _padding3;
-    float3 backgroundBottom;
-    float _padding4;
-    float4x4 backgroundTransform;
-    bool backgroundUseScreen;
-    bool hasLightTex;
-    bool hasBackgroundTex;
-};
-
-// Layout of an alias map entry.
-// NOTE: Padding to 16 byte (float4) alignment is added for best performance.
-struct AliasEntry
-{
-    uint alias;
-    float probability;
-    float pdf;
-    float _padding1;
-};
+#include "GlobalPipelineState.slang"
 
 // Environment properties.
 struct Environment

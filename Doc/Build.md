@@ -40,7 +40,7 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
 
 2. **Start a command line** with access to your C++ compiler tools. When using Visual Studio, the "x64 Native Tools Command Prompt for VS 2019" (or 2022) shortcut will provide the proper environment. The CMake and Python executables must also be available, through the PATH environment variable.
 
-3. **Installing externals:** Run *[Scripts/installExternals.py](Scripts/installExternals.py)* with Python in *AURORA_DIR* to build and install externals.
+3. **Installing externals:** Run *[Scripts/installExternals.py](/Scripts/installExternals.py)* with Python in *AURORA_DIR* to build and install externals.
 
    - You can run the install script with the desired location for storing and compiling externals as the only argument. We will refer to this location as *EXTERNALS_ROOT*.
      ```
@@ -59,7 +59,7 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
 
    - You may specify the externals installation directory (*EXTERNALS_ROOT*, above) as a CMake path variable called `EXTERNALS_ROOT`. This must be specified as an absolute path, e.g. with a drive letter on Windows. If no `EXTERNALS_ROOT` is specified, the `EXTERNALS_ROOT` built by the latest run of *installExternals.py* will be used automatically. If you are using cmake-gui, you should specify this variable before generating.
 
-   - You must specify a build directory, and we refer to this location as *AURORA_BUILD_DIR*. The recommended build directory is *{AURORA_DIR}/Build*, which is filtered by [.gitignore](.gitignore) so it won't appear as local changes for Git.
+   - You must specify a build directory, and we refer to this location as *AURORA_BUILD_DIR*. The recommended build directory is *{AURORA_DIR}/Build*, which is filtered by [.gitignore](/.gitignore) so it won't appear as local changes for Git.
 
    - You can use CMake on the command line or the GUI (cmake-gui). The CMake command to generate projects is as follows:
 

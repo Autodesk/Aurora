@@ -14,6 +14,8 @@
 #ifndef __STANDARD_SURFACE_H__
 #define __STANDARD_SURFACE_H__
 
+#include "BSDFCommon.slang"
+
 // NOTE: The following shader code is ported to HLSL from the MaterialX GLSL implementations.
 
 // Determines whether vector a and b are in the same hemisphere relative to normal n.

@@ -109,24 +109,26 @@ file(MAKE_DIRECTORY "${COMPILED_SHADERS_DIR}")
 
 # The slang shaders that are shared by DX and HGI backends.
 set(COMMON_SHADERS
-    "Source/Shaders/BackgroundMissShader.slang"
     "Source/Shaders/BSDF.slang"
     "Source/Shaders/BSDFCommon.slang"
     "Source/Shaders/Colors.slang"
+    "Source/Shaders/DefaultMaterialUniformAccessors.slang"
+    "Source/Shaders/DefaultMaterialUniformBuffer.slang"
+    "Source/Shaders/DefaultMaterial.slang"
     "Source/Shaders/Environment.slang"
     "Source/Shaders/Frame.slang"
     "Source/Shaders/Geometry.slang"
     "Source/Shaders/Globals.slang"
     "Source/Shaders/GLSLToHLSL.slang"
     "Source/Shaders/GroundPlane.slang"
-    "Source/Shaders/InitializeDefaultMaterialType.slang"
+    "Source/Shaders/InstancePipelineState.slang"
+    "Source/Shaders/GlobalPipelineState.slang"
     "Source/Shaders/MainEntryPoints.slang"
     "Source/Shaders/Material.slang"
+    "Source/Shaders/GlobalBufferAccessors.slang"
     "Source/Shaders/MaterialXCommon.slang"
+    "Source/Shaders/Options.slang"
     "Source/Shaders/PathTracingCommon.slang"
-    "Source/Shaders/ShadowMissShader.slang"
-    "Source/Shaders/RadianceMissShader.slang"
-    "Source/Shaders/RayGenShader.slang"
     "Source/Shaders/ShadeFunctions.slang"
     "Source/Shaders/Random.slang"
     "Source/Shaders/RayTrace.slang"
@@ -145,9 +147,8 @@ endif()
 
 # Set MINIFIED_SHADERS_HEADER to filename of auto-generated header file containing minified Slang shader strings.
 set(MINIFIED_COMMON_SHADERS_HEADER "${COMPILED_SHADERS_DIR}/CommonShaders.h")
-# Add commands to minifiy common shaders.
-minify_shaders("${MINIFIED_COMMON_SHADERS_HEADER}" "${PROJECT_SOURCE_DIR}/Source/Shaders" "${COMMON_SHADERS}")
-
+# Add commands to minifiy common shaders, and compile the default main entry points.
+minify_shaders("${MINIFIED_COMMON_SHADERS_HEADER}" "${PROJECT_SOURCE_DIR}/Source/Shaders" "${COMMON_SHADERS}" ${Slang_COMPILER})
 
 if(ENABLE_DIRECTX_BACKEND)
     if(ENABLE_MATERIALX)
@@ -273,6 +274,8 @@ source_group("DirectX/Shaders" FILES ${DIRECTX_PRECOMPILED_SHADERS})
 source_group("HGI/Shaders" FILES ${HGI_SHADERS})
 
 if(WIN32)
+
+
     if(ENABLE_DIRECTX_BACKEND)
         # Create custom targets that will copy DLLs of the DirectX shader compiler to the runtime folder.
         add_custom_target(CopyDXCompilerDLLs ALL

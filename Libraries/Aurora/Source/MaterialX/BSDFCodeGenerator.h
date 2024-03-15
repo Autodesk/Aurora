@@ -13,7 +13,7 @@
 #include <MaterialXCore/Generated.h>
 
 // Forward declare MaterialX types.
-namespace MaterialX_v1_38_5
+namespace MaterialX_v1_38_8
 {
 class Document;
 class FileSearchPath;
@@ -26,7 +26,7 @@ class UnitConverterRegistry;
 class UnitSystem;
 class ShaderNode;
 class TypeDesc;
-} // namespace MaterialX_v1_38_5
+} // namespace MaterialX_v1_38_8
 
 #include "Properties.h"
 
@@ -82,7 +82,7 @@ public:
         /// function.
         vector<UniformBufferPropertyDefinition> materialProperties;
         /// \brief Vector of textures used by this material in the setup function.
-        vector<string> textures;
+        vector<TextureIdentifier> textures;
         /// \brief Vector of BSDF inputs output by the setup function.
         vector<BSDFInput> bsdfInputs;
         /// \desc True if the setup fuction takes an integer unit parameter (index into unit names
@@ -143,7 +143,7 @@ protected:
     // Convert GLSL type string to Aurora type (asserts if conversion fails.)
     PropertyValue::Type glslTypeToAuroraType(const string glslType);
 
-    // Convert materialX value to Aurora value (asserts if conversion fails.)
+    // Convert MaterialX value to Aurora value (asserts if conversion fails.)
     bool materialXValueToAuroraValue(Value* pValueOut, shared_ptr<MaterialX::Value> pMtlXValue);
 
     bool materialXValueToAuroraPropertyValue(

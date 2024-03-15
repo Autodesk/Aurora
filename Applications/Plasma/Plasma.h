@@ -59,8 +59,7 @@ private:
 #if defined(INTERACTIVE_PLASMA)
     static LRESULT __stdcall wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 #endif
-    static Aurora::IScenePtr createSampleScene(
-        Aurora::IRenderer* pRenderer, SceneContents& contentsOut);
+    static void createSampleScene(Aurora::IScene* pRenderer, SceneContents& contentsOut);
 
     /*** Private Functions ***/
 
@@ -96,6 +95,8 @@ private:
     void saveImage(const wstring& filePath, const uvec2& dimensions);
     bool applyMaterialXFile(const string& mtlxPath);
     Aurora::Path loadMaterialXFile(const string& filePath);
+    void addAssetPath(const string& path);
+    void addAssetPathContainingFile(const string& filePath);
 
     void resetMaterials();
     bool addDecal(const string& decalMtlXPath);
@@ -139,9 +140,9 @@ private:
     vec3 _lightDirection     = normalize(vec3(1.0f, -0.5f, 0.0f));
     bool _isDenoisingEnabled = false;
 #if defined(INTERACTIVE_PLASMA)
-    bool _isDiffuseOnlyEnabled   = false;
-    bool _isOpaqueShadowsEnabled = false;
-    bool _isToneMappingEnabled   = false;
+    bool _isDiffuseOnlyEnabled        = false;
+    bool _isForceOpaqueShadowsEnabled = false;
+    bool _isToneMappingEnabled        = false;
 #endif
     bool _isGroundPlaneShadowEnabled     = false;
     bool _isGroundPlaneReflectionEnabled = false;

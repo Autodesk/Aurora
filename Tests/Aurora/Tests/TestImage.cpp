@@ -53,25 +53,9 @@ TEST_P(ImageTest, TestImageDefault)
     // Load pixels for test image file.
     const std::string txtName = dataPath() + "/Textures/Hieroglyphs.jpg";
 
-    // Load image
-    TestHelpers::ImageData imageData;
-    loadImage(txtName, &imageData);
-
-    // Create the image.
-    const Path kImagePath = "DefaultImage";
-    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
-
-    const std::string txtName1 = dataPath() + "/Textures/Mandrill.png";
-    TestHelpers::ImageData imageData1;
-    loadImage(txtName, &imageData1);
-
-    // Create the image.
-    const Path kImagePath1 = "OtherImage";
-    pScene->setImageDescriptor(kImagePath1, imageData1.descriptor);
-
     // Create a material.
     const Path kMaterialPath = "DefaultMaterial";
-    pScene->setMaterialProperties(kMaterialPath, { { "base_color_image", kImagePath } });
+    pScene->setMaterialProperties(kMaterialPath, { { "base_color_image", loadImage(txtName) } });
 
     // Create plane instance.
     Path geomPath = createPlaneGeometry(*pScene);
@@ -86,6 +70,7 @@ TEST_P(ImageTest, TestImageDefault)
 }
 
 // Basic image test.
+// TODO: Re-enable once samplers working.
 TEST_P(ImageTest, TestImageSamplers)
 {
     // Create the default scene (also creates renderer)
@@ -98,14 +83,7 @@ TEST_P(ImageTest, TestImageSamplers)
 
     // Load pixels for test image file.
     const std::string txtName = dataPath() + "/Textures/Mandrill.png";
-
-    // Load image
-    TestHelpers::ImageData imageData;
-    loadImage(txtName, &imageData);
-
-    // Create the image.
-    const Path kImagePath = "ClampImage";
-    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+    Path imagePath            = loadImage(txtName);
 
     // Create plane instance.
     Path geomPath = createPlaneGeometry(*pScene, vec2(2, 2), vec2(-0.5, -0.5));
@@ -122,7 +100,7 @@ TEST_P(ImageTest, TestImageSamplers)
     // Create a material.
     const Path kClampMaterialPath = "ClampSamplerMaterial";
     pScene->setMaterialProperties(kClampMaterialPath,
-        { { "base_color_image", kImagePath },
+        { { "base_color_image", imagePath },
             {
                 "base_color_image_sampler",
                 kClampSamplerPath,
@@ -148,7 +126,7 @@ TEST_P(ImageTest, TestImageSamplers)
 
     const Path kMirrorMaterialPath = "MirrorSamplerMaterial";
     pScene->setMaterialProperties(kMirrorMaterialPath,
-        { { "base_color_image", kImagePath },
+        { { "base_color_image", imagePath },
             {
                 "base_color_image_sampler",
                 kMirrorSamplerPath,
@@ -172,20 +150,12 @@ TEST_P(ImageTest, TestImageOpacity)
     if (!pRenderer)
         return;
 
-    // Load pixels for test image file.
+    // Path to test image.
     const std::string txtName = dataPath() + "/Textures/Triangle.png";
-
-    // Load image
-    TestHelpers::ImageData imageData;
-    loadImage(txtName, &imageData);
-
-    // Create the image.
-    const Path kImagePath = "OpacityImage";
-    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
 
     // Create a material.
     const Path kMaterialPath = "OpacityMaterial";
-    pScene->setMaterialProperties(kMaterialPath, { { "opacity_image", kImagePath } });
+    pScene->setMaterialProperties(kMaterialPath, { { "opacity_image", loadImage(txtName) } });
 
     // Create plane instance.
     Path geomPath = createPlaneGeometry(*pScene);
@@ -212,32 +182,23 @@ TEST_P(ImageTest, TestGammaImage)
 
     // Load pixels for test image file.
     const std::string txtName = dataPath() + "/Textures/Mandrill.png";
-
-    // Load image
-    TestHelpers::ImageData imageData;
-    loadImage(txtName, &imageData);
-
-    // Create the image.with default gamma settings (linearize from sRGB.)
-    const Path kImagePath0 = "GammaImage0";
-    pScene->setImageDescriptor(kImagePath0, imageData.descriptor);
+    Path linearImagePath      = loadImage(txtName, true);
 
     // Create the same image.with linearize set to false.
-    const Path kImagePath1         = "GammaImage1";
-    imageData.descriptor.linearize = false;
-    pScene->setImageDescriptor(kImagePath1, imageData.descriptor);
+    Path gammaImagePath = loadImage(txtName, false);
 
     // Create plane instance.
     Path geomPath = createPlaneGeometry(*pScene);
 
     // Create matrix and material for first instance (which is linearized).
     const Path kMaterialPath0 = "GammaMaterial0";
-    pScene->setMaterialProperties(kMaterialPath0, { { "base_color_image", kImagePath0 } });
+    pScene->setMaterialProperties(kMaterialPath0, { { "base_color_image", linearImagePath } });
 
     mat4 mtx0 = translate(glm::vec3(-1.0, 0, -0.4));
 
     // Create matrix and material for second instance (which is not linearized).
     const Path kMaterialPath1 = "GammaMaterial1";
-    pScene->setMaterialProperties(kMaterialPath1, { { "base_color_image", kImagePath1 } });
+    pScene->setMaterialProperties(kMaterialPath1, { { "base_color_image", gammaImagePath } });
     mat4 mtx1 = translate(glm::vec3(+1.0, 0, -0.4));
 
     // Set the test image
@@ -271,16 +232,8 @@ TEST_P(ImageTest, TestNormalMapImage)
     defaultDistantLight()->values().setFloat3(
         Aurora::Names::LightProperties::kColor, value_ptr(glm::vec3(1, 1, 1)));
 
-    // Load pixels for test image file.
+    // Path to test normal map
     const std::string txtName = dataPath() + "/Textures/fishscale_normal.png";
-    // Load image
-    TestHelpers::ImageData imageData;
-    loadImage(txtName, &imageData);
-
-    // Create the image.
-    const Path kImagePath          = "NormalImage";
-    imageData.descriptor.linearize = false;
-    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
 
     // Create geometry.
     Path planePath  = createPlaneGeometry(*pScene);
@@ -288,7 +241,7 @@ TEST_P(ImageTest, TestNormalMapImage)
 
     // Create matrix and material for first instance (which is linearized).
     const Path kMaterialPath = "NormalMaterial";
-    pScene->setMaterialProperties(kMaterialPath, { { "normal_image", kImagePath } });
+    pScene->setMaterialProperties(kMaterialPath, { { "normal_image", loadImage(txtName, false) } });
     mat4 scaleMtx = scale(vec3(2, 2, 2));
 
     // Create geometry with the material.
@@ -316,11 +269,8 @@ TEST_P(ImageTest, TestCreateImageAfterSceneCreation)
 
     const Path kImagePath = "DefaultImage";
     ImageDescriptor imageDesc;
-    imageDesc.width         = 2048;
-    imageDesc.height        = 1024;
     imageDesc.isEnvironment = false;
     imageDesc.linearize     = true;
-    imageDesc.format        = ImageFormat::Integer_RGBA;
 
     // Load pixels for test image file.
     std::vector<unsigned char> buffer(1024 * 2048 * 4);
@@ -328,12 +278,13 @@ TEST_P(ImageTest, TestCreateImageAfterSceneCreation)
     bool loaded = false;
 
     // Set up the pixel data callback
-    imageDesc.getPixelData = [&buffer, &loaded](PixelData& dataOut, glm::ivec2, glm::ivec2) {
+    imageDesc.getData = [&buffer, &loaded](ImageData& dataOut, AllocateBufferFunction alloc) {
         // Get address and size from buffer (assumes will be called from scope of test, so buffer
         // still valid)
-        dataOut.address = buffer.data();
-        dataOut.size    = buffer.size();
-        loaded          = true;
+        dataOut.pPixelBuffer = buffer.data();
+        dataOut.bufferSize   = buffer.size();
+        dataOut.dimensions   = { 2048, 1024 };
+        loaded               = true;
         return true;
     };
 

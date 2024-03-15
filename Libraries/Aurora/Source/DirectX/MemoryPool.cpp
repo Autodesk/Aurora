@@ -22,10 +22,11 @@ BEGIN_AURORA
 uint8_t* TransferBuffer::map(size_t sz, size_t offset)
 {
     // Ensure buffer is not already mapped.
-    AU_ASSERT(mappedRange.Begin == SIZE_MAX, "Already mapped");
+    AU_ASSERT(!isMapped(), "Already mapped");
 
     // Set the mapped range from size and offset.
-    mappedRange = { offset, sz };
+    mappedRange          = { offset, sz };
+    isUploadBufferMapped = true;
 
     // Map the DX buffer resource, call AU_FAIL if HRESULT indicates an error.
     uint8_t* pMappedData = nullptr;
@@ -39,10 +40,12 @@ uint8_t* TransferBuffer::map(size_t sz, size_t offset)
 void TransferBuffer::unmap()
 {
     // Ensure buffer is mapped.
-    AU_ASSERT(mappedRange.Begin != SIZE_MAX, "Not mapped");
+    AU_ASSERT(isMapped(), "Not mapped");
 
     // Unmap the DX buffer resource for the upload buffer.
     pUploadBuffer->Unmap(0, mappedRange.End == 0 ? nullptr : &mappedRange); // no HRESULT
+
+    isUploadBufferMapped = false;
 
     // Pass this buffer to renderer to add to the pending upload list.
     pRenderer->transferBufferUpdated(*this);

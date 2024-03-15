@@ -25,6 +25,7 @@ Path SceneBase::kDefaultEnvironmentName = "__AuroraDefaultEnvironment";
 Path SceneBase::kDefaultMaterialName    = "__AuroraDefaultMaterial";
 Path SceneBase::kDefaultGeometryName    = "__AuroraDefaultInstance";
 Path SceneBase::kDefaultInstanceName    = "__AuroraDefaultGeometry";
+Path SceneBase::kDefaultImageName       = "__AuroraDefaultImage";
 
 RendererBase* SceneBase::rendererBase()
 {
@@ -33,6 +34,13 @@ RendererBase* SceneBase::rendererBase()
 
 void SceneBase::createDefaultResources()
 {
+    if (_resources.find(kDefaultEnvironmentName) != _resources.end())
+        _resources.erase(kDefaultEnvironmentName);
+    if (_resources.find(kDefaultInstanceName) != _resources.end())
+        _resources.erase(kDefaultInstanceName);
+    if (_resources.find(kDefaultImageName) != _resources.end())
+        _resources.erase(kDefaultImageName);
+
     // Create a default environment resource, and set it as current environment.
     _pDefaultEnvironmentResource = make_shared<EnvironmentResource>(
         kDefaultEnvironmentName, _resources, _environments, _pRenderer);
@@ -59,7 +67,6 @@ void SceneBase::createDefaultResources()
     _resources[kDefaultMaterialName] = _pDefaultMaterialResource;
     _pDefaultMaterialResource->incrementPermanentRefCount();
 
-    const Path kDefaultQuadPath = "DefaultQuadGeometry";
     GeometryDescriptor geomDesc;
     geomDesc.type                                                      = PrimitiveType::Triangles;
     geomDesc.vertexDesc.attributes[Names::VertexAttributes::kPosition] = AttributeFormat::Float3;
@@ -92,6 +99,23 @@ void SceneBase::createDefaultResources()
     _pDefaultInstanceResource->setProperties(
         { { Names::InstanceProperties::kGeometry, kDefaultGeometryName } });
     _resources[kDefaultInstanceName] = _pDefaultInstanceResource;
+
+    ImageDescriptor imageDesc;
+    imageDesc.isEnvironment = false;
+    imageDesc.linearize     = true;
+    imageDesc.getData       = [this](ImageData& dataOut, AllocateBufferFunction alloc) {
+        dataOut.pPixelBuffer = _defaultImagePixels.data();
+        dataOut.bufferSize   = _defaultImagePixels.size();
+        dataOut.dimensions   = { 2, 2 };
+        dataOut.format       = ImageFormat::Integer_RGBA;
+        return true;
+    };
+
+    _pDefaultImageResource =
+        make_shared<ImageResource>(kDefaultImageName, _resources, _images, _pRenderer);
+    _pDefaultImageResource->setDescriptor(imageDesc);
+    _resources[kDefaultImageName] = _pDefaultImageResource;
+    _pDefaultImageResource->incrementPermanentRefCount();
 }
 
 SceneBase::~SceneBase()
@@ -183,42 +207,48 @@ void SceneBase::setImageFromFilePath(
     if (imagePath.empty())
         imagePath = atPath;
 
-    // Lookup in loaded images map, return
-    shared_ptr<ImageAsset> pImageAsset;
-    auto iter = _loadedImages.find(filePath);
-    if (iter != _loadedImages.end())
-    {
-        pImageAsset = iter->second;
-    }
-    else
-    {
-        pImageAsset = rendererBase()->assetManager()->acquireImage(imagePath);
-        if (!pImageAsset)
-        {
-            pImageAsset = _pErrorImageData;
-            AU_ERROR("Failed to load image %s", imagePath.c_str());
-        }
-        _loadedImages[filePath] = pImageAsset;
-    }
-
     Aurora::ImageDescriptor imageDesc;
-    imageDesc.format        = pImageAsset->data.format;
-    imageDesc.width         = pImageAsset->data.width;
-    imageDesc.height        = pImageAsset->data.height;
-    imageDesc.linearize     = forceLinear ? false : pImageAsset->data.linearize;
+    imageDesc.linearize     = forceLinear;
     imageDesc.isEnvironment = isEnvironment;
 
     // Setup pixel data callback to get address and size from buffer from cache entry.
-    string pathToLoad      = filePath;
-    imageDesc.getPixelData = [this, pathToLoad](
-                                 Aurora::PixelData& dataOut, glm::ivec2, glm::ivec2) {
-        shared_ptr<ImageAsset> pAsset = _loadedImages[pathToLoad];
-        dataOut.address               = pAsset->pixels.get();
-        dataOut.size                  = pAsset->sizeBytes;
+    string pathToLoad = filePath;
+    imageDesc.getData = [this, forceLinear, pathToLoad](
+                            Aurora::ImageData& dataOut, AllocateBufferFunction /* alloc*/) {
+        shared_ptr<ImageAsset> pImageAsset;
+
+        // Lookup in loaded images map, return
+        auto iter = _loadedImages.find(pathToLoad);
+        if (iter != _loadedImages.end())
+        {
+            pImageAsset = iter->second;
+        }
+        else
+        {
+            pImageAsset = rendererBase()->assetManager()->acquireImage(pathToLoad);
+
+            if (!pImageAsset)
+            {
+                pImageAsset = _pErrorImageData;
+                AU_ERROR("Failed to load image %s", pathToLoad.c_str());
+            }
+            _loadedImages[pathToLoad] = pImageAsset;
+        }
+
+        // Fill in output data.
+        dataOut.format       = pImageAsset->data.format;
+        dataOut.dimensions   = { pImageAsset->data.width, pImageAsset->data.height };
+        dataOut.pPixelBuffer = pImageAsset->pixels.get();
+        dataOut.bufferSize   = pImageAsset->sizeBytes;
+
+        // Override the linearize value with the one inferred from the image file, unless client
+        // passed forceLinear flag.
+        dataOut.overrideLinearize = !forceLinear;
+        dataOut.linearize         = pImageAsset->data.linearize;
+
         return true;
     };
-    imageDesc.pixelUpdateComplete = [this, pathToLoad](const Aurora::PixelData&, glm::ivec2,
-                                        glm::ivec2) { _loadedImages.erase(pathToLoad); };
+    imageDesc.updateComplete = [this, pathToLoad]() { _loadedImages.erase(pathToLoad); };
 
     setImageDescriptor(atPath, imageDesc);
 }

@@ -18,42 +18,29 @@
 #include "PTGroundPlane.h"
 #include "PTLight.h"
 #include "PTMaterial.h"
+#include "PTSampler.h"
 #include "SceneBase.h"
 
 #include <mutex>
 
 BEGIN_AURORA
 
+namespace MaterialXCodeGen
+{
+class MaterialGenerator;
+} // namespace MaterialXCodeGen
+
+// -1 is used to indicate an invalid offset in offset buffers passed to GPU.
+#define kInvalidOffset -1
+
 // Forward declarations.
 class PTRenderer;
 class PTScene;
 class PTShaderLibrary;
+class PTSampler;
 
 // Definition of a layer material (material+geometry)
 using PTLayerDefinition = pair<PTMaterialPtr, PTGeometryPtr>;
-
-// An internal implementation for the table of layer material indices.
-class PTLayerIndexTable
-{
-public:
-    /*** Lifetime Management ***/
-
-    PTLayerIndexTable(PTRenderer* pRenderer, const vector<int>& indices = {});
-    void set(const vector<int>& indices);
-
-    // The maximum number of supported material layers, must match value in PathTracingCommon.hlsl
-    // shader.
-    static const int kMaxMaterialLayers = 64;
-
-    int count() { return _count; }
-    ID3D12Resource* buffer() const { return _pConstantBuffer.Get(); }
-
-private:
-    int _count             = 0;
-    PTRenderer* _pRenderer = nullptr;
-    ID3D12ResourcePtr _pConstantBuffer;
-};
-MAKE_AURORA_PTR(PTLayerIndexTable);
 
 // An internal implementation for IInstance.
 class PTInstance : public IInstance
@@ -95,13 +82,14 @@ private:
 };
 MAKE_AURORA_PTR(PTInstance);
 
+class PTShaderOptions;
+
 // An internal implementation for IScene.
 class PTScene : public SceneBase
 {
 public:
     /*** Lifetime Management ***/
-    PTScene(
-        PTRenderer* pRenderer, PTShaderLibrary* pShaderLibrary, uint32_t numRendererDescriptors);
+    PTScene(PTRenderer* pRenderer, uint32_t numRendererDescriptors);
     ~PTScene() = default;
 
     /*** IScene Functions ***/
@@ -112,9 +100,10 @@ public:
     ILightPtr addLightPointer(const string& lightType) override;
 
     void update();
+    void updateResources();
 
     /*** Functions ***/
-
+    void computeMaterialTextureCount(int& textureCountOut, int& samplerCountOut);
     int instanceCount() const { return static_cast<int>(_instances.active().count()); }
     PTEnvironmentPtr environment() const { return _pEnvironment; }
     PTGroundPlanePtr groundPlane() const { return _pGroundPlane; }
@@ -127,6 +116,17 @@ public:
     void clearDesciptorHeap();
     PTRenderer* renderer() { return _pRenderer; }
 
+    const TransferBuffer& globalMaterialBuffer() { return _globalMaterialBuffer; }
+    const TransferBuffer& globalInstanceBuffer() { return _globalInstanceBuffer; }
+    const TransferBuffer& layerGeometryBuffer() { return _layerGeometryBuffer; }
+    const TransferBuffer& transformMatrixBuffer() { return _transformMatrixBuffer; }
+    PTShaderLibrary& shaderLibrary() { return *_pShaderLibrary.get(); }
+    IMaterialPtr createMaterialPointer(
+        const string& materialType, const string& document, const string& name);
+    shared_ptr<MaterialShader> generateMaterialX(
+        const string& document, shared_ptr<MaterialDefinition>* pDefOut);
+    void setUnit(const string& unit);
+
 private:
     /*** Private Types ***/
 
@@ -134,38 +134,44 @@ private:
     // of using it in a shader table.
     struct InstanceData
     {
-        InstanceData() : pGeometry(nullptr), mtlIndex((uint32_t)-1), pLayerIndices(nullptr) {}
-
-        InstanceData(
-            const PTInstance& instance, PTLayerIndexTablePtr pLayerIndices, uint32_t mtlIndex) :
-            pGeometry(instance.dxGeometry()), mtlIndex(mtlIndex), pLayerIndices(pLayerIndices)
+        InstanceData(const PTInstance& instance) :
+            pGeometry(nullptr),
+            mtlBufferOffset((int)-1),
+            layers({}),
+            bufferOffset(-1),
+            isOpaque(true),
+            pInstance(&instance)
         {
         }
 
         bool operator==(const InstanceData& other) const
         {
-            return pGeometry == other.pGeometry && mtlIndex == other.mtlIndex &&
-                pLayerIndices == other.pLayerIndices;
+            if (pGeometry != other.pGeometry || mtlBufferOffset != other.mtlBufferOffset ||
+                layers.size() != other.layers.size())
+                return false;
+
+            for (int i = 0; i < layers.size(); i++)
+            {
+                if (layers[i].first != other.layers[i].first)
+                    return false;
+                if (layers[i].second != other.layers[i].second)
+                    return false;
+            }
+            return true;
         }
 
+        // Properties used to compute hash.
+        // Geometry for instance
         PTGeometryPtr pGeometry;
-        PTLayerIndexTablePtr pLayerIndices;
-        // Index into array of unique materials for scsne.
-        uint32_t mtlIndex;
-    };
+        // Offset in global material buffer and layer geometry buffer for each layer.
+        vector<pair<int, int>> layers;
+        // Offset into global material buffer for base layer material.
+        int mtlBufferOffset;
 
-    // Structure containing the contents of material layer, and an index back to parent instance
-    // data.
-    struct LayerData
-    {
-        LayerData(const PTLayerDefinition& def, uint32_t mtlIndex, int idx = -1) : index(idx)
-        {
-            instanceData.mtlIndex  = mtlIndex;
-            instanceData.pGeometry = def.second;
-        }
-
-        InstanceData instanceData;
-        int index;
+        // Convenience properties, do not effect hash.
+        const PTInstance* pInstance;
+        bool isOpaque;
+        int bufferOffset;
     };
 
     // A functor that hashes the contents of an instance, i.e. the pointers to the geometry and
@@ -174,40 +180,57 @@ private:
     {
         size_t operator()(const InstanceData& object) const
         {
-            hash<const PTGeometry*> hasher1;
-            hash<uint32_t> hasher2;
-            hash<const PTLayerIndexTable*> hasher3;
-            return hasher1(object.pGeometry.get()) ^ (hasher2(object.mtlIndex) << 1) ^
-                (hasher3(object.pLayerIndices.get()) << 2);
+            hash<const PTGeometry*> geomHasher;
+            hash<int> indexHasher;
+            size_t res =
+                geomHasher(object.pGeometry.get()) ^ (indexHasher(object.mtlBufferOffset) << 1);
+            for (int i = 0; i < object.layers.size(); i++)
+            {
+                size_t layerHash = indexHasher(object.layers[i].first) ^
+                    (indexHasher(object.layers[i].second) << 1);
+                res = res ^ (layerHash << (i + 1));
+            }
+            return res;
         }
     };
 
     using InstanceList     = set<PTInstancePtr>;
-    using InstanceDataMap  = unordered_map<InstanceData, uint32_t, HashInstanceData>;
-    using LayerIndicesMap  = map<vector<int>, PTLayerIndexTablePtr>;
+    using InstanceDataMap  = unordered_map<InstanceData, int, HashInstanceData>;
     using InstanceDataList = vector<InstanceData>; // <set> not needed; known to be unique
-    using LayerDataList    = vector<LayerData>;
 
     /*** Private Functions ***/
 
     void updateAccelerationStructure();
     void updateDescriptorHeap();
     void updateShaderTables();
-    ID3D12ResourcePtr buildTLAS(const vector<uint32_t>& instanceDataIndices);
-    static size_t GetSamplerHash(const PTMaterial& mtl) { return mtl.computeSamplerHash(); }
+    ID3D12ResourcePtr buildTLAS();
+    InstanceData createInstanceData(const PTInstance& instance);
 
     /*** Private Variables ***/
 
-    PTRenderer* _pRenderer           = nullptr;
-    PTShaderLibrary* _pShaderLibrary = nullptr;
+    PTRenderer* _pRenderer = nullptr;
+    unique_ptr<PTShaderLibrary> _pShaderLibrary;
     InstanceDataList _lstInstanceData;
-    UniqueHashLookup<PTMaterial, GetSamplerHash> _samplerLookup;
-    LayerDataList _lstLayerData;
+    map<const PTMaterial*, int> _materialOffsetLookup;
+    map<const PTInstance*, int> _instanceDataIndexLookup;
+    map<const PTGeometry*, int> _layerGeometryOffsetLookup;
+    vector<PTGeometry*> _layerGeometry;
+    size_t _instanceBufferSize        = 0;
+    size_t _layerGeometryBufferSize   = 0;
+    size_t _transformMatrixBufferSize = 0;
+    map<IImage*, int> _materialTextureIndexLookup;
+    map<ISampler*, int> _materialSamplerIndexLookup;
+    vector<PTImage*> _activeMaterialTextures;
+    vector<PTSampler*> _activeMaterialSamplers;
     PTGroundPlanePtr _pGroundPlane;
     PTEnvironmentPtr _pEnvironment;
     uint32_t _numRendererDescriptors = 0;
     map<int, weak_ptr<PTLight>> _distantLights;
     int _currentLightIndex = 0;
+    TransferBuffer _globalMaterialBuffer;
+    TransferBuffer _globalInstanceBuffer;
+    TransferBuffer _layerGeometryBuffer;
+    TransferBuffer _transformMatrixBuffer;
 
     /*** DirectX 12 Objects ***/
 
@@ -222,7 +245,15 @@ private:
     bool _isEnvironmentDescriptorsDirty = true;
     bool _isHitGroupDescriptorsDirty    = true;
     std::mutex _mutex;
+
+    map<size_t, ISamplerPtr> _samplerCache;
+    map<string, weak_ptr<IImage>> _imageCache;
+    // Code generator used to generate MaterialX files.
+#if ENABLE_MATERIALX
+    unique_ptr<MaterialXCodeGen::MaterialGenerator> _pMaterialXGenerator;
+#endif
 };
+
 MAKE_AURORA_PTR(PTScene);
 
 END_AURORA

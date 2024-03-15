@@ -70,9 +70,9 @@ static void copyVertexChannelData(vector<ComponentType>& dst, const AttributeDat
 GeometryBase::GeometryBase(const std::string& name, const GeometryDescriptor& descriptor) :
     _name(name)
 {
-    // Position values must be provided, there must be at least three vertices. If indices are
-    // provided, there must be at least three of them. All other data is optional.
-    AU_ASSERT(descriptor.vertexDesc.count >= 3, "Invalid vertex data");
+    // If there is vertex data provided, there must be three or more vertices.
+    AU_ASSERT(descriptor.vertexDesc.count == 0 || descriptor.vertexDesc.count >= 3,
+        "Invalid vertex data");
 
     _incomplete = !descriptor.vertexDesc.hasAttribute(Names::VertexAttributes::kPosition);
 

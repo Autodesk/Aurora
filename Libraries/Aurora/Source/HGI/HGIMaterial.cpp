@@ -20,9 +20,9 @@ using namespace pxr;
 
 BEGIN_AURORA
 
-HGIMaterial::HGIMaterial(
-    HGIRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef) :
-    MaterialBase(pShader, pDef), _pRenderer(pRenderer)
+HGIMaterial::HGIMaterial(HGIRenderer* pRenderer, const string& name, MaterialShaderPtr pShader,
+    shared_ptr<MaterialDefinition> pDef) :
+    MaterialBase(name, pShader, pDef), _pRenderer(pRenderer)
 {
     // Create buffer descriptor, passing material as initial data.
     HgiBufferDesc uboDesc;

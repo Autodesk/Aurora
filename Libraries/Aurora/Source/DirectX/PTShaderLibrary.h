@@ -26,14 +26,15 @@ class MaterialBase;
 struct MaterialDefaultValues;
 struct CompileJob;
 
+#define kDefaultShaderIndex 0
+
 // The DX data for a compiled.
 struct CompiledShader
 {
     ComPtr<IDxcBlob> binary = nullptr;
-    string exportName;
-
     string id;
     string hlslFilename;
+    string setupFunctionDeclaration;
     map<string, string> entryPoints;
     void destroyBinary() { binary = nullptr; }
     // Reset the struct (as indices are re-used.)
@@ -41,9 +42,11 @@ struct CompiledShader
     {
         destroyBinary();
         entryPoints.clear();
-        exportName.clear();
         id.clear();
+        hlslFilename.clear();
+        setupFunctionDeclaration.clear();
     }
+    bool valid() { return !id.empty(); }
 };
 
 // Shader options represented as set of HLSL #define statements.
@@ -73,13 +76,7 @@ private:
 // Types of shader entry point used in the library.
 struct EntryPointTypes
 {
-    static const string kRadianceHit;
-    static const string kLayerMiss;
-    static const string kShadowAnyHit;
-    static const string kRayGen;
-    static const string kBackgroundMiss;
-    static const string kRadianceMiss;
-    static const string kShadowMiss;
+    static const string kInitializeMaterialExport;
 };
 
 /**
@@ -108,6 +105,12 @@ public:
         initialize();
     }
     ~PTShaderLibrary() {}
+
+    static const LPWSTR kInstanceHitGroupName;
+    static const LPWSTR kInstanceClosestHitEntryPointName;
+    static const LPWSTR kInstanceShadowAnyHitEntryPointName;
+    static const LPWSTR kRayGenEntryPointName;
+    static const LPWSTR kShadowMissEntryPointName;
 
     /// Get the named built-in material shader.  These are hand-coded and do not require runtime
     /// code generation, so this will never trigger a rebuild.
@@ -143,10 +146,6 @@ public:
         return _pPipelineState;
     }
 
-    // Get the DX shader identifier for one of the shared entry points (that are used by all
-    // materials). entryPointType must be one of the strings in EntryPointTypes.
-    DirectXShaderIdentifier getSharedEntryPointShaderID(const string& entryPointType);
-
     /// Get the names of the built-in material types.
     const vector<string>& builtInMaterials() const { return _builtInMaterialNames; }
 
@@ -154,7 +153,7 @@ public:
     ID3D12RootSignaturePtr globalRootSignature() const { return _pGlobalRootSignature; }
 
     /// Rebuild the shader library and its pipeline state. GPU must be idle before calling this.
-    void rebuild();
+    void rebuild(int globalTextureCount, int globalSamplerCount);
 
     // Get the DirectX shader reflection for library.
     ID3D12LibraryReflection* reflection() const { return _pShaderLibraryReflection; }
@@ -164,19 +163,19 @@ public:
     bool setOption(const string& name, int value);
 
     // Get the DirectX shader ID for the provided shader.
-    DirectXShaderIdentifier getShaderID(MaterialShaderPtr pShader);
-    // Get the DirectX shader ID for the layer shader for provided shader.
-    DirectXShaderIdentifier getLayerShaderID(MaterialShaderPtr pShader);
+    DirectXShaderIdentifier getShaderID(LPWSTR name);
 
     bool rebuildRequired() { return _shaderLibrary.rebuildRequired(); }
 
 private:
+    // Initialize the library.
+    void initialize();
+
+    void generateEvaluateMaterialFunction(CompileJob& jobOut);
+
     /*** Private Functions ***/
 
     void setupCompileJobForShader(const MaterialShader& shader, CompileJob& shadersOut);
-
-    // Initialize the library.
-    void initialize();
 
     // Compile HLSL source code using DXCompiler.
     bool compileLibrary(const ComPtr<IDxcLibrary>& pDXCLibrary, const string source,
@@ -196,17 +195,14 @@ private:
     ID3D12RootSignaturePtr createRootSignature(const D3D12_ROOT_SIGNATURE_DESC& desc);
 
     // Initialize the shared root signatures.
-    void initRootSignatures();
+    void initRootSignatures(int globalTextureCount, int globalSamplerCount);
 
     // Remove the HLSL source for the associated index.  Called by friend class MaterialShader.
     void removeSource(int sourceIndex);
 
-    CompiledShader& getDefaultShader() { return _compiledShaders[0]; }
+    CompiledShader& getDefaultShader() { return _compiledShaders[kDefaultShaderIndex]; }
 
     /*** Private Variables ***/
-
-    // Get the shader identifier for an entry point.
-    DirectXShaderIdentifier getShaderID(const wchar_t* entryPoint);
 
     vector<string> _builtInMaterialNames;
 
@@ -214,8 +210,7 @@ private:
 
     ID3D12RootSignaturePtr _pGlobalRootSignature;
     ID3D12RootSignaturePtr _pRayGenRootSignature;
-    ID3D12RootSignaturePtr _pRadianceHitRootSignature;
-    ID3D12RootSignaturePtr _pLayerMissRootSignature;
+    ID3D12RootSignaturePtr _pInstanceHitRootSignature;
 
     ID3D12StateObjectPtr _pPipelineState;
 
@@ -234,6 +229,9 @@ private:
     vector<shared_ptr<Transpiler>> _transpilerArray;
 
     Foundation::CPUTimer _timer;
+    int _globalTextureCount = 0;
+    ComPtr<IDxcBlob> _pDefaultShaderDXIL;
+    string _defaultOptions;
 };
 
 END_AURORA

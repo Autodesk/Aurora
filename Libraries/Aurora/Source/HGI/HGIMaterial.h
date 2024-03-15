@@ -26,8 +26,8 @@ struct MaterialData;
 class HGIMaterial : public MaterialBase
 {
 public:
-    HGIMaterial(
-        HGIRenderer* pRenderer, MaterialShaderPtr pShader, shared_ptr<MaterialDefinition> pDef);
+    HGIMaterial(HGIRenderer* pRenderer, const string& name, MaterialShaderPtr pShader,
+        shared_ptr<MaterialDefinition> pDef);
     ~HGIMaterial() {};
 
     void update();

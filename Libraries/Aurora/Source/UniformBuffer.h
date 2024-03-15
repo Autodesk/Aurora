@@ -36,12 +36,28 @@ struct UniformBufferPropertyDefinition
 // currently in UniformBuffer.
 using UniformBufferDefinition = vector<UniformBufferPropertyDefinition>;
 
+// Texture indentifier, containing image name (e.g. "base_color_image") and optional sampler name
+// (e.g. "base_color_image_sampler").
+struct TextureIdentifier
+{
+    string image;
+    string sampler;
+    TextureIdentifier(const char* pImageName = nullptr) :
+        image(pImageName ? pImageName : ""), sampler("")
+    {
+    }
+    TextureIdentifier(const string& imageName, const string& samplerName = "") :
+        image(imageName), sampler(samplerName)
+    {
+    }
+    bool hasSampler() const { return !sampler.empty(); }
+};
+
 // Definition of a texture.
-// TODO: Should be part of equivalent TextureArray class, similar to UniformBuffer.
 struct TextureDefinition
 {
     // Texture name.
-    string name;
+    TextureIdentifier name;
     // Is true, the texture is sRGB that should be converted to linear color space on the GPU.
     bool linearize = true;
     // Default filename for texture.

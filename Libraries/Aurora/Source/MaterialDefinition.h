@@ -27,7 +27,7 @@ struct MaterialDefaultValues
         const vector<PropertyValue>& defaultProps, const vector<TextureDefinition>& defaultTxt);
 
     // The names of the textures defined for this material.
-    vector<string> textureNames;
+    vector<TextureIdentifier> textureNames;
 
     // The definitions of the properties defined for this material.
     UniformBufferDefinition propertyDefinitions;

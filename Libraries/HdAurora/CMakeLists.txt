@@ -8,6 +8,12 @@ find_package(MaterialX REQUIRED) # MaterialX SDK
 find_package(pxr REQUIRED) # Find the Universal Scene Description (USD) library
 # Alias the namespace to meet the cmake convention on imported targets
 add_library(MaterialX::GenGlsl ALIAS MaterialXGenGlsl)
+# Include system python libraries if needed by USD.
+if(USD_BUILT_WITH_PYTHON)
+  find_package (Python3 COMPONENTS Development)
+  set(PYTHON_DEPENDENCY Python3::Python)
+endif()
+
 
 # On windows, the version resource and header files that add the version information to the DLL.
 if(WIN32)
@@ -67,6 +73,7 @@ PRIVATE
     pxr::hd
     pxr::hdx
     Foundation
+    ${PYTHON_DEPENDENCY}
     Aurora
 )
 
@@ -88,7 +95,9 @@ if(WIN32)
     add_dependencies(CopyUSDExecutables MakeRuntimeDir)
     add_dependencies(${PROJECT_NAME} CopyUSDExecutables)
 
-    if(ENABLE_USDVIEW)
+    # If USD was built with python, add a custom build step to copy PXR python libs.
+    if(USD_BUILT_WITH_PYTHON)
+        message(STATUS "USD built with python, adding python copy step")
         add_custom_target(CopyUSDPythonExecutables ALL
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${USD_PYTHON_LIB_DIR} ${RUNTIME_OUTPUT_DIR}/python
         )
@@ -111,6 +120,7 @@ endif()
 target_include_directories(${PROJECT_NAME}
 PRIVATE
     ${VERSION_FOLDER}
+    ${PYTHON_INCLUDE_DIRS}
 )
 
 # Install the binaries.

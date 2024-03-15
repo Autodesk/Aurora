@@ -127,6 +127,7 @@ private:
     IRenderer* _pRenderer;
     ImageDescriptor _descriptor;
     bool _hasDescriptor = false;
+    static vector<unsigned int> _defaultImageData;
 };
 
 /// ResourceStub sub-class that implements a renderer sampler resource.

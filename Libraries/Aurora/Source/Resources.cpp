@@ -187,6 +187,8 @@ ImageResource::ImageResource(const Aurora::Path& path, const ResourceMap& contai
 {
 }
 
+vector<unsigned int> ImageResource::_defaultImageData = { 0x00000000 };
+
 void ImageResource::createResource()
 {
     // Ensure descriptor as been set.
@@ -195,26 +197,48 @@ void ImageResource::createResource()
     // Setup InitData object for image.
     // TODO: This is legacy struct, replace with descriptor in pointer inteface.
     IImage::InitData initData;
-    initData.format        = _descriptor.format;
-    initData.width         = _descriptor.width;
-    initData.height        = _descriptor.height;
     initData.isEnvironment = _descriptor.isEnvironment;
     initData.linearize     = _descriptor.linearize;
     initData.name          = path();
 
-    // Use the getPixelData callback to get the contents of the image.
-    PixelData pixelData;
-    _descriptor.getPixelData(pixelData, ivec2(0, 0), ivec2(_descriptor.width, _descriptor.height));
-    initData.pImageData = pixelData.address;
+    // Use the getData callback to get the contents of the image.
+
+    vector<vector<uint8_t>> buffers;
+
+    AllocateBufferFunction allocFunc = [&buffers](size_t numBytes) {
+        buffers.push_back(vector<uint8_t>(numBytes));
+        buffers.back().resize(numBytes);
+        return buffers.back().data();
+    };
+    ImageData pixelData;
+    if (!_descriptor.getData(pixelData, allocFunc))
+    {
+        // If the getData function failed, print warning.
+        AU_WARN("Failed to get data for image resource %s", path().c_str());
+
+        // Then fill in with 1x1 default black image.
+        initData.format     = ImageFormat::Integer_RGBA;
+        initData.width      = 1;
+        initData.height     = 1;
+        initData.pImageData = _defaultImageData.data();
+    }
+    else
+    {
+        initData.format     = pixelData.format;
+        initData.width      = pixelData.dimensions.x;
+        initData.height     = pixelData.dimensions.y;
+        initData.pImageData = pixelData.pPixelBuffer;
+        if (pixelData.overrideLinearize)
+            initData.linearize = pixelData.linearize;
+    }
 
     // Create the actual renderer image resource.
     _resource = _pRenderer->createImagePointer(initData);
 
-    // If we have a completion callback, execute that as pixels ahve been passed to renderer and can
+    // If we have a completion callback, execute that as pixels have been passed to renderer and can
     // be deleted.
-    if (_descriptor.pixelUpdateComplete)
-        _descriptor.pixelUpdateComplete(
-            pixelData, ivec2(0, 0), ivec2(_descriptor.width, _descriptor.height));
+    if (_descriptor.updateComplete)
+        _descriptor.updateComplete();
 }
 
 void ImageResource::destroyResource()

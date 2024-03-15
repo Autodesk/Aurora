@@ -406,8 +406,8 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
         return;
     }
 
-    // Compare connection name.
-    string variableName = connection->getFullName();
+    // Get full variable name (with postfix numeral) for connection.
+    string variableName = connection->getVariable();
     if (input->getConnection()->getNode()->getName() == "BSDFCodeGeneratorShaderGraph")
     {
         // If this a connection from the high-level shader graph, its a material input.
@@ -752,7 +752,7 @@ bool BSDFCodeGenerator::materialXValueToAuroraPropertyValue(
         *pValueOut     = valData;
         return true;
     }
-    AU_FAIL("Unrecognized MateriaLX value type:%s", glslType.c_str());
+    AU_FAIL("Unrecognized MaterialX value type:%s", glslType.c_str());
     return false;
 }
 
@@ -892,7 +892,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
                 // Create the texture definition for this parameter.
                 TextureDefinition tex;
-                tex.name            = param.path;
+                tex.name            = TextureIdentifier(param.path, param.path + "_sampler");
                 tex.defaultFilename = valueElem->getValue()->asA<string>();
 
                 // Set linearize to if no color space or srgb_texture color space.
@@ -949,7 +949,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
                     // Create the texture definition for this parameter.
                     TextureDefinition tex;
-                    tex.name            = param.path;
+                    tex.name            = TextureIdentifier(param.path, param.path + "_sampler");
                     tex.defaultFilename = elem->getAttribute("value");
 
                     // Set linearize to if no color space or srgb_texture color space.
@@ -1014,7 +1014,14 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // Find renderable nodes.
     vector<MaterialX::TypedElementPtr> elements;
     unordered_set<MaterialX::ElementPtr> processedOutputs;
+    // TODO: This was deprecated in between MaterialX 1.38.7 and 1.38.8.  Work out the reasons for
+    // this and move to new API.
+    // See
+    // https://github.com/AcademySoftwareFoundation/MaterialX/commit/f49359877ea41e7fc8ced47d3334e1d608b35a1a
+#pragma warning(push)
+#pragma warning(disable : 4996)
     MaterialX::findRenderableMaterialNodes(mtlxDocument, elements, false, processedOutputs);
+#pragma warning(pop)
 
     // Return false if no renderable nodes.
     // TODO: Better error handling.
@@ -1080,7 +1087,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
         return false;
     }
 
-    // Get the node for materialX shader.
+    // Get the node for MaterialX shader.
     MaterialX::NodePtr shaderNode = shaderNodeElement->asA<MaterialX::Node>();
 
     // Build a set of the BSDF inputs used by the shader nodes.  These will be the outputs to the
@@ -1209,7 +1216,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     pResultOut->materialStructName = sstream.str();
 
     // Create the GLSL code for the material struct (containing all material properties).
-    pResultOut->materialStructCode.append("struct " + pResultOut->materialStructName + " {\n");
+    pResultOut->materialStructCode = "struct " + pResultOut->materialStructName + " {\n";
     pResultOut->materialStructCode.append(structProperties);
     pResultOut->materialStructCode.append("};\n");
 
@@ -1229,7 +1236,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
         // Add the code for this input to the prototype.
         pResultOut->materialSetupCode.append(
-            "\tsampler2D " + _textures[i].name + "_image_parameter");
+            "\tsampler2D " + _textures[i].name.image + "_image_parameter");
 
         numParams++;
     }

@@ -188,14 +188,16 @@ bool Transpiler::transpile(
     slang::ICompileRequest* pRequest;
     [[maybe_unused]] const int reqIndex = _pSession->createCompileRequest(&pRequest);
 
+    auto profileId = _pSession->findProfile("sm_6_3");
+
     // Set the file system and compile fiags.
     pRequest->setFileSystem(_pFileSystem.get());
     pRequest->setCompileFlags(SLANG_COMPILE_FLAG_NO_MANGLING);
-
     // Create code gen target (with GLSL or HLSL language as required).
     const int targetIndex =
         pRequest->addCodeGenTarget(target == Language::GLSL ? SLANG_GLSL : SLANG_HLSL);
 
+    pRequest->setTargetProfile(targetIndex, profileId);
     // Set target flags to generate whole program.
     pRequest->setTargetFlags(targetIndex, SLANG_TARGET_FLAG_GENERATE_WHOLE_PROGRAM);
     // TODO: The buffer layout might be an issue, need to work out correct flags.

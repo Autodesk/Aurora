@@ -60,6 +60,19 @@ TEST_P(RendererTest, TestRendererDefault)
     ASSERT_EQ(pRenderer->backend(), backend) << rendererDescription();
 }
 
+// Ensure debug flag is not set on device.
+TEST_P(RendererTest, TestRendererDebugDevice)
+{
+    if (!backendSupported())
+        return;
+
+    auto renderer = createRenderer(rendererBackend());
+    ASSERT_NE(renderer.get(), nullptr);
+
+    // Look for the string that DXDevice::initialize will print to console if debug enabled.
+    ASSERT_THAT(lastLogMessage(), ::testing::Not(::testing::HasSubstr("AU_DEVICE_DEBUG_ENABLED")));
+}
+
 // Test creating, destroying renderer then rendering.
 TEST_P(RendererTest, TestRendererCreateDestroyThenRenderFull)
 {
@@ -220,7 +233,7 @@ TEST_P(RendererTest, TestRendererDestroyRenderBufferFirst)
     // Create a scene.
     IScenePtr pScene = pRenderer->createScene();
 
-    // Set arbritary bounds.
+    // Set arbitrary bounds.
     vec3 boundsMin(-1, -1, -1);
     vec3 boundsMax(+1, +1, +1);
     pScene->setBounds(boundsMin, boundsMax);
@@ -260,7 +273,7 @@ TEST_P(RendererTest, TestRendererEmptyScene)
     // Create a scene.
     IScenePtr pScene = pRenderer->createScene();
 
-    // Set arbritary bounds.
+    // Set arbitrary bounds.
     vec3 boundsMin(-1, -1, -1);
     vec3 boundsMax(+1, +1, +1);
     pScene->setBounds(boundsMin, boundsMax);
@@ -443,6 +456,7 @@ TEST_P(RendererTest, TestRendererEmptySceneBounds)
 }
 
 // Test ground plane.
+// TODO: Re-enable once ground plane re-enabled.
 TEST_P(RendererTest, TestRendererGroundPlane)
 {
     auto pScene    = createDefaultScene();
@@ -462,7 +476,7 @@ TEST_P(RendererTest, TestRendererGroundPlane)
 
     setDefaultRendererCamera(vec3(0, 1, -5), vec3(0, 0, 0));
 
-    // Set arbritary bounds.
+    // Set arbitrary bounds.
     vec3 boundsMin(-1, -1, -1);
     vec3 boundsMax(+1, +1, +1);
     pScene->setBounds(boundsMin, boundsMax);
@@ -518,7 +532,7 @@ TEST_P(RendererTest, TestRendererInstanceProperties)
     if (!pRenderer)
         return;
 
-    // Set arbritary bounds.
+    // Set arbitrary bounds.
     vec3 boundsMin(-1, -1, -1);
     vec3 boundsMax(+1, +1, +1);
     pScene->setBounds(boundsMin, boundsMax);
@@ -552,7 +566,7 @@ TEST_P(RendererTest, TestRendererNonIndexedGeom)
     if (!pRenderer)
         return;
 
-    // Set arbritary bounds.
+    // Set arbitrary bounds.
     vec3 boundsMin(-1, -1, -1);
     vec3 boundsMax(+1, +1, +1);
     pScene->setBounds(boundsMin, boundsMax);
@@ -615,7 +629,7 @@ TEST_P(RendererTest, TestRendererRemoveInstance)
     if (!pRenderer)
         return;
 
-    // Set arbritary bounds.
+    // Set arbitrary bounds.
     vec3 boundsMin(-1, -1, -1);
     vec3 boundsMax(+1, +1, +1);
     pScene->setBounds(boundsMin, boundsMax);
@@ -641,6 +655,7 @@ TEST_P(RendererTest, TestRendererRemoveInstance)
 }
 
 // Test instance with layer materials
+// TODO: Re-enable test when layers are working.
 TEST_P(RendererTest, TestRendererMaterialLayers)
 {
     auto pScene    = createDefaultScene();
@@ -650,41 +665,26 @@ TEST_P(RendererTest, TestRendererMaterialLayers)
     if (!pRenderer)
         return;
 
-    const std::string txtNormalName = dataPath() + "/Textures/fishscale_normal.png";
-    TestHelpers::ImageData normalImageData;
-    loadImage(txtNormalName, &normalImageData);
     // Create the image.
-    const Path kNormalImagePath = "NormalImage";
-    normalImageData.descriptor.linearize = false;
-    pScene->setImageDescriptor(kNormalImagePath, normalImageData.descriptor);
-
+    const std::string txtNormalName = dataPath() + "/Textures/fishscale_normal.png";
+    const Path normalImagePath = loadImage(txtNormalName, false);
 
     Path kMaterialPath = "BaseMaterial";
-    pScene->setMaterialProperties(kMaterialPath, {{"normal_image", kNormalImagePath}, { "base_color", vec3(1, 0, 0) } });
+    pScene->setMaterialProperties(kMaterialPath, {{"normal_image", normalImagePath}, { "base_color", vec3(1, 0, 0) } });
 
 
-    // Load pixels for test image file.
+    // Load opacity image file.
     const std::string txtName = dataPath() +
         "/Textures/Triangle.png";
+    Path opacityImagePath = loadImage(txtName);
 
-    // Load image
-    TestHelpers::ImageData opactiyImageData;
-    loadImage(txtName, &opactiyImageData);
-
-    // Create the image.
-    const Path kOpacityImagePath = "OpacityImage";
-    pScene->setImageDescriptor(kOpacityImagePath, opactiyImageData.descriptor);
-
+    // Load diffuse image file.
     const std::string mandrillTxPath = dataPath() + "/Textures/Mandrill.png";
-
-    const Path kMandrillImagePath = "MandrillImage";
-    TestHelpers::ImageData imageData;
-    loadImage(mandrillTxPath, &imageData);
-    pScene->setImageDescriptor(kMandrillImagePath, imageData.descriptor);
-
+    Path mandrillImagePath = loadImage(mandrillTxPath);
+    
     // Create a material.
     const Path kDecalMaterialPath0 = "kDecalMaterial0";
-    pScene->setMaterialProperties(kDecalMaterialPath0, { { "opacity_image", kOpacityImagePath }, { "base_color_image", kMandrillImagePath }, {"diffuse_roughness",0.9f} });
+    pScene->setMaterialProperties(kDecalMaterialPath0, { { "opacity_image", opacityImagePath }, { "base_color_image", mandrillImagePath }, {"diffuse_roughness",0.9f} });
 
     ;
     vector<glm::vec2> xformedUVs(TestHelpers::TeapotModel::verticesCount());
@@ -731,7 +731,8 @@ TEST_P(RendererTest, TestRendererMaterialLayers)
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName());
 }
 
-// Test instance with layer materials
+// Test instance with invalid layer material paths
+// TODO: Re-enable test when layers are working.
 TEST_P(RendererTest, TestRendererInvalidMaterialLayerPaths)
 {
     // No layers on HGI currently.
@@ -745,41 +746,26 @@ TEST_P(RendererTest, TestRendererInvalidMaterialLayerPaths)
     if (!pRenderer)
         return;
 
-    const std::string txtNormalName = dataPath() + "/Textures/fishscale_normal.png";
-    TestHelpers::ImageData normalImageData;
-    loadImage(txtNormalName, &normalImageData);
     // Create the image.
-    const Path kNormalImagePath = "NormalImage";
-    normalImageData.descriptor.linearize = false;
-    pScene->setImageDescriptor(kNormalImagePath, normalImageData.descriptor);
-
+    const std::string txtNormalName = dataPath() + "/Textures/fishscale_normal.png";
+    const Path normalImagePath = loadImage(txtNormalName, false);
 
     Path kMaterialPath = "BaseMaterial";
-    pScene->setMaterialProperties(kMaterialPath, {{"normal_image", kNormalImagePath}, { "base_color", vec3(1, 0, 0) } });
+    pScene->setMaterialProperties(kMaterialPath, {{"normal_image", normalImagePath}, { "base_color", vec3(1, 0, 0) } });
 
 
-    // Load pixels for test image file.
+    // Load opacity image.
     const std::string txtName = dataPath() +
         "/Textures/Triangle.png";
+    const Path opacityImagePath = loadImage(txtName);
 
-    // Load image
-    TestHelpers::ImageData opactiyImageData;
-    loadImage(txtName, &opactiyImageData);
-
-    // Create the image.
-    const Path kOpacityImagePath = "OpacityImage";
-    pScene->setImageDescriptor(kOpacityImagePath, opactiyImageData.descriptor);
-
+    // Load diffuse image.
     const std::string mandrillTxPath = dataPath() + "/Textures/Mandrill.png";
-
-    const Path kMandrillImagePath = "MandrillImage";
-    TestHelpers::ImageData imageData;
-    loadImage(mandrillTxPath, &imageData);
-    pScene->setImageDescriptor(kMandrillImagePath, imageData.descriptor);
+    const Path mandrillImagePath = loadImage(mandrillTxPath);
 
     // Create a material.
     const Path kDecalMaterialPath0 = "kDecalMaterial0";
-    pScene->setMaterialProperties(kDecalMaterialPath0, { { "opacity_image", kOpacityImagePath }, { "base_color_image", kMandrillImagePath }, {"diffuse_roughness",0.9f} });
+    pScene->setMaterialProperties(kDecalMaterialPath0, { { "opacity_image", opacityImagePath }, { "base_color_image", mandrillImagePath }, {"diffuse_roughness",0.9f} });
 
     ;
     vector<glm::vec2> xformedUVs(TestHelpers::TeapotModel::verticesCount());
@@ -835,6 +821,7 @@ TEST_P(RendererTest, TestRendererInvalidMaterialLayerPaths)
         ::testing::StartsWith("AU_ASSERT test failed:\nEXPRESSION: iter != _container.end()"));
 }
 
+// TODO: Re-enable test when layers are working.
 TEST_P(RendererTest, TestRendererInvalidGeometryLayers)
 {
     // No layers on HGI backed.
@@ -849,40 +836,24 @@ TEST_P(RendererTest, TestRendererInvalidGeometryLayers)
         return;
 
     const std::string txtNormalName = dataPath() + "/Textures/fishscale_normal.png";
-    TestHelpers::ImageData normalImageData;
-    loadImage(txtNormalName, &normalImageData);
-    // Create the image.
-    const Path kNormalImagePath = "NormalImage";
-    normalImageData.descriptor.linearize = false;
-    pScene->setImageDescriptor(kNormalImagePath, normalImageData.descriptor);
-
+    Path normalImagePath =  loadImage(txtNormalName, false);
 
     Path kMaterialPath = "BaseMaterial";
-    pScene->setMaterialProperties(kMaterialPath, {{"normal_image", kNormalImagePath}, { "base_color", vec3(1, 0, 0) } });
+    pScene->setMaterialProperties(kMaterialPath, {{"normal_image", normalImagePath}, { "base_color", vec3(1, 0, 0) } });
 
 
-    // Load pixels for test image file.
+    // Load opacity image.
     const std::string txtName = dataPath() +
         "/Textures/Triangle.png";
+    const Path opacityImagePath = loadImage(txtName);;
 
-    // Load image
-    TestHelpers::ImageData opactiyImageData;
-    loadImage(txtName, &opactiyImageData);
-
-    // Create the image.
-    const Path kOpacityImagePath = "OpacityImage";
-    pScene->setImageDescriptor(kOpacityImagePath, opactiyImageData.descriptor);
-
+    // Load diffuse image.
     const std::string mandrillTxPath = dataPath() + "/Textures/Mandrill.png";
-
-    const Path kMandrillImagePath = "MandrillImage";
-    TestHelpers::ImageData imageData;
-    loadImage(mandrillTxPath, &imageData);
-    pScene->setImageDescriptor(kMandrillImagePath, imageData.descriptor);
-
+    const Path mandrillImagePath = loadImage(mandrillTxPath);;
+  
     // Create a material.
     const Path kDecalMaterialPath0 = "kDecalMaterial0";
-    pScene->setMaterialProperties(kDecalMaterialPath0, { { "opacity_image", kOpacityImagePath }, { "base_color_image", kMandrillImagePath }, {"diffuse_roughness",0.9f} });
+    pScene->setMaterialProperties(kDecalMaterialPath0, { { "opacity_image", opacityImagePath }, { "base_color_image", mandrillImagePath }, {"diffuse_roughness",0.9f} });
 
     ;
     vector<glm::vec2> xformedUVs(TestHelpers::TeapotModel::verticesCount());
@@ -951,6 +922,7 @@ TEST_P(RendererTest, TestRendererInvalidGeometryLayers)
 }
 
 // Test instance with layer materials
+// TODO: Re-enable test when layers are working.
 TEST_P(RendererTest, TestRendererMultipleMaterialLayers)
 {
     if (!isDirectX())
@@ -963,47 +935,30 @@ TEST_P(RendererTest, TestRendererMultipleMaterialLayers)
     if (!pRenderer)
         return;
 
-    const std::string txtNormalName = dataPath() + "/Textures/fishscale_normal.png";
-    TestHelpers::ImageData normalImageData;
-    loadImage(txtNormalName, &normalImageData);
-    // Create the image.
-    const Path kNormalImagePath = "NormalImage";
-    normalImageData.descriptor.linearize = false;
-    pScene->setImageDescriptor(kNormalImagePath, normalImageData.descriptor);
-
+    const std::string txtNormalName = dataPath() + "/Textures/fishscale_normal.png";    
+    const Path normalImagePath = loadImage(txtNormalName);
 
     Path kMaterialPath = "BaseMaterial";
     pScene->setMaterialProperties(kMaterialPath, { { "base_color", vec3(1, 0, 0) } });
 
 
-    // Load pixels for test image file.
+    // Load opacity image.
     const std::string txtName = dataPath() +
         "/Textures/Triangle.png";
+    const Path opacityImagePath = loadImage(txtName);
 
-    // Load image
-    TestHelpers::ImageData opactiyImageData;
-    loadImage(txtName, &opactiyImageData);
-
-    // Create the image.
-    const Path kOpacityImagePath = "OpacityImage";
-    pScene->setImageDescriptor(kOpacityImagePath, opactiyImageData.descriptor);
-
+    // Load metallic image.
     const std::string metalTxtPath = dataPath() + "/Textures/fishscale_roughness.png";
-    const Path kMetalImage = "MetalImage";
-    TestHelpers::ImageData imageData;
-    loadImage(metalTxtPath, &imageData);
-    pScene->setImageDescriptor(kMetalImage, imageData.descriptor);
+    const Path metalImagePath = loadImage(metalTxtPath);;    
 
-
+    // Load diffuse image
     const std::string mandrillTxPath = dataPath() + "/Textures/Mandrill.png";
-    const Path kMandrillImagePath = "MandrillImage";
-    loadImage(mandrillTxPath, &imageData);
-    pScene->setImageDescriptor(kMandrillImagePath, imageData.descriptor);
+    const Path mandrillImagePath =  loadImage(mandrillTxPath);
 
     // Create two decal materials.
     vector<Path> materialLayers = {"DecalMaterial0","DecalMaterial1"} ;
-    pScene->setMaterialProperties(materialLayers[0], { {"normal_image", kNormalImagePath},{ "opacity_image", kOpacityImagePath }, { "base_color_image", kMetalImage }, {"diffuse_roughness",0.2f} });
-    pScene->setMaterialProperties(materialLayers[1], {  { "opacity_image", kOpacityImagePath }, { "base_color_image", kMandrillImagePath }, {"diffuse_roughness",0.6f}, {"metalness",0.9f} });
+    pScene->setMaterialProperties(materialLayers[0], { {"normal_image", normalImagePath},{ "opacity_image", opacityImagePath }, { "base_color_image", metalImagePath }, {"diffuse_roughness",0.2f} });
+    pScene->setMaterialProperties(materialLayers[1], {  { "opacity_image", opacityImagePath }, { "base_color_image", mandrillImagePath }, {"diffuse_roughness",0.6f}, {"metalness",0.9f} });
 
     int numLayers = 2;
     vector<string> geometryLayers;
@@ -1273,14 +1228,7 @@ TEST_P(RendererTest, TestDebugNormals)
 
     // Load pixels for test image file.
     const std::string txtName = dataPath() + "/Textures/Verde_Guatemala_Slatted_Marble_normal.png";
-    // Load image
-    TestHelpers::ImageData imageData;
-    loadImage(txtName, &imageData);
-
-    // Create the image.
-    const Path kImagePath          = "NormalImage";
-    imageData.descriptor.linearize = false;
-    pScene->setImageDescriptor(kImagePath, imageData.descriptor);
+    const Path imagePath          = loadImage(txtName, false);
 
     // Create geometry.
     Path planePath  = createPlaneGeometry(*pScene, vec2(0.5f,0.5f));
@@ -1288,7 +1236,7 @@ TEST_P(RendererTest, TestDebugNormals)
 
     // Create matrix and material for first instance (which is linearized).
     const Path kMaterialPath = "NormalMaterial";
-    pScene->setMaterialProperties(kMaterialPath, { { "normal_image", kImagePath },{ "normal_image_scale", vec2(5.f, 5.f)} });
+    pScene->setMaterialProperties(kMaterialPath, { { "normal_image", imagePath },{ "normal_image_scale", vec2(5.f, 5.f)} });
     const Path kBasicMaterialPath = "BasicMaterial";
     pScene->setMaterialProperties(kBasicMaterialPath, { { "base_color", vec3(0,1,0) } });
     

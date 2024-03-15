@@ -25,6 +25,13 @@ if (DEFINED Slang_ROOT)
                  PATH_SUFFIXES release debug
                  DOC "path to slang library files"
     )
+    find_program(Slang_COMPILER       # Set variable Slang_LIBRARY
+                 slangc               # Find library path with libslang.so, slang.dll, or slang.lib
+                 NO_DEFAULT_PATH
+                 PATHS "${Slang_ROOT}/bin/${Slang_BUILD_CONFIG}"
+                 PATH_SUFFIXES release debug
+                 DOC "path to slangc compiler executable"
+    )
 endif()
 # Once the prioritized find_path succeeds the result variable will be set and stored in the cache
 # so that no call will search again.
@@ -36,7 +43,11 @@ find_library(Slang_LIBRARY       # Set variable Slang_LIBRARY
              slang               # Find library path with libslang.so, slang.dll, or slang.lib
              DOC "path to slang library files"
 )
-
+find_program(Slang_COMPILER       # Set variable Slang_LIBRARY
+             slangc               # Find library path with libslang.so, slang.dll, or slang.lib
+             DOC "path to slangc compiler executable"
+)
+ 
 set(Slang_LIBRARIES ${Slang_LIBRARY})
 set(Slang_INCLUDE_DIRS ${Slang_INCLUDE_DIR})
 

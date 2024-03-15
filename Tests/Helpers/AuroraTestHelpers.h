@@ -39,13 +39,6 @@ using namespace std;
 namespace TestHelpers
 {
 
-// Loaded image data
-struct ImageData
-{
-    Aurora::ImageDescriptor descriptor;
-    vector<unsigned char> buffer;
-};
-
 // Geometry for teapot test model created from OBJ
 class TeapotModel
 {
@@ -82,7 +75,7 @@ public:
     /// Get the data path used for test assets.
     const string& dataPath() { return _dataPath; }
 
-    void loadImage(const string& filename, ImageData* pImageOut);
+    Aurora::Path loadImage(const string& filename, bool linearize = true);
 
     /// \brief Creates a default renderer and render buffer for renderer tests to use if needed for
     /// conciseness (and associated render buffer.)

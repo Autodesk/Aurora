@@ -44,7 +44,7 @@ macro(minify_shaders header shader_folder shaders)
     # Add a custom command to create minified shader.
     add_custom_command(
         OUTPUT ${header}
-        COMMAND ${Python3_EXECUTABLE} ${SCRIPTS_DIR}/minifyShadersFolder.py ${shader_folder} ${header}
+        COMMAND ${Python3_EXECUTABLE} ${SCRIPTS_DIR}/minifyShadersFolder.py ${shader_folder} ${header} ${Slang_COMPILER}
         COMMENT "Minifying path tracing shaders to ${header}"
         DEPENDS ${shaders}
     )

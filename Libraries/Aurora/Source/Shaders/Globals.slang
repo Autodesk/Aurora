@@ -21,30 +21,8 @@
 #define M_RAY_TMIN 0.01f
 
 // Miss shader indices.
-#if DIRECTX
 #define kMissNull 0       // for a disabled miss shader (no effect)
-#define kMissBackground 1 // for the background, visible by primary rays
-#define kMissRadiance 2   // for lighting (radiance)
-#define kMissShadow 3     // for shadow rays, forced to opaque
-#else
-// In HGI backend, backround and radiance miss shader are the same.
-#define kMissBackground 0 // for the background, visible by primary rays
-#define kMissRadiance 1   // for lighting (radiance)
-#define kMissShadow 2     // for shadow rays, forced to opaque
-#endif
-
-// Importance sampling modes. This is set with the IMPORTANCE_SAMPLING_MODE preprocessor symbol.
-#define IMPORTANCE_SAMPLING_BSDF 0        // sample the BSDF alone
-#define IMPORTANCE_SAMPLING_ENVIRONMENT 1 // sample the environment alone
-#define IMPORTANCE_SAMPLING_MIS 2         // sample both the BSDF and environment
-#if !defined(IMPORTANCE_SAMPLING_MODE)
-#if DIRECTX
-#define IMPORTANCE_SAMPLING_MODE IMPORTANCE_SAMPLING_MIS
-#else
-#define IMPORTANCE_SAMPLING_MODE IMPORTANCE_SAMPLING_BSDF
-#endif
-
-#endif
+#define kMissShadow 1     // for shadow rays, forced to opaque
 
 // Black and white constant values, which can also be used as a float3.
 #define BLACK 0.0f

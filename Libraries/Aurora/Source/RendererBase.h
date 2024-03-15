@@ -22,21 +22,21 @@ BEGIN_AURORA
 class SceneBase;
 
 // Property names as constants.
-static const string kLabelIsResetHistoryEnabled    = "isResetHistoryEnabled";
-static const string kLabelIsDenoisingEnabled       = "isDenoisingEnabled";
-static const string kLabelIsDiffuseOnlyEnabled     = "isDiffuseOnlyEnabled";
-static const string kLabelDebugMode                = "debugMode";
-static const string kLabelMaxLuminance             = "maxLuminance";
-static const string kLabelTraceDepth               = "traceDepth";
-static const string kLabelIsToneMappingEnabled     = "isToneMappingEnabled";
-static const string kLabelIsGammaCorrectionEnabled = "isGammaCorrectionEnabled";
-static const string kLabelIsAlphaEnabled           = "alphaEnabled";
-static const string kLabelBrightness               = "brightness";
-static const string kLabelUnits                    = "units";
-static const string kLabelImportanceSamplingMode   = "importanceSamplingMode";
-static const string kLabelIsFlipImageYEnabled      = "isFlipImageYEnabled";
-static const string kLabelIsReferenceBSDFEnabled   = "isReferenceBSDFEnabled";
-static const string kLabelIsOpaqueShadowsEnabled   = "isOpaqueShadowsEnabled";
+static const string kLabelIsResetHistoryEnabled       = "isResetHistoryEnabled";
+static const string kLabelIsDenoisingEnabled          = "isDenoisingEnabled";
+static const string kLabelIsDiffuseOnlyEnabled        = "isDiffuseOnlyEnabled";
+static const string kLabelDebugMode                   = "debugMode";
+static const string kLabelMaxLuminance                = "maxLuminance";
+static const string kLabelTraceDepth                  = "traceDepth";
+static const string kLabelIsToneMappingEnabled        = "isToneMappingEnabled";
+static const string kLabelIsGammaCorrectionEnabled    = "isGammaCorrectionEnabled";
+static const string kLabelIsAlphaEnabled              = "alphaEnabled";
+static const string kLabelBrightness                  = "brightness";
+static const string kLabelUnits                       = "units";
+static const string kLabelImportanceSamplingMode      = "importanceSamplingMode";
+static const string kLabelIsFlipImageYEnabled         = "isFlipImageYEnabled";
+static const string kLabelIsReferenceBSDFEnabled      = "isReferenceBSDFEnabled";
+static const string kLabelIsForceOpaqueShadowsEnabled = "isForceOpaqueShadowsEnabled";
 
 // The debug modes include:
 // - 0 Output (accumulation)
@@ -130,7 +130,7 @@ protected:
 
         // Whether shadow evaluation should treat all objects as opaque, as a performance
         // optimization.
-        int isOpaqueShadowsEnabled;
+        int isForceOpaqueShadowsEnabled;
 
         // Whether to write the NDC depth result to an output texture.
         int isDepthNDCEnabled;

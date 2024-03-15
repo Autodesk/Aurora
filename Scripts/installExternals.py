@@ -597,7 +597,7 @@ OPENSUBDIV = Dependency(OPENSUBDIV_INSTALL_FOLDER, OPENSUBDIV_PACKAGE_NAME, Inst
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/materialx/MaterialX/archive/v1.38.5.zip"
+MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.38.8.zip"
 MATERIALX_INSTALL_FOLDER = "MaterialX"
 MATERIALX_PACKAGE_NAME = "MaterialX"
 

@@ -328,7 +328,8 @@ IMaterialPtr HGIRenderer::createMaterialPointer(
     }
 
     // Create and return a new material object.
-    return make_shared<HGIMaterial>(this, _pDefaultMaterialShader, _pDefaultMaterialDefinition);
+    return make_shared<HGIMaterial>(
+        this, name, _pDefaultMaterialShader, _pDefaultMaterialDefinition);
 }
 
 IGeometryPtr HGIRenderer::createGeometryPointer(
@@ -365,7 +366,7 @@ void HGIRenderer::render(uint32_t sampleStart, uint32_t sampleCount)
     pHGIScene->update();
 
     // Must have opaque shadows on HGI currently.
-    _values.setValue(kLabelIsOpaqueShadowsEnabled, true);
+    _values.setValue(kLabelIsForceOpaqueShadowsEnabled, true);
 
     // Render all the samples.
     for (uint32_t i = 0; i < sampleCount; i++)

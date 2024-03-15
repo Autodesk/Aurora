@@ -1,6 +1,45 @@
 #!/usr/bin/env groovy
 @Library('PSL@master') _
 
+def isPrimaryBranch(){
+  return env.BRANCH_NAME == "dev" || env.BRANCH_NAME == "main"
+}
+
+def isReleaseBranch(){
+    def match = env.BRANCH_NAME =~/(?i)^release-\/.*/
+    def result = match ? true : false
+    match = null
+    return result
+}
+
+def isInventorBranch(){
+    def match = env.BRANCH_NAME =~/(?i)^inventor_fy.*/
+    def result = match ? true : false
+    match = null
+    return result
+}
+
+def isPullRequest(){
+  def match = env.BRANCH_NAME =~/(?i)^pr-.*/
+  def result = match ? true : false
+  match = null
+  return result
+}
+
+// Build upon primary branches or those with PR opened,
+// and skip for the rest to save build resources
+if (!(isPrimaryBranch() || isReleaseBranch() || isInventorBranch() || isPullRequest())) {
+  echo "Skip CI build other than 'dev', 'main', 'release' and branches with open PRs"
+  return
+}
+
+def jenkinsProperties = []
+// Abort previous running build after any new commit pushed to PRs
+if (isPullRequest()) {
+  jenkinsProperties.add(disableConcurrentBuilds(abortPrevious: true))
+}
+properties(jenkinsProperties)
+
 ///////////////////////////////////////////////////
 // Global constants
 COMMONSHELL = new ors.utils.CommonShell(steps, env)
@@ -70,7 +109,10 @@ def windowsBuild(Config) {
     call set VULKAN_SDK=C:\\VulkanSDK\\1.3.231.1
 
     :: Set up Visual Studio 2019 Environment
-    call C:\\"Program Files (x86)"\\"Microsoft Visual Studio"\\2019\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat
+    for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere" -property installationPath`) do (
+        if exist "%%i\\MSBuild\\Microsoft\\VisualStudio\\v16.0" set "VSInstallPath=%%i"
+    )
+    call "%VSInstallPath%\\VC\\Auxiliary\\Build\\vcvars64.bat"
 
     :: install externals
     python -u Scripts\\installExternals.py ${EXTERNALS_DIR_AURORA} --build-variant=${Config} -v -v

@@ -151,17 +151,10 @@ bool Plasma::run(int argc, char* argv[])
 #endif
 
 // Creates a sample scene.
-Aurora::IScenePtr Plasma::createSampleScene(Aurora::IRenderer* pRenderer, SceneContents& contents)
+void Plasma::createSampleScene(Aurora::IScene* pScene, SceneContents& contents)
 {
     // Clear the result.
     contents.reset();
-
-    // Create an Aurora scene.
-    Aurora::IScenePtr pScene = pRenderer->createScene();
-    if (!pScene)
-    {
-        return nullptr;
-    }
 
     // Create sample geometry, a single triangle.
     const Aurora::Path kGeomPath = "PlasmaDefaultSceneGeometry";
@@ -269,7 +262,7 @@ Aurora::IScenePtr Plasma::createSampleScene(Aurora::IRenderer* pRenderer, SceneC
     vec3 max(1.0f, 1.0f, 0.01f);
     contents.bounds = Foundation::BoundingBox(min, max);
 
-    return pScene;
+    return;
 }
 
 bool Plasma::getFloat3Option(const string& name, glm::vec3& value) const
@@ -360,6 +353,7 @@ void Plasma::parseOptions(int argc, char* argv[])
         ("fov", "Camera field of view in degrees.", cxxopts::value<float>())
         ("env", "Environment map path to load (lat-long format .HDR file)", cxxopts::value<string>())
         ("mtlx", "MaterialX document path to apply.",cxxopts::value<string>())
+        ("loadMtlXForObj", "Try and load MaterialX documents for each OBJ material.",  cxxopts::value<bool>())
         ("h,help", "Print help");
     // clang-format on
 
@@ -437,12 +431,11 @@ bool Plasma::initialize()
         return false;
     }
 
-    // Setup asset search paths. Including the path to the ProteinX test folder (if running within
-    // the Github repo).
-    // TODO: A more reliable solution would be to set based on the loaded materialX file path.
-    _assetPaths = { "",
-        Foundation::getModulePath() +
-            "../../../Renderers/Tests/Data/Materials/mtlx_ProteinSubset/" };
+    // Setup asset search paths. Including the path to the unit test assets folder (if running
+    // within the Github repo).
+    // TODO: A more reliable solution would be to set based on the loaded MaterialX file path.
+    _assetPaths = { "", Foundation::getModulePath() + "../../../Tests/Assets/Materials/",
+        Foundation::getModulePath() + "../../../Tests/Assets/Textures/" };
 
     // Setup the resource loading function to use asset search paths.
     auto loadResourceFunc = [this](const string& uri, vector<unsigned char>* pBufferOut,
@@ -478,6 +471,12 @@ bool Plasma::initialize()
         return false;
     };
     _pRenderer->setLoadResourceFunction(loadResourceFunc);
+
+    // The load materialX flag for OBJ loader if argument set.
+    if (_pArguments->count("loadMtlXForObj") > 0)
+    {
+        loadMaterialXForOBJMaterials(true);
+    }
 
     // Set reference flag.
     if (_pArguments->count("reference") > 0)
@@ -536,8 +535,14 @@ bool Plasma::initialize()
     // If a file was not loaded, create a sample scene.
     if (!bFileLoaded)
     {
+        // Create new empty scene
+        _pScene = _pRenderer->createScene();
+
+        // Set the scene on the renderer.
+        _pRenderer->setScene(_pScene);
+
         // Create the sample scene, and return if it not successful.
-        _pScene = createSampleScene(_pRenderer.get(), _sceneContents);
+        createSampleScene(_pScene.get(), _sceneContents);
         if (!_pScene)
         {
             return false;
@@ -605,7 +610,7 @@ bool Plasma::initialize()
 
 bool Plasma::addDecal(const string& decalMtlXPath)
 {
-    // Load the materialX file for decal.
+    // Load the MaterialX file for decal.
     auto materialPath = loadMaterialXFile(decalMtlXPath);
     if (materialPath.empty())
         return false;
@@ -704,10 +709,6 @@ void Plasma::updateNewScene()
     _sampleCounter.reset();
     _animationTimer.reset(!_isAnimating);
     _frameNumber = 0;
-
-    // Set the scene on the renderer, and assign the environment and ground plane. Set the ground
-    // plane position to the bottom corner, of the scene bounds.
-    _pRenderer->setScene(_pScene);
 
     // Setup environment for new scene.
     _pScene->setEnvironmentProperties(
@@ -1003,11 +1004,29 @@ void Plasma::selectFile(
     // works as desired here because the load blocks the application.
     ::SetCursor(::LoadCursor(nullptr, IDC_WAIT));
 
-    // Load the file.
+    addAssetPathContainingFile(Foundation::w2s(filePath.data()));
     loadFunc(Foundation::w2s(filePath.data()));
 }
 
 #endif
+
+void Plasma::addAssetPathContainingFile(const string& filePath)
+{
+    string directory = filesystem::path(filePath).parent_path().u8string();
+    if (directory.empty())
+        return;
+    addAssetPath(directory + "/");
+}
+
+void Plasma::addAssetPath(const string& filePath)
+{
+    for (int i = 0; i < _assetPaths.size(); i++)
+    {
+        if (_assetPaths[i].compare(filePath) == 0)
+            return;
+    }
+    _assetPaths.push_back(filePath);
+}
 
 // Loads an environment image file with the specified path.
 bool Plasma::loadEnvironmentImageFile(const string& filePath)
@@ -1052,10 +1071,16 @@ bool Plasma::loadSceneFile(const string& filePath)
     auto directory = filesystem::path(filePath).parent_path();
     filesystem::current_path(directory);
 
+    // Create new empty scene
+    _pScene = _pRenderer->createScene();
+
+    // Set the scene on the renderer.
+    _pRenderer->setScene(_pScene);
+
     // Create a new scene and load the scene file into it. If that fails, return immediately.
     _sceneContents.reset();
-    Aurora::IScenePtr pScene = _pRenderer->createScene();
-    if (!loadSceneFunc(_pRenderer.get(), pScene.get(), filePath, _sceneContents))
+    addAssetPathContainingFile(filePath);
+    if (!loadSceneFunc(_pRenderer.get(), _pScene.get(), filePath, _sceneContents))
     {
         ::errorMessage("Unable to load the specified scene file: \"" + filePath + "\"");
 
@@ -1064,7 +1089,6 @@ bool Plasma::loadSceneFile(const string& filePath)
     _instanceLayers = vector<Layers>(_sceneContents.instances.size());
 
     // Record the new scene and update application state for the new scene.
-    _pScene = pScene;
     updateNewScene();
 
     // Report the load time.
@@ -1139,7 +1163,7 @@ Aurora::Path Plasma::loadMaterialXFile(const string& filePath)
     processedMtlXString =
         regex_replace(processedMtlXString, regex(R"(\.\.\/\.\.\/\.\.)"), mtlxResourcesPath);
 
-    // Create a new material from the materialX document.
+    // Create a new material from the MaterialX document.
     _pScene->setMaterialType(
         materialPath, Aurora::Names::MaterialTypes::kMaterialX, processedMtlXString);
 
@@ -1147,7 +1171,7 @@ Aurora::Path Plasma::loadMaterialXFile(const string& filePath)
 }
 bool Plasma::applyMaterialXFile(const string& filePath)
 {
-    // Create a new material from the materialX document.
+    // Create a new material from the MaterialX document.
     Aurora::Path materialPath = loadMaterialXFile(filePath);
     if (materialPath.empty())
     {
@@ -1327,6 +1351,7 @@ void Plasma::onFilesDropped(HDROP hDrop)
     }
     else
     {
+        addAssetPathContainingFile(filePath);
         (*funcIt).second(filePath);
     }
 }
@@ -1482,8 +1507,8 @@ void Plasma::onKeyPressed(WPARAM keyCode)
         }
         else
         {
-            _isOpaqueShadowsEnabled = !_isOpaqueShadowsEnabled;
-            options.setBoolean("isOpaqueShadowsEnabled", _isOpaqueShadowsEnabled);
+            _isForceOpaqueShadowsEnabled = !_isForceOpaqueShadowsEnabled;
+            options.setBoolean("isForceOpaqueShadowsEnabled", _isForceOpaqueShadowsEnabled);
             requestUpdate();
         }
         break;
@@ -1515,7 +1540,7 @@ void Plasma::onKeyPressed(WPARAM keyCode)
         adjustUnit(+1);
         break;
 
-    // W: Add decal from materialX file.
+    // W: Add decal from MaterialX file.
     case 0x57:
         if (::GetAsyncKeyState(VK_CONTROL) != 0)
         {

@@ -14,6 +14,8 @@
 #ifndef __GEOMETRY_H__
 #define __GEOMETRY_H__
 
+#include "Globals.slang"
+
 interface IGeometry
 {
     uint3 getIndices(int bufferLocation);
@@ -40,7 +42,11 @@ struct ShadingData
                            // materialX generated code.
     float3 objectPosition; // the shading normal in object space (not world space). Used only in
                            // materialX generated code.
+    float3x4 objToWorld;
+    uint3 indices;
+    float3 barycentrics;
 };
+
 
 // Computes the barycentric coordinates from the specified triangle intersection.
 float3 computeBarycentrics(BuiltInTriangleIntersectionAttributes attribs)
@@ -49,6 +55,11 @@ float3 computeBarycentrics(BuiltInTriangleIntersectionAttributes attribs)
     return float3(1.0f - bary2.x - bary2.y, bary2.x, bary2.y);
 }
 
+// Computes the barycentric coordinates from the specified triangle intersection.
+float3 computeBarycentrics(float2 bary2)
+{
+    return float3(1.0f - bary2.x - bary2.y, bary2.x, bary2.y);
+}
 // Projects the specified position (point) onto the plane with the specified origin and normal.
 float3 projectOnPlane(float3 position, float3 origin, float3 normal)
 {
@@ -83,8 +94,11 @@ float3 computeShadingPosition(float3 geomPosition, float3 shadingNormal, float3 
 // Computes the shading data (e.g. interpolated vertex data) for the triangle with the specified
 // (primitive) index, at the specified barycentric coordinates.
 ShadingData computeShadingData<GeometryType : IGeometry>(
-    GeometryType geometry, uint triangleIndex, float3 barycentrics, float3x4 objToWorld)
+    GeometryType geometry, uint triangleIndex, float2 bary2, float3x4 objToWorld)
 {
+    // Expand barycentrics to 3d.
+    float3 barycentrics = computeBarycentrics(bary2);
+
     // Initialize a result structure.
     ShadingData shading;
     shading.position     = float3(0.0f, 0.0f, 0.0f);
@@ -154,16 +168,22 @@ ShadingData computeShadingData<GeometryType : IGeometry>(
     shading.geomPosition = mul(objToWorld, float4(shading.geomPosition, 1.0f));
     shading.normal       = normalize(mul((float3x3)objToWorld, shading.objectNormal));
     
-    // Arbritary up vector used to calculate tangents, if none provided.
+    // arbitrary up vector used to calculate tangents, if none provided.
     float3 up =
         abs(shading.normal.y) < 0.999f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
 
-    // Compute arbritary shading tangent from up vector, or use provided one transformed in world space.
+    // Compute arbitrary shading tangent from up vector, or use provided one transformed in world space.
     shading.tangent = normalize(geometry.hasTangents() ? normalize(mul((float3x3)objToWorld, shading.tangent))
                                             : cross(shading.normal, up));
 
     // Generate bitangent from normal and tangent.
     shading.bitangent = computeBitangent(shading.normal, shading.tangent);
+
+    shading.objToWorld = objToWorld;
+
+    shading.indices = indices;
+
+    shading.barycentrics = barycentrics;
 
     return shading;
 }

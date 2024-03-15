@@ -31,146 +31,7 @@
 #include "RayTrace.slang"
 #include "Sampling.slang"
 
-// =================================================================================================
-// Global Variables - For All Shaders
-// =================================================================================================
-
-// The top-level acceleration structure with the scene contents.
-[[vk::binding(0)]] RaytracingAccelerationStructure gScene : register(t0);
-
-// Constant buffers of sample and per-frame values.
-[[vk::binding(4)]] ConstantBuffer<SampleData> gSampleData : register(b0);
-[[vk::binding(2)]] ConstantBuffer<FrameData> gFrameData : register(b1);
-
-// Environment data.
-[[vk::binding(5)]] ConstantBuffer<EnvironmentConstants> gEnvironmentConstants : register(b2);
-StructuredBuffer<AliasEntry> gEnvironmentAliasMap : register(t1);
-[[vk::binding(8)]] Texture2D<float4> gEnvironmentLightTexture : register(t2);
-[[vk::binding(7)]] Texture2D<float4> gEnvironmentBackgroundTexture : register(t3);
-ConstantBuffer<GroundPlane> gGroundPlane : register(b3);
-RaytracingAccelerationStructure gNullScene : register(t4);
-
-// =================================================================================================
-// Ray Gen Shader Variables
-// =================================================================================================
-
-// The output textures (AOVs) as UAVs.
-[[vk::binding(1)]] RWTexture2D<float4> gResult : register(u0);
-RWTexture2D<float> gDepthNDC : register(u1);
-RWTexture2D<float> gDepthView : register(u2);
-RWTexture2D<float4> gNormalRoughness : register(u3);
-RWTexture2D<float4> gBaseColorMetalness : register(u4);
-RWTexture2D<float4> gDiffuse : register(u5);
-RWTexture2D<float4> gGlossy : register(u6);
-
-// =================================================================================================
-// Radiance Hit Shader Variables
-// =================================================================================================
-
-// The maximum number of supported material layers, must match value in
-// PTLayerIndexTable::kMaxMaterialLayers C++ code.
-#define kMaxMaterialLayers 64
-
-// The layer material shader IDs.
-struct MaterialLayerShaderIDs
-{
-    // Shader indices (must be stored as floattors due to HLSL packing rules).
-    int4 shaderIDs[kMaxMaterialLayers / WORD_SIZE];
-};
-
-#if DIRECTX
-// Geometry data, for the current instance only.
-ByteAddressBuffer gIndices : register(t0, space1);
-ByteAddressBuffer gPositions : register(t1, space1);
-ByteAddressBuffer gNormals : register(t2, space1);
-ByteAddressBuffer gTangents : register(t3, space1);
-ByteAddressBuffer gTexCoords : register(t4, space1);
-
-// NOTE: Material variables are inserted at register(b1, space1) between gGeometryMetadata and
-// gMaterialLayerIDs by Material.slang.
-cbuffer gGeometryMetadata : register(b0, space1)
-{
-    bool gHasNormals;        // Are there normals?
-    bool gHasTangents;       // Are there tangents?
-    bool gHasTexCoords;      // Are there texture coordinates?
-    int gMaterialLayerCount; // Number of material layer miss shaders.
-    bool gIsOpaque;          // Is the geometry opaque?
-}
-
-// To hide DX-Vulkan differences, expose geometry access using functions.
-uint3 getIndicesForTriangle(int triangleIndex) {
-    return gIndices.Load3((triangleIndex * 3) * 4);
-}
-
-float3 getPositionForVertex(int vertexIndex)
-{
-    return asfloat(gPositions.Load3(vertexIndex * 3 * 4));
-}
-
-float3 getNormalForVertex(int vertexIndex)
-{
-    return asfloat(gNormals.Load3(vertexIndex * 3 * 4));
-}
-
-float3 getTangentForVertex(int vertexIndex)
-{
-    return asfloat(gTangents.Load3(vertexIndex * 3 * 4));
-}
-
-float2 getTexCoordForVertex(int vertexIndex)
-{
-    return asfloat(gTexCoords.Load2(vertexIndex * 2 * 4));
-}
-
-bool instanceHasNormals()
-{
-    return gHasNormals;
-}
-bool instanceHasTangents()
-{
-    return gHasTangents;
-}
-bool instanceHasTexCoords()
-{
-    return gHasTexCoords;
-}
-
-#else
-
-// Forward declare these functions on Vulkan GLSL.  As we need a platform-specific suffix file containing the implementation of these functions.
-uint3 getIndicesForTriangle(int bufferLocation);
-float3 getPositionForVertex(int bufferLocation);
-float3 getNormalForVertex(int bufferLocation);
-float3 getTangentForVertex(int bufferLocation);
-float2 getTexCoordForVertex(int bufferLocation);
-bool instanceHasNormals();
-bool instanceHasTangents();
-bool instanceHasTexCoords();
-
-#endif
-
-// Slang interface implementation to handle geometry access in platform-independent way.
-struct Geometry : IGeometry
-{
-    uint3 getIndices(int triangleIndex) { return getIndicesForTriangle(triangleIndex); }
-    float3 getPosition(int vertexIndex) { return getPositionForVertex(vertexIndex); }
-    float3 getNormal(int vertexIndex) { return getNormalForVertex(vertexIndex); }
-    float3 getTangent(int vertexIndex) { return getTangentForVertex(vertexIndex); }
-    float2 getTexCoord(int vertexIndex) { return getTexCoordForVertex(vertexIndex); }
-    bool hasTexCoords() { return instanceHasTexCoords(); }
-    bool hasNormals() { return instanceHasNormals(); }
-    bool hasTangents() { return instanceHasTangents(); }
-} gGeometry;
-
-// Constant buffer for layer material shader IDs.
-ConstantBuffer<MaterialLayerShaderIDs> gMaterialLayerIDs : register(b2, space1);
-
-// Get the layer material index for given layer.
-int getMaterialLayerIndex(int layer)
-{
-    // TODO: Optimize the float->scalar look-up.
-    return gMaterialLayerIDs.shaderIDs[layer / 4][layer % 4];
-}
+#include "GlobalPipelineState.slang"
 
 // =================================================================================================
 // Utility Functions
@@ -180,12 +41,12 @@ int getMaterialLayerIndex(int layer)
 Environment prepareEnvironmentValues()
 {
     Environment values;
-    values.constants = gEnvironmentConstants;
+    values.constants         = gEnvironmentConstants;
     values.backgroundTexture = gEnvironmentBackgroundTexture;
-    values.sampler           = gDefaultSampler;
+    values.sampler           = gSamplerArray[0];
     values.lightTexture      = gEnvironmentLightTexture;
 #if DIRECTX
-    values.aliasMap          = gEnvironmentAliasMap;
+    values.aliasMap = gEnvironmentAliasMap;
 #endif
     return values;
 }
