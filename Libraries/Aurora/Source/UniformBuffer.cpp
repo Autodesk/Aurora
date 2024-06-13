@@ -164,6 +164,7 @@ string UniformBuffer::generateByteAddressBufferAccessors(const string& prefix) c
             break;
         case PropertyValue::Type::Float4:
             ss << "\treturn asfloat(buf.Load4(materialOffset + " << offset << "));" << endl;
+            break;
         case PropertyValue::Type::Matrix4:
             for (int j = 0; j < 16; j++)
             {

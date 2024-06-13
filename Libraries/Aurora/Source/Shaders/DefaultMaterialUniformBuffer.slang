@@ -72,230 +72,230 @@ struct MaterialConstants
 }
 ;
 
-float Material_base(MaterialConstants mtl) {
+float Material_base(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.base;
 }
 
-float3 Material_baseColor(MaterialConstants mtl) {
+float3 Material_baseColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.baseColor;
 }
 
-float Material_diffuseRoughness(MaterialConstants mtl) {
+float Material_diffuseRoughness(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.diffuseRoughness;
 }
 
-float Material_metalness(MaterialConstants mtl) {
+float Material_metalness(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.metalness;
 }
 
-float Material_specular(MaterialConstants mtl) {
+float Material_specular(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specular;
 }
 
-float3 Material_specularColor(MaterialConstants mtl) {
+float3 Material_specularColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularColor;
 }
 
-float Material_specularRoughness(MaterialConstants mtl) {
+float Material_specularRoughness(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularRoughness;
 }
 
-float Material_specularIOR(MaterialConstants mtl) {
+float Material_specularIOR(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularIOR;
 }
 
-float Material_specularAnisotropy(MaterialConstants mtl) {
+float Material_specularAnisotropy(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularAnisotropy;
 }
 
-float Material_specularRotation(MaterialConstants mtl) {
+float Material_specularRotation(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularRotation;
 }
 
-float Material_transmission(MaterialConstants mtl) {
+float Material_transmission(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.transmission;
 }
 
-float3 Material_transmissionColor(MaterialConstants mtl) {
+float3 Material_transmissionColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.transmissionColor;
 }
 
-float Material_subsurface(MaterialConstants mtl) {
+float Material_subsurface(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.subsurface;
 }
 
-float3 Material_subsurfaceColor(MaterialConstants mtl) {
+float3 Material_subsurfaceColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.subsurfaceColor;
 }
 
-float3 Material_subsurfaceRadius(MaterialConstants mtl) {
+float3 Material_subsurfaceRadius(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.subsurfaceRadius;
 }
 
-float Material_subsurfaceScale(MaterialConstants mtl) {
+float Material_subsurfaceScale(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.subsurfaceScale;
 }
 
-float Material_subsurfaceAnisotropy(MaterialConstants mtl) {
+float Material_subsurfaceAnisotropy(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.subsurfaceAnisotropy;
 }
 
-float Material_sheen(MaterialConstants mtl) {
+float Material_sheen(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.sheen;
 }
 
-float3 Material_sheenColor(MaterialConstants mtl) {
+float3 Material_sheenColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.sheenColor;
 }
 
-float Material_sheenRoughness(MaterialConstants mtl) {
+float Material_sheenRoughness(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.sheenRoughness;
 }
 
-float Material_coat(MaterialConstants mtl) {
+float Material_coat(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coat;
 }
 
-float3 Material_coatColor(MaterialConstants mtl) {
+float3 Material_coatColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coatColor;
 }
 
-float Material_coatRoughness(MaterialConstants mtl) {
+float Material_coatRoughness(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coatRoughness;
 }
 
-float Material_coatAnisotropy(MaterialConstants mtl) {
+float Material_coatAnisotropy(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coatAnisotropy;
 }
 
-float Material_coatRotation(MaterialConstants mtl) {
+float Material_coatRotation(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coatRotation;
 }
 
-float Material_coatIOR(MaterialConstants mtl) {
+float Material_coatIOR(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coatIOR;
 }
 
-float Material_coatAffectColor(MaterialConstants mtl) {
+float Material_coatAffectColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coatAffectColor;
 }
 
-float Material_coatAffectRoughness(MaterialConstants mtl) {
+float Material_coatAffectRoughness(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.coatAffectRoughness;
 }
 
-float Material_emission(MaterialConstants mtl) {
+float Material_emission(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.emission;
 }
 
-float3 Material_emissionColor(MaterialConstants mtl) {
+float3 Material_emissionColor(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.emissionColor;
 }
 
-float3 Material_opacity(MaterialConstants mtl) {
+float3 Material_opacity(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.opacity;
 }
 
-int Material_thinWalled(MaterialConstants mtl) {
+int Material_thinWalled(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.thinWalled;
 }
 
-int Material_hasBaseColorTex(MaterialConstants mtl) {
+int Material_hasBaseColorTex(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.hasBaseColorTex;
 }
 
-float2 Material_baseColorTexOffset(MaterialConstants mtl) {
+float2 Material_baseColorTexOffset(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.baseColorTexOffset;
 }
 
-float2 Material_baseColorTexScale(MaterialConstants mtl) {
+float2 Material_baseColorTexScale(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.baseColorTexScale;
 }
 
-float2 Material_baseColorTexPivot(MaterialConstants mtl) {
+float2 Material_baseColorTexPivot(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.baseColorTexPivot;
 }
 
-float Material_baseColorTexRotation(MaterialConstants mtl) {
+float Material_baseColorTexRotation(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.baseColorTexRotation;
 }
 
-int Material_hasSpecularRoughnessTex(MaterialConstants mtl) {
+int Material_hasSpecularRoughnessTex(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.hasSpecularRoughnessTex;
 }
 
-float2 Material_specularRoughnessTexOffset(MaterialConstants mtl) {
+float2 Material_specularRoughnessTexOffset(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularRoughnessTexOffset;
 }
 
-float2 Material_specularRoughnessTexScale(MaterialConstants mtl) {
+float2 Material_specularRoughnessTexScale(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularRoughnessTexScale;
 }
 
-float2 Material_specularRoughnessTexPivot(MaterialConstants mtl) {
+float2 Material_specularRoughnessTexPivot(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularRoughnessTexPivot;
 }
 
-float Material_specularRoughnessTexRotation(MaterialConstants mtl) {
+float Material_specularRoughnessTexRotation(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.specularRoughnessTexRotation;
 }
 
-int Material_hasEmissionColorTex(MaterialConstants mtl) {
+int Material_hasEmissionColorTex(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.hasEmissionColorTex;
 }
 
-float2 Material_emissionColorTexOffset(MaterialConstants mtl) {
+float2 Material_emissionColorTexOffset(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.emissionColorTexOffset;
 }
 
-float2 Material_emissionColorTexScale(MaterialConstants mtl) {
+float2 Material_emissionColorTexScale(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.emissionColorTexScale;
 }
 
-float2 Material_emissionColorTexPivot(MaterialConstants mtl) {
+float2 Material_emissionColorTexPivot(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.emissionColorTexPivot;
 }
 
-float Material_emissionColorTexRotation(MaterialConstants mtl) {
+float Material_emissionColorTexRotation(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.emissionColorTexRotation;
 }
 
-int Material_hasOpacityTex(MaterialConstants mtl) {
+int Material_hasOpacityTex(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.hasOpacityTex;
 }
 
-float2 Material_opacityTexOffset(MaterialConstants mtl) {
+float2 Material_opacityTexOffset(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.opacityTexOffset;
 }
 
-float2 Material_opacityTexScale(MaterialConstants mtl) {
+float2 Material_opacityTexScale(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.opacityTexScale;
 }
 
-float2 Material_opacityTexPivot(MaterialConstants mtl) {
+float2 Material_opacityTexPivot(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.opacityTexPivot;
 }
 
-float Material_opacityTexRotation(MaterialConstants mtl) {
+float Material_opacityTexRotation(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.opacityTexRotation;
 }
 
-int Material_hasNormalTex(MaterialConstants mtl) {
+int Material_hasNormalTex(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.hasNormalTex;
 }
 
-float2 Material_normalTexOffset(MaterialConstants mtl) {
+float2 Material_normalTexOffset(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.normalTexOffset;
 }
 
-float2 Material_normalTexScale(MaterialConstants mtl) {
+float2 Material_normalTexScale(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.normalTexScale;
 }
 
-float2 Material_normalTexPivot(MaterialConstants mtl) {
+float2 Material_normalTexPivot(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.normalTexPivot;
 }
 
-float Material_normalTexRotation(MaterialConstants mtl) {
+float Material_normalTexRotation(MaterialConstants mtl, int /*materialOffset*/) {
 	return mtl.normalTexRotation;
 }

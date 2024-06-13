@@ -57,7 +57,12 @@ public:
 private:
     shared_ptr<HGIGeometry> _pGeometry;
     shared_ptr<HGIMaterial> _pMaterial;
-    [[maybe_unused]] HGIRenderer* _pRenderer;
+// Disable warning "attributes" for GCC to fix build error "'maybe_unused' attribute ignored".
+// TODO: This might be a bug of GCC. Need to review it when upgrading GCC to a newer version.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+    [[maybe_unused]] HGIRenderer* _pRenderer = nullptr;
+#pragma GCC diagnostic pop
     pxr::GfMatrix4f _transform;
 };
 
@@ -133,11 +138,10 @@ private:
     vector<shared_ptr<HGIImage>> _lstImages;
     HgiResourceBindingsHandleWrapper::Pointer _resBindings;
     HgiTextureHandleWrapper::Pointer _pDefaultImage;
-    HgiShaderFunctionHandleWrapper::Pointer _backgroundMissShaderFunc;
     HgiShaderFunctionHandleWrapper::Pointer _rayGenShaderFunc;
     HgiShaderFunctionHandleWrapper::Pointer _shadowMissShaderFunc;
-    HgiShaderFunctionHandleWrapper::Pointer _radianceMissShaderFunc;
     HgiShaderFunctionHandleWrapper::Pointer _closestHitShaderFunc;
+    HgiShaderFunctionHandleWrapper::Pointer _anyHitShaderFunc;
 };
 using HGIScenePtr = std::shared_ptr<HGIScene>;
 

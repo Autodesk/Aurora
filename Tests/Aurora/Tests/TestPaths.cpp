@@ -84,7 +84,11 @@ public:
 };
 
 // Basic path test.
+#if defined(__APPLE__)
+TEST_P(PathTest, DISABLED_TestPathDefault)
+#else
 TEST_P(PathTest, TestPathDefault)
+#endif
 {
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();

@@ -92,6 +92,18 @@ void HGIGeometry::update()
     indexBufferDesc.byteSize    = _indexCount * sizeof(_indices[0]);
     indexBuffer                 = HgiBufferHandleWrapper::create(
         _pRenderer->hgi()->CreateBuffer(indexBufferDesc), _pRenderer->hgi());
+    
+    // Per primitive data
+    HgiBufferDesc primitiveDataBufferDesc;
+    primitiveDataBufferDesc.debugName = _name + "PrimitiveData";
+    primitiveDataBufferDesc.usage     = HgiBufferUsageStorage |
+        HgiBufferUsageAccelerationStructureBuildInputReadOnly | HgiBufferUsageRayTracingExtensions |
+        HgiBufferUsageShaderDeviceAddress;
+    primitiveDataBufferDesc.initialData  = _primitiveData.data();
+    primitiveDataBufferDesc.vertexStride = sizeof(Triangle);
+    primitiveDataBufferDesc.byteSize     = (_indexCount / 3) * primitiveDataBufferDesc.vertexStride;
+    primitiveDataBuffer                  = HgiBufferHandleWrapper::create(
+        _pRenderer->hgi()->CreateBuffer(primitiveDataBufferDesc), _pRenderer->hgi());
 
     // Get the device addresses for all the buffers to place in shader record.
     bufferAddresses.indexBufferDeviceAddress    = indexBuffer->handle()->GetDeviceAddress();
@@ -122,6 +134,10 @@ void HGIGeometry::update()
     geometryDesc.maxVertex     = _vertexCount;
     geometryDesc.transformData = transformBuffer->handle();
     geometryDesc.count         = triangleCount;
+    geometryDesc.primitiveData              = primitiveDataBuffer->handle();
+    geometryDesc.primitiveDataStride        = primitiveDataBufferDesc.vertexStride;
+    geometryDesc.primitiveDataElementSize   = primitiveDataBufferDesc.vertexStride;
+
     geom                       = HgiAccelerationStructureGeometryHandleWrapper::create(
         _pRenderer->hgi()->CreateAccelerationStructureGeometry(geometryDesc), _pRenderer->hgi());
 
@@ -141,7 +157,6 @@ void HGIGeometry::update()
     accelStructCmds->PopDebugGroup();
 
     // Buld the BLAS.
-    // TODO: Should not be done in geometry ctor.
     _pRenderer->hgi()->SubmitCmds(accelStructCmds.get(), HgiSubmitWaitTypeWaitUntilCompleted);
 }
 

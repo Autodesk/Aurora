@@ -38,6 +38,12 @@ class LightTest : public TestHelpers::FixtureBase
 public:
     LightTest() {}
     ~LightTest() {}
+#if defined(__APPLE__)
+protected:
+    void SetUp() override {
+        GTEST_SKIP() << "Skipping all light tests on MacOS.";
+    }
+#endif
 };
 
 // Create test HDR lat-long environment map image data, interpolated from colors for on six

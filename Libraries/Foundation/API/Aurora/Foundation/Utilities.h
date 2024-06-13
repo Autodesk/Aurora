@@ -52,9 +52,12 @@ inline std::string w2s(const std::wstring& utf16Source)
 // standard.
 #pragma warning(push)
 #pragma warning(disable : 4996)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
     return converter.to_bytes(utf16Source);
+#pragma clang diagnostic pop
 #pragma warning(pop)
 }
 
@@ -67,9 +70,12 @@ inline std::wstring s2w(const std::string& utf8Source)
 // standard.
 #pragma warning(push)
 #pragma warning(disable : 4996)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 
     return converter.from_bytes(utf8Source);
+#pragma clang diagnostic pop
 #pragma warning(pop)
 }
 

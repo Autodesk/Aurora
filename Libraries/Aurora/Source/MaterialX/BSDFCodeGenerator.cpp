@@ -518,7 +518,7 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
                 " \n");
 
             vector<string> outputVars;
-            for (int i = 0; i < inputs.size(); i++)
+            for (size_t i = 0; i < inputs.size(); i++)
             {
                 // Get the input name and connection name it is coming from..
                 auto nodeInput = inputs[i];
@@ -536,7 +536,7 @@ void BSDFCodeGenerator::processInput(MaterialX::ShaderInput* input,
             }
 
             // Recursively process inputs.
-            for (int i = 0; i < inputs.size(); i++)
+            for (size_t i = 0; i < inputs.size(); i++)
             {
                 auto nodeInput = inputs[i];
                 processInput(nodeInput, pBSDFGenShader, outputVars[i], pSourceOut);
@@ -643,7 +643,7 @@ int BSDFCodeGenerator::generateDefinitions(string* pResultOut)
 {
     // Combine the GLSL code stored in the definitions vector.
     *pResultOut = "";
-    for (int i = 0; i < _definitions.size(); i++)
+    for (size_t i = 0; i < _definitions.size(); i++)
     {
         pResultOut->append(_definitions[i]);
     }
@@ -1020,7 +1020,13 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // https://github.com/AcademySoftwareFoundation/MaterialX/commit/f49359877ea41e7fc8ced47d3334e1d608b35a1a
 #pragma warning(push)
 #pragma warning(disable : 4996)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     MaterialX::findRenderableMaterialNodes(mtlxDocument, elements, false, processedOutputs);
+#pragma GCC diagnostic pop
+#pragma clang diagnostic pop
 #pragma warning(pop)
 
     // Return false if no renderable nodes.
@@ -1045,7 +1051,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
     // Find the material node using name from element.
     MaterialX::NodePtr materialNode = nullptr;
-    for (int i = 0; i < materialNodes.size(); i++)
+    for (size_t i = 0; i < materialNodes.size(); i++)
     {
         if (materialNodes[i]->getName() == materialNodeName)
         {
@@ -1152,7 +1158,7 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     // Build the body of the setup function from the surface shader node inputs.
     string functionBody      = "";
     auto surfaceShaderInputs = surfaceShaderNode->getInputs();
-    for (int ssi = 0; ssi < surfaceShaderInputs.size(); ssi++)
+    for (size_t ssi = 0; ssi < surfaceShaderInputs.size(); ssi++)
     {
         // Is this shader input one of the outputs we are interested in ?
         auto surfaceShaderInput = surfaceShaderInputs[ssi];
@@ -1182,14 +1188,14 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
 
     // Set the texture names in the result.
     pResultOut->textures.clear();
-    for (int i = 0; i < pResultOut->textureDefaults.size(); i++)
+    for (size_t i = 0; i < pResultOut->textureDefaults.size(); i++)
     {
         pResultOut->textures.push_back(pResultOut->textureDefaults[i].name);
     }
 
     // Create the contents of the material struct.
     string structProperties;
-    for (int i = 0; i < pResultOut->materialProperties.size(); i++)
+    for (size_t i = 0; i < pResultOut->materialProperties.size(); i++)
     {
         string glslType = getGLSLStringFromType(pResultOut->materialProperties[i].type);
 
@@ -1224,13 +1230,13 @@ bool BSDFCodeGenerator::generate(const string& document, BSDFCodeGenerator::Resu
     pResultOut->materialSetupCode = "void " + pResultOut->setupFunctionName + "(\n";
 
     // Keep track of total input and output parameter count.
-    int numParams = 0;
+    [[maybe_unused]] int numParams = 0;
 
     // The first argument is always the material struct.
     pResultOut->materialSetupCode.append("\t" + pResultOut->materialStructName + " material");
 
     // Add the texture inputs to the function prototype.
-    for (int i = 0; i < _textures.size(); i++)
+    for (size_t i = 0; i < _textures.size(); i++)
     {
         pResultOut->materialSetupCode.append(",\n");
 

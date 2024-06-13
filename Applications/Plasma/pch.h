@@ -14,13 +14,13 @@
 #pragma once
 
 // Memory leak detection.
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #endif
 #include <cstdlib>
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
 // Windows headers.
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -30,6 +30,10 @@
 #include <commdlg.h>
 #include <shellapi.h>
 #include <windowsx.h>
+#endif
+
+#if defined(__APPLE__)
+#include <os/log.h>
 #endif
 
 // STL headers.
@@ -88,7 +92,7 @@ using namespace Aurora;
 // Module resources.
 #include "resource.h"
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
 // TODO move those windows implementations to a utility class
 // Set the window to use for messages.
 extern HWND gWindow;
@@ -109,7 +113,11 @@ inline void errorMessage(const string& message)
 {
     AU_ERROR(message);
 #if defined(INTERACTIVE_PLASMA)
+#if defined(WIN32)
     ::MessageBoxW(gWindow, Foundation::s2w(message).c_str(), L"Error", MB_OK);
+#else
+    os_log_error(OS_LOG_DEFAULT, "Error: %s", message.c_str());
+#endif
 #endif
 }
 

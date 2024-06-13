@@ -17,6 +17,9 @@
 #include "Loaders.h"
 #include "PerformanceMonitor.h"
 #include "SceneContents.h"
+#if defined(__APPLE__)
+#import <GameController/GameController.h>
+#endif
 
 // Structure representing layer geometry and material.
 struct Layer
@@ -35,7 +38,7 @@ class Plasma
 public:
     /*** Lifetime Management ***/
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
     explicit Plasma(HINSTANCE hInstance, unsigned int width = 1280, unsigned int height = 720);
 #else
     explicit Plasma(unsigned int width = 1280, unsigned int height = 720);
@@ -46,7 +49,16 @@ public:
 #if defined(INTERACTIVE_PLASMA)
     bool run();
 #else
+#if defined(__APPLE__)
+    bool run();
+#else
     bool run(int argc, char* argv[]);
+#endif
+#endif
+
+#if defined(__APPLE__)
+    uvec2 getDims() { return _dimensions; }
+    const void* getData(size_t& stride) { return _pRenderBuffer->data(stride); }
 #endif
 
 private:
@@ -56,14 +68,14 @@ private:
     using LoadFileFunctionMap = unordered_map<string, LoadFileFunction>;
 
     /*** Private Static Functions ***/
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
     static LRESULT __stdcall wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 #endif
     static void createSampleScene(Aurora::IScene* pRenderer, SceneContents& contentsOut);
 
     /*** Private Functions ***/
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
     LRESULT processMessage(UINT message, WPARAM wParam, LPARAM lParam);
     HWND createWindow(const uvec2& dimensions);
 #endif
@@ -71,16 +83,33 @@ private:
 #if defined(INTERACTIVE_PLASMA)
     void parseOptions();
 #else
+#if defined(__APPLE__)
+    void parseOptions();
+#else
     void parseOptions(int argc, char* argv[]);
+#endif
 #endif
     bool initialize();
     void updateNewScene();
     void updateLighting();
     void updateGroundPlane();
     void updateSampleCount();
+#if defined(__APPLE__)
+public:
     void update();
+private:
+#else
+    void update();
+#endif
 #if defined(INTERACTIVE_PLASMA)
+    
+#if defined(__APPLE__)
+public:
     void requestUpdate(bool shouldRestart = true);
+private:
+#else
+    void requestUpdate(bool shouldRestart = true);
+#endif
     void toggleAnimation();
     void toggleFullScreen();
     void toggleVSync();
@@ -104,15 +133,24 @@ private:
 #if defined(INTERACTIVE_PLASMA)
     /*** Private Event Handlers ***/
 
+#if defined(WIN32)
     void onFilesDropped(HDROP hDrop);
     void onKeyPressed(WPARAM keyCode);
     void onMouseMoved(int xPos, int yPos, WPARAM buttons);
     void onMouseWheel(int delta, WPARAM buttons);
     void onSizeChanged(UINT width, UINT height);
+#else
+public:
+    void onMouseMoved(int xPos, int yPos, bool leftButtonPressed, bool middleButtonPressed, bool rightButtonPressed);
+    void onMouseWheel(int delta);
+    void onKeyPressed(GCKeyCode keyCode);
+private:
+#endif
+    
 #endif
     /*** Private Variables ***/
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
     HINSTANCE _hInstance                 = nullptr;
     HWND _hwnd                           = nullptr;
     WINDOWPLACEMENT _prevWindowPlacement = {};
@@ -130,24 +168,24 @@ private:
 #if defined(INTERACTIVE_PLASMA)
     bool _isFullScreenEnabled = false;
     bool _isVSyncEnabled      = false;
-    bool _isOrthoProjection   = false;
+    [[maybe_unused]] bool _isOrthoProjection   = false;
 #endif
     bool _isDirectionalLightEnabled = true;
 #if defined(INTERACTIVE_PLASMA)
-    unsigned int _importanceSamplingMode = 2; // Importance sampling mode 2 == MIS
-    bool _isReferenceBSDFEnabled         = false;
+    [[maybe_unused]] unsigned int _importanceSamplingMode = 2; // Importance sampling mode 2 == MIS
+    [[maybe_unused]] bool _isReferenceBSDFEnabled         = false;
 #endif
     vec3 _lightDirection     = normalize(vec3(1.0f, -0.5f, 0.0f));
     bool _isDenoisingEnabled = false;
 #if defined(INTERACTIVE_PLASMA)
-    bool _isDiffuseOnlyEnabled        = false;
-    bool _isForceOpaqueShadowsEnabled = false;
-    bool _isToneMappingEnabled        = false;
+    [[maybe_unused]] bool _isDiffuseOnlyEnabled        = false;
+    [[maybe_unused]] bool _isForceOpaqueShadowsEnabled = false;
+    [[maybe_unused]] bool _isToneMappingEnabled        = false;
 #endif
     bool _isGroundPlaneShadowEnabled     = false;
     bool _isGroundPlaneReflectionEnabled = false;
 #if defined(INTERACTIVE_PLASMA)
-    int _traceDepth             = 5;
+    [[maybe_unused]] int _traceDepth             = 5;
     float _exposure             = 0.0f;
     float _maxLuminanceExposure = 0.0f;
 #endif
@@ -174,5 +212,6 @@ private:
     Aurora::ILightPtr _pDistantLight;
     Aurora::IScenePtr _pScene;
     Aurora::IWindowPtr _pWindow;
+    Aurora::IRenderBufferPtr _pRenderBuffer;
     vector<string> _assetPaths;
 };

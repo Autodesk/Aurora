@@ -72,6 +72,9 @@
 #define AU_LINE 0
 #endif
 
+// This is to fix "ISO C++11 requires at least one argument for the "..." in a variadic macro".
+#pragma GCC system_header
+
 /// Triggers an information event, which logs a message along with the current file and line.
 #define AU_INFO(_msg, ...) Aurora::Foundation::Log::info(AU_FILE, AU_LINE, _msg, ##__VA_ARGS__)
 
@@ -305,7 +308,7 @@ private:
         // Return a new string object from the buffer.
         // TODO: Avoid multiple allocations.
         return std::string(buf.data(), buf.data() + size - 1);
-    };
+    }
 
     // Displays a failure dialog box.
     bool displayFailureDialog(const std::string& file, int line, const std::string& msg);

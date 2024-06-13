@@ -5,8 +5,10 @@ endif()
 
 if(WIN32)
     set(Slang_BUILD_CONFIG "windows-x64")
-elseif(UNIX)
+elseif(LINUX)
     set(Slang_BUILD_CONFIG "linux-x64")
+elseif(APPLE)
+    set(Slang_BUILD_CONFIG "macosx-aarch64")
 endif()
 
 # Find the Slang include path
@@ -25,8 +27,8 @@ if (DEFINED Slang_ROOT)
                  PATH_SUFFIXES release debug
                  DOC "path to slang library files"
     )
-    find_program(Slang_COMPILER       # Set variable Slang_LIBRARY
-                 slangc               # Find library path with libslang.so, slang.dll, or slang.lib
+    find_program(Slang_COMPILER       # Set variable Slang_COMPILER
+                 slangc               # Find executable path with slangc
                  NO_DEFAULT_PATH
                  PATHS "${Slang_ROOT}/bin/${Slang_BUILD_CONFIG}"
                  PATH_SUFFIXES release debug

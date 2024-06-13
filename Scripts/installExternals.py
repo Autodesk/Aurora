@@ -105,14 +105,10 @@ BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/bo
 # Use a sub-version in the version string to force reinstallation, even if 1.85.0 installed.
 BOOST_VERSION_STRING = BOOST_URL+".a"
 
-if Linux():
-    BOOST_VERSION_FILE = "include/boost/version.hpp"
-elif Windows():
-    # The default installation of boost on Windows puts headers in a versioned
-    # subdirectory, which we have to account for here. In theory, specifying
-    # "layout=system" would make the Windows install match Linux, but that
-    # causes problems for other dependencies that look for boost.
+if Windows():
     BOOST_VERSION_FILE = "include/boost-1_85/boost/version.hpp"
+else:
+    BOOST_VERSION_FILE = "include/boost/version.hpp"
 
 BOOST_INSTALL_FOLDER = "boost"
 BOOST_PACKAGE_NAME = "Boost"
@@ -148,12 +144,46 @@ def InstallBoost_Helper(context, force, buildArgs):
                 bsToolset = "vc142"
 
         bootstrap = "bootstrap.bat" if Windows() else "./bootstrap.sh"
-        Run(f'{bootstrap} {bsToolset}')
+        if not Windows():
+            # zip doesn't preserve file attributes, so force +x manually.
+            Run('chmod +x ' + bootstrap)
+            Run('chmod +x ./tools/build/src/engine/build.sh')
+        
+        # For cross-compilation on macOS we need to specify the architecture
+        # for both the bootstrap and the b2 phase of building boost.
+        bootstrapCmd = '{bootstrap} --prefix="{instDir}"'.format(
+            bootstrap=bootstrap, instDir=instFolder)
+
+        macOSArch = ""
+
+        if MacOS():
+            if apple_utils.GetTargetArch(context) == \
+                        apple_utils.TARGET_X86:
+                macOSArch = "-arch {0}".format(apple_utils.TARGET_X86)
+            elif apple_utils.GetTargetArch(context) == \
+                        apple_utils.GetTargetArmArch():
+                macOSArch = "-arch {0}".format(
+                        apple_utils.GetTargetArmArch())
+            elif context.targetUniversal:
+                (primaryArch, secondaryArch) = \
+                        apple_utils.GetTargetArchPair(context)
+                macOSArch="-arch {0} -arch {1}".format(
+                        primaryArch, secondaryArch)
+            if macOSArch:
+                bootstrapCmd += " cxxflags=\"{0} -std=c++17 -stdlib=libc++\" " \
+                                " cflags=\"{0}\" " \
+                                " linkflags=\"{0}\"".format(macOSArch)
+            bootstrapCmd += " --with-toolset=clang"
+        elif Windows():
+            bootstrapCmd += " \"{0}\"".format(bsToolset)
+
+        Run(bootstrapCmd)
 
         # b2 supports at most -j64 and will error if given a higher value.
         numProc = min(64, context.numJobs)
 
         b2Settings = [
+            f'--prefix="{instFolder}"',
             f'--build-dir="{context.buildDir}"',
             f'-j{numProc}',
             'address-model=64',
@@ -202,9 +232,26 @@ def InstallBoost_Helper(context, force, buildArgs):
             if context.cmakeToolset == "v143" or IsVisualStudio2022OrGreater():
                 b2Settings.append("toolset=msvc-14.3")
             elif context.cmakeToolset == "v142" or IsVisualStudio2019OrGreater():
-                 b2Settings.append("toolset=msvc-14.2")
+                b2Settings.append("toolset=msvc-14.2")
             else:
                 b2Settings.append("toolset=msvc-14.2")
+        
+        if MacOS():
+            # Must specify toolset=clang to ensure install_name for boost
+            # libraries includes @rpath
+            b2Settings.append("toolset=clang")
+            #
+            # Xcode 15.3 (and hence Apple Clang 15) removed the global
+            # declaration of std::piecewise_construct which causes boost build
+            # to fail.
+            # https://developer.apple.com/documentation/xcode-release-notes/xcode-15_3-release-notes.
+            # A fix for the same is also available in boost 1.84:
+            # https://github.com/boostorg/container/commit/79a75f470e75f35f5f2a91e10fcc67d03b0a2160
+            b2Settings.append(f"define=BOOST_UNORDERED_HAVE_PIECEWISE_CONSTRUCT=0")
+            if macOSArch:
+                b2Settings.append("cxxflags=\"{0} -std=c++17 -stdlib=libc++\"".format(macOSArch))
+                b2Settings.append("cflags=\"{0}\"".format(macOSArch))
+                b2Settings.append("linkflags=\"{0}\"".format(macOSArch))
 
         # Add on any user-specified extra arguments.
         b2Settings += buildArgs
@@ -214,14 +261,12 @@ def InstallBoost_Helper(context, force, buildArgs):
         # boost only accepts three variants: debug, release, profile
         b2ExtraSettings = []
         if context.buildDebug:
-            b2ExtraSettings.append('--prefix="{}" variant=debug --debug-configuration'.format(
-                instFolder))
+            b2ExtraSettings.append('variant=debug --debug-configuration')
         if context.buildRelease:
-            b2ExtraSettings.append('--prefix="{}" variant=release'.format(
-                instFolder))
+            b2ExtraSettings.append('variant=release')
         if context.buildRelWithDebInfo:
-            b2ExtraSettings.append('--prefix="{}" variant=profile'.format(
-                instFolder))
+            b2ExtraSettings.append('variant=profile')
+
         for extraSettings in b2ExtraSettings:
             b2Settings.append(extraSettings)
             # Build and install Boost
@@ -261,8 +306,8 @@ TBB_PACKAGE_NAME = "TBB"
 def InstallTBB(context, force, buildArgs):
     if Windows():
         InstallTBB_Windows(context, force, buildArgs)
-    elif Linux():
-        InstallTBB_Linux(context, force, buildArgs)
+    elif Linux() or MacOS():
+        InstallTBB_LinuxOrMacOS(context, force, buildArgs)
 
 def InstallTBB_Windows(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TBB_URL, context, force, TBB_ROOT_DIR_NAME)):
@@ -278,18 +323,44 @@ def InstallTBB_Windows(context, force, buildArgs):
         CopyDirectory(context, "include/serial", "include/serial", TBB_INSTALL_FOLDER)
         CopyDirectory(context, "include/tbb", "include/tbb", TBB_INSTALL_FOLDER)
 
-def InstallTBB_Linux(context, force, buildArgs):
+def InstallTBB_LinuxOrMacOS(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(TBB_URL, context, force)):
+        # Ensure that the tbb build system picks the proper architecture.
+        if MacOS() and Arm():
+            buildArgs.append("arch=arm64")
+
         # TBB does not support out-of-source builds in a custom location.
-        Run('make -j{procs} {buildArgs}'
-            .format(procs=context.numJobs,
-                    buildArgs=" ".join(buildArgs)))
+        makeTBBCmd = 'make -j{procs} {buildArgs}'.format(
+            procs=context.numJobs,
+            buildArgs=" ".join(buildArgs))
+        Run(makeTBBCmd)
+        
+        # Install both release and debug builds.
+        #
+        # As of TBB 2020 the build no longer produces a debug build along
+        # with the release build. There is also no way to specify a debug
+        # build when running make, even though the internals of the build
+        # still support it.
+        #
+        # To workaround this, we patch the Makefile to change "release" to
+        # "debug" and re-run the build, copying the debug libraries
+        # afterwards. 
+        #
+        # See https://github.com/oneapi-src/oneTBB/issues/207/
+        PatchFile("Makefile", [("release", "debug")])
+        Run(makeTBBCmd)
 
         for config in BuildConfigs(context):
-            if (config == "Debug"):
-                CopyFiles(context, "build/*_debug/libtbb*.2", "lib", TBB_INSTALL_FOLDER)
-            if (config == "Release" or config == "RelWithDebInfo"):
-                CopyFiles(context, "build/*_release/libtbb*.2", "lib", TBB_INSTALL_FOLDER)
+            if MacOS():
+                if (config == "Debug"):
+                    CopyFiles(context, "build/*_debug/libtbb*", "lib", TBB_INSTALL_FOLDER)
+                if (config == "Release" or config == "RelWithDebInfo"):
+                    CopyFiles(context, "build/*_release/libtbb*", "lib", TBB_INSTALL_FOLDER)
+            else:
+                if (config == "Debug"):
+                    CopyFiles(context, "build/*_debug/libtbb*.2", "lib", TBB_INSTALL_FOLDER)
+                if (config == "Release" or config == "RelWithDebInfo"):
+                    CopyFiles(context, "build/*_release/libtbb*.2", "lib", TBB_INSTALL_FOLDER)
             installLibDir = os.path.join(context.externalsInstDir, TBB_INSTALL_FOLDER, "lib")
             with CurrentWorkingDirectory(installLibDir):
                 MakeSymLink(context, f"*.2")
@@ -336,7 +407,7 @@ def InstallTIFF(context, force, buildArgs):
         # functionality is only for compilers using GNU ld on
         # ELF systems or systems which provide an emulation; therefore
         # skipping it completely on mac and windows.
-        if Windows():
+        if MacOS() or Windows():
             extraArgs = ["-Dld-version-script=OFF"]
         else:
             extraArgs = []
@@ -354,7 +425,18 @@ PNG_PACKAGE_NAME = "PNG"
 
 def InstallPNG(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(PNG_URL, context, force)):
-        RunCMake(context, True, PNG_INSTALL_FOLDER, buildArgs)
+        macArgs = []
+        if MacOS() and apple_utils.IsTargetArm(context):
+            # Ensure libpng's build doesn't erroneously activate inappropriate
+            # Neon extensions
+            macArgs = ["-DCMAKE_C_FLAGS=\"-DPNG_ARM_NEON_OPT=0\""]
+
+            if context.targetUniversal:
+                PatchFile("scripts/genout.cmake.in",
+                [("CMAKE_OSX_ARCHITECTURES",
+                  "CMAKE_OSX_INTERNAL_ARCHITECTURES")])
+        
+        RunCMake(context, True, PNG_INSTALL_FOLDER, buildArgs + macArgs)
 
 PNG = Dependency(PNG_INSTALL_FOLDER, PNG_PACKAGE_NAME, InstallPNG, PNG_URL, "include/png.h")
 
@@ -573,6 +655,10 @@ def InstallOpenSubdiv(context, force, buildArgs):
         # tbbmalloc.
         extraArgs.append('-DNO_TBB=ON')
 
+        # Use Metal for macOS and all Apple embedded systems.
+        if MacOS():
+            extraArgs.append('-DNO_OPENGL=ON')
+
         # Add on any user-specified extra arguments.
         extraArgs += buildArgs
 
@@ -612,24 +698,13 @@ MATERIALX = Dependency(MATERIALX_INSTALL_FOLDER, MATERIALX_PACKAGE_NAME, Install
 
 ############################################################
 # USD
+
 USD_URL = "https://github.com/autodesk-forks/USD/archive/refs/tags/v24.08-Aurora-v24.08.zip"
 USD_INSTALL_FOLDER = "USD"
 USD_PACKAGE_NAME = "pxr"
 
 def InstallUSD(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(USD_URL, context, force)):
-
-# USD_URL = "https://github.com/autodesk-forks/USD.git"
-# USD_TAG = "v24.08-Aurora-v24.08"
-# USD_FOLDER = "USD-" + USD_TAG
-# USD_INSTALL_FOLDER = "USD"
-# USD_PACKAGE_NAME = "pxr"
-
-# def InstallUSD(context, force, buildArgs):
-#     with CurrentWorkingDirectory(GitClone(USD_URL, USD_TAG, USD_FOLDER, context)):
-
-        # We need to apply patch to make USD build with our externals configuration
-        # ApplyGitPatch(context, "USD.patch")
 
         extraArgs = []
 
@@ -644,7 +719,10 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DPXR_BUILD_EXAMPLES=OFF')
         extraArgs.append('-DPXR_BUILD_TUTORIALS=OFF')
 
-        extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=ON')
+        if MacOS():
+            extraArgs.append('-DPXR_ENABLE_METAL_SUPPORT=ON')
+        else:
+            extraArgs.append('-DPXR_ENABLE_VULKAN_SUPPORT=ON')
 
         extraArgs.append('-DPXR_BUILD_USD_TOOLS=ON')
 
@@ -653,12 +731,29 @@ def InstallUSD(context, force, buildArgs):
         extraArgs.append('-DPXR_ENABLE_OPENVDB_SUPPORT=OFF')
         extraArgs.append('-DPXR_BUILD_EMBREE_PLUGIN=OFF')
         extraArgs.append('-DPXR_BUILD_PRMAN_PLUGIN=OFF')
-        extraArgs.append('-DPXR_BUILD_OPENIMAGEIO_PLUGIN=ON')
         extraArgs.append('-DPXR_BUILD_OPENCOLORIO_PLUGIN=OFF')
 
         extraArgs.append('-DPXR_BUILD_USD_IMAGING=ON')
-
-        extraArgs.append('-DPXR_BUILD_USDVIEW=ON')
+        if not MacOS():
+            extraArgs.append('-DPXR_BUILD_OPENIMAGEIO_PLUGIN=ON')
+            extraArgs.append('-DPXR_BUILD_USDVIEW=ON')
+            extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=ON')
+            extraArgs.append('-DPXR_USE_PYTHON_3=ON')
+            pythonInfo = GetPythonInfo(context)
+            if pythonInfo:
+                # According to FindPythonLibs.cmake these are the variables
+                # to set to specify which Python installation to use.
+                extraArgs.append('-DPYTHON_EXECUTABLE="{pyExecPath}"'
+                                .format(pyExecPath=pythonInfo[0]))
+                extraArgs.append('-DPYTHON_LIBRARY="{pyLibPath}"'
+                                .format(pyLibPath=pythonInfo[1]))
+                extraArgs.append('-DPYTHON_INCLUDE_DIR="{pyIncPath}"'
+                                .format(pyIncPath=pythonInfo[2]))
+                extraArgs.append('-DPXR_USE_DEBUG_PYTHON=OFF')
+        else:
+            extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=OFF')
+            extraArgs.append('-DPXR_USE_PYTHON_3=OFF')
+            
 
         extraArgs.append('-DPXR_BUILD_ALEMBIC_PLUGIN=OFF')
         extraArgs.append('-DPXR_BUILD_DRACO_PLUGIN=OFF')
@@ -667,20 +762,6 @@ def InstallUSD(context, force, buildArgs):
 
         # Turn off the text system in USD (Autodesk extension)
         extraArgs.append('-DPXR_ENABLE_TEXT_SUPPORT=OFF')
-
-        extraArgs.append('-DPXR_ENABLE_PYTHON_SUPPORT=ON')
-        extraArgs.append('-DPXR_USE_PYTHON_3=ON')
-        pythonInfo = GetPythonInfo(context)
-        if pythonInfo:
-            # According to FindPythonLibs.cmake these are the variables
-            # to set to specify which Python installation to use.
-            extraArgs.append('-DPYTHON_EXECUTABLE="{pyExecPath}"'
-                                .format(pyExecPath=pythonInfo[0]))
-            extraArgs.append('-DPYTHON_LIBRARY="{pyLibPath}"'
-                                .format(pyLibPath=pythonInfo[1]))
-            extraArgs.append('-DPYTHON_INCLUDE_DIR="{pyIncPath}"'
-                                .format(pyIncPath=pythonInfo[2]))
-            extraArgs.append('-DPXR_USE_DEBUG_PYTHON=OFF')
 
         if Windows():
             # Increase the precompiled header buffer limit.
@@ -702,23 +783,58 @@ def InstallUSD(context, force, buildArgs):
             "Release": '-DTBB_USE_DEBUG_BUILD=OFF',
             "RelWithDebInfo": '-DTBB_USE_DEBUG_BUILD=OFF',
         }
+
         RunCMake(context, True, USD_INSTALL_FOLDER, extraArgs, configExtraArgs=tbbConfigs)
 
 USD = Dependency(USD_INSTALL_FOLDER, USD_PACKAGE_NAME, InstallUSD, USD_URL, "include/pxr/pxr.h")
+
+############################################################
+# Premake
+
+PREMAKE_URL = "https://github.com/premake/premake-core/releases/download/v5.0.0-beta2/premake-5.0.0-beta2-macosx.tar.gz"
+PREMAKE_INSTALL_FOLDER = "Premake"
+PREMAKE_PACKAGE_NAME = "Premake"
+
+def InstallPremake(context, force, buildArgs):
+    DownloadURL(PREMAKE_URL, context, force, destDir=os.path.join(context.externalsInstDir, PREMAKE_INSTALL_FOLDER))
+
+PREMAKE = Dependency(PREMAKE_INSTALL_FOLDER, PREMAKE_PACKAGE_NAME, InstallPremake, PREMAKE_URL, "premake5")
 
 ############################################################
 # Slang
 
 if Windows():
     Slang_URL = "https://github.com/shader-slang/slang/releases/download/v0.24.35/slang-0.24.35-win64.zip"
+elif MacOS():
+    Slang_URL = "https://github.com/shader-slang/slang.git"
 else:
     Slang_URL = "https://github.com/shader-slang/slang/releases/download/v0.24.35/slang-0.24.35-linux-x86_64.zip"
 Slang_INSTALL_FOLDER = "Slang"
 Slang_PACKAGE_NAME = "Slang"
 
 def InstallSlang(context, force, buildArgs):
-    Slang_SRC_FOLDER = DownloadURL(Slang_URL, context, force, destDir="Slang")
-    CopyDirectory(context, Slang_SRC_FOLDER, Slang_INSTALL_FOLDER)
+    if MacOS():
+        tag = 'v2024.1.19'
+        GitClone(Slang_URL, tag, "slang", context)
+        Slang_SRC_FOLDER = os.path.join(os.path.abspath(args.install_dir), "src",  "slang")
+        with CurrentWorkingDirectory(Slang_SRC_FOLDER):
+            Run("git submodule update --init")
+            Run("{premakePath}/premake5 gmake2 --cc=gcc --deps=true --arch=aarch64".format(
+                premakePath=os.path.join(context.externalsInstDir, PREMAKE_INSTALL_FOLDER)))
+            Run("make -j{procs} config=release_aarch64 verbose=1".format(procs=context.numJobs))
+        Slang_BUILD_COPY_DIRS = ["bin", "prelude"]
+        Slang_BUILD_COPY_FILES = ["LICENSE", "README.md", "slang-com-helper.h", "slang-com-ptr.h", "slang-gfx.h", "slang-tag-version.h", "slang.h"]
+        for dir in Slang_BUILD_COPY_DIRS:
+            CopyDirectory(context, os.path.join(Slang_SRC_FOLDER, dir), os.path.join(Slang_INSTALL_FOLDER, dir))
+        for filename in Slang_BUILD_COPY_FILES:
+            CopyFiles(context, os.path.join(Slang_SRC_FOLDER, filename), Slang_INSTALL_FOLDER)
+    else:
+        Slang_SRC_FOLDER = DownloadURL(Slang_URL, context, force, destDir="Slang")
+        # Resolve Linux permission denied error.
+        if Linux():
+            with CurrentWorkingDirectory(Slang_SRC_FOLDER):
+                Run('chmod +rwx ./bin/linux-x64/release/slangc')
+        CopyDirectory(context, Slang_SRC_FOLDER, Slang_INSTALL_FOLDER)
 
 SLANG = Dependency(Slang_INSTALL_FOLDER, Slang_PACKAGE_NAME, InstallSlang, Slang_URL, "slang.h")
 
@@ -782,15 +898,29 @@ NRI = Dependency(NRI_INSTALL_FOLDER, NRI_PACKAGE_NAME, InstallNRI, NRI_URL, "inc
 ############################################################
 # GLEW
 
-GLEW_URL = "https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0-win32.zip"
+if Windows():
+    GLEW_URL = "https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0-win32.zip"
+elif MacOS():
+    GLEW_URL = "https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.zip"
+else:
+    # TODO: Linux url ?
+    GLEW_URL = "https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.zip"
+
+
 GLEW_INSTALL_FOLDER = "glew"
 GLEW_PACKAGE_NAME = "GLEW"
 
 def InstallGLEW(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(GLEW_URL, context, force)):
+        if MacOS():
+            Run('make SYSTEM=darwin')
         CopyDirectory(context, "include/GL", "include/GL", GLEW_INSTALL_FOLDER)
-        CopyFiles(context, "bin/Release/x64/*.dll", "bin", GLEW_INSTALL_FOLDER)
-        CopyFiles(context, "lib/Release/x64/*.lib", "lib", GLEW_INSTALL_FOLDER)
+        if Windows():
+            CopyFiles(context, "bin/Release/x64/*.dll", "bin", GLEW_INSTALL_FOLDER)
+            CopyFiles(context, "lib/Release/x64/*.lib", "lib", GLEW_INSTALL_FOLDER)
+        if MacOS():
+            CopyFiles(context, "lib/*.a", "lib", GLEW_INSTALL_FOLDER)
+            CopyFiles(context, "lib/*.dylib", "lib", GLEW_INSTALL_FOLDER)
 
 GLEW = Dependency(GLEW_INSTALL_FOLDER, GLEW_PACKAGE_NAME, InstallGLEW, GLEW_URL, "include/GL/glew.h")
 
@@ -918,6 +1048,14 @@ group.add_argument("--build-variant", default=BUILD_RELEASE,
                 help=("Build variant for external libraries. "
                         "(default: {})".format(BUILD_RELEASE)))
 
+if MacOS():
+    group.add_argument("--build-target",
+                       default=apple_utils.GetBuildTargetDefault(),
+                       choices=apple_utils.GetBuildTargets(),
+                       help=("Build target for macOS cross compilation. "
+                             "(default: {})".format(
+                                apple_utils.GetBuildTargetDefault())))
+
 group.add_argument("--build-args", type=str, nargs="*", default=[],
                    help=("Custom arguments to pass to build system when "
                          "building libraries (see docs above)"))
@@ -1007,6 +1145,17 @@ class InstallContext:
         if self.buildRelWithDebInfo:
             self.buildConfigs.append("RelWithDebInfo")
 
+        # Build target and code signing
+        if MacOS():
+            self.buildTarget = args.build_target
+            apple_utils.SetTarget(self, self.buildTarget)
+
+            self.macOSCodesign = \
+                (args.macos_codesign if hasattr(args, "macos_codesign")
+                 else False)
+        else:
+            self.buildTarget = ""
+
         # Dependencies that are forced to be built
         self.forceBuildAll = args.force_all
         self.forceBuild = [dep.lower() for dep in args.force_build]
@@ -1061,23 +1210,15 @@ requiredDependencies = [ZLIB,
 # our own. This avoids potential issues where a host application loads an older version
 # of these librraies than the one we'd build and link our libraries against.
 #
-# On Ubuntu 20.04, you can run the following command to install these libraries:
-# sudo apt-get -y install zlib1g-dev libjpeg-turbo8-dev libtiff-dev libpng-dev libglm-dev libglew-dev libglfw3-dev libgtest-dev libgmock-dev
-#
-# The installed libraries likely have the following versions:
-# zlib1g-dev: 1.2.11
-# libjpeg-turbo8-dev: 2.0.3
-# libtiff-dev: 4.1.0
-# libpng-dev: 1.6.37
-# libglm-dev: 0.9.9.7
-# libglew-dev: 2.1.0
-# libglfw3-dev: 3.3.2
-# libgtest-dev: 1.10.0
-# libgmock-dev: 1.10.0
+# On Ubuntu 22.04, you can run the following command to install these libraries:
+# sudo apt-get -y install zlib1g-dev libjpeg-turbo8-dev libtiff-dev libpng-dev libglm-dev libglew-dev libglfw3-dev libgtest-dev libgmock-dev libxt-dev
 if Linux():
     excludes = [ZLIB, JPEG, TIFF, PNG, GLM, GLEW, GLFW, GTEST]
     for lib in excludes:
         requiredDependencies.remove(lib)
+
+if MacOS():
+    requiredDependencies = [PREMAKE] + requiredDependencies
 
 context.cmakePrefixPaths = set(map(lambda lib: os.path.join(context.externalsInstDir, lib.installFolder), requiredDependencies))
 

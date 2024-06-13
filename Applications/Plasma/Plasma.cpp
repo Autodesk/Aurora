@@ -19,14 +19,17 @@
 
 // A global pointer to the application object, for the static WndProc function.
 Plasma* gpApp = nullptr;
-#if defined(INTERACTIVE_PLASMA)
+int gArgc = 0;
+const char** gpArgv= nullptr;
+
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
 static const char* kAppName = "Plasma";
 #endif
 // The maximum number of samples to render when converging.
 constexpr uint32_t kMaxSamples       = 1000;
 constexpr uint32_t kDenoisingSamples = 50;
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) &&defined(WIN32)
 // Application constructor.
 Plasma::Plasma(HINSTANCE hInstance, unsigned int width, unsigned int height)
 {
@@ -107,6 +110,7 @@ bool Plasma::run()
         return false;
     }
 
+#if defined(WIN32)
     // Show the window.
     ::ShowWindow(_hwnd, SW_SHOWNORMAL);
 
@@ -117,10 +121,12 @@ bool Plasma::run()
         ::TranslateMessage(&msg);
         ::DispatchMessage(&msg);
     }
+#endif
 
     return true;
 }
 
+#if defined(WIN32)
 // The static window callback function.
 LRESULT __stdcall Plasma::wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -130,7 +136,10 @@ LRESULT __stdcall Plasma::wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     // Return the result if valid, otherwise use default message processing.
     return result == -1 ? DefWindowProc(hWnd, message, wParam, lParam) : result;
 }
+#endif
+
 #else
+
 // Runs the application as one-pass command line program
 bool Plasma::run(int argc, char* argv[])
 {
@@ -148,6 +157,7 @@ bool Plasma::run(int argc, char* argv[])
 
     return true;
 }
+
 #endif
 
 // Creates a sample scene.
@@ -293,6 +303,7 @@ bool Plasma::getFloat3Option(const string& name, glm::vec3& value) const
 #if defined(INTERACTIVE_PLASMA)
 void Plasma::parseOptions()
 {
+#if defined(WIN32)
     // Command line arguments.
     int numArgs = 0;
 
@@ -320,12 +331,15 @@ void Plasma::parseOptions()
     // Get char pointer-to-pointer to pass to cxxopts.
     char** pArgv = argsNarrowPtr.data();
 #else
+    int numArgs  = gArgc;
+    const char** pArgv = gpArgv;
+#endif
+#else
 void Plasma::parseOptions(int argc, char* argv[])
 {
     // Command line arguments.
     int numArgs  = argc;
     char** pArgv = argv;
-
 #endif
     // Initialize cxxopts options with application name.
     cxxopts::Options options("Plasma", "Plasma: Aurora example application.");
@@ -368,7 +382,7 @@ void Plasma::parseOptions(int argc, char* argv[])
     {
         stringstream message;
         message << options.help();
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
         wstring messageWide = Foundation::s2w(message.str());
         ::MessageBox(nullptr, messageWide.c_str(), L"Command line options", MB_OK);
 #else
@@ -395,7 +409,7 @@ bool Plasma::initialize()
         }
     }
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
     // Create the application window.
     _hwnd = createWindow(_dimensions);
     ::setMessageWindow(_hwnd);
@@ -589,7 +603,7 @@ bool Plasma::initialize()
         AU_INFO("Output command line option is set. Rendered one image to %s, now exiting.",
             outputFile.c_str());
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
         PostMessage(_hwnd, WM_CLOSE, 0, 0);
 #endif
     }
@@ -597,14 +611,24 @@ bool Plasma::initialize()
     else
     {
         // Create an Aurora window, which can be used to render into the application window.
+#if defined(WIN32)
         _pWindow = _pRenderer->createWindow(_hwnd, _dimensions.x, _dimensions.y);
+#else
+        _pWindow = _pRenderer->createWindow(nullptr, _dimensions.x, _dimensions.y);
+#endif
         if (!_pWindow)
         {
             return false;
         }
+#if defined(WIN32)
         _pRenderer->setTargets({ { Aurora::AOV::kFinal, _pWindow } });
+#else
+        _pRenderBuffer = _pRenderer->createRenderBuffer(_dimensions.x, _dimensions.y, Aurora::ImageFormat::Float_RGBA);
+        _pRenderer->setTargets({ { Aurora::AOV::kFinal, _pRenderBuffer } });
+#endif
     }
 #endif
+    
     return true;
 }
 
@@ -793,16 +817,29 @@ void Plasma::updateSampleCount()
 // Updates the window.
 void Plasma::update()
 {
+    // really want to do something like this:
+//    std::shared_ptr<HGIRenderBuffer> hgiRenderBuffer = std::dynamic_pointer_cast<HGIRenderBuffer>(_pRenderer);
+//    _pRenderBuffer->storageTex();
+    
     // Prepare the performance monitor for the frame.
     _performanceMonitor.beginFrame(_shouldRestart);
 
     // Update lighting properties, which may have changed.
     updateLighting();
 
+#if defined(__APPLE__)
+    // TODO: quick fix for row-major/column-major mismatch ... we shouldn't have to do this.
+    mat4 viewMatrix = transpose(_camera.viewMatrix());
+    mat4 projMatrix = transpose(_camera.projMatrix());
+#else
+    mat4 viewMatrix = _camera.viewMatrix();
+    mat4 projMatrix = _camera.projMatrix();
+#endif
+    
     // Get the view and projection matrices from the camera as float arrays, and set them on the
     // renderer as the camera (view).
-    const float* viewArray = value_ptr(_camera.viewMatrix());
-    const float* projArray = value_ptr(_camera.projMatrix());
+    const float* viewArray = value_ptr(viewMatrix);
+    const float* projArray = value_ptr(projMatrix);
     _pRenderer->setCamera(viewArray, projArray);
 
     // Render the scene, accumulating as many frames as possible within a target time, as
@@ -811,6 +848,10 @@ void Plasma::update()
     Foundation::CPUTimer firstFrameTimer;
     uint32_t sampleStart = 0;
     uint32_t sampleCount = _sampleCounter.update(sampleStart, _shouldRestart);
+#if defined(__APPLE__)
+    // TODO: temporary hack whilst accumulation is done on the raygen shader rather than as a post process
+    sampleCount = 1;
+#endif
     if (sampleCount > 0)
     {
         _pRenderer->render(sampleStart, sampleCount);
@@ -847,8 +888,10 @@ void Plasma::requestUpdate(bool shouldRestart)
 {
     _shouldRestart = _shouldRestart || shouldRestart;
 
+#if defined(WIN32)
     // Invalidate the window to ensure that a paint message is sent.
     ::InvalidateRect(_hwnd, nullptr, FALSE);
+#endif
 }
 
 // Toggles the animating state of the application.
@@ -875,6 +918,7 @@ void Plasma::toggleFullScreen()
     // Toggle the full screen state.
     _isFullScreenEnabled = !_isFullScreenEnabled;
 
+#if defined(WIN32)
     LONG windowStyle     = 0;
     HWND windowZ         = nullptr;
     UINT windowShowState = SW_SHOWNORMAL;
@@ -916,6 +960,7 @@ void Plasma::toggleFullScreen()
 
     // Show the window (again) so that changes take effect, with a show state.
     ::ShowWindow(_hwnd, windowShowState);
+#endif
 }
 
 // Toggles vsync (vertical sync).
@@ -971,8 +1016,9 @@ void Plasma::adjustMaxLuminanceExposure(float increment)
 // Displays a dialog for selecting a file to load, and loads it using the specified load
 // function.
 void Plasma::selectFile(
-    const string& extension, const wchar_t* pFilters, const LoadFileFunction& loadFunc)
+    [[maybe_unused]] const string& extension, [[maybe_unused]] const wchar_t* pFilters, [[maybe_unused]] const LoadFileFunction& loadFunc)
 {
+#if defined(WIN32)
     // Prepare a structure for displaying a file open dialog.
     array<wchar_t, MAX_PATH> filePath = { '\0' }; // must be initialized for GetOpenFileName()
     OPENFILENAME desc                 = {};
@@ -1006,6 +1052,7 @@ void Plasma::selectFile(
 
     addAssetPathContainingFile(Foundation::w2s(filePath.data()));
     loadFunc(Foundation::w2s(filePath.data()));
+#endif
 }
 
 #endif
@@ -1020,7 +1067,7 @@ void Plasma::addAssetPathContainingFile(const string& filePath)
 
 void Plasma::addAssetPath(const string& filePath)
 {
-    for (int i = 0; i < _assetPaths.size(); i++)
+    for (size_t i = 0; i < _assetPaths.size(); i++)
     {
         if (_assetPaths[i].compare(filePath) == 0)
             return;
@@ -1111,8 +1158,21 @@ void Plasma::saveImage(const wstring& filePath, const uvec2& dimensions)
 
     // Get the view and projection matrices from the camera as float arrays, and set them on the
     // renderer as the camera (view).
-    auto* viewArray = reinterpret_cast<const float*>(&_camera.viewMatrix());
-    auto* projArray = reinterpret_cast<const float*>(&_camera.projMatrix());
+    
+#if defined(__APPLE__)
+    // TODO: quick fix for row-major/column-major mismatch ... we shouldn't have to do this.
+    mat4 viewMatrix = transpose(_camera.viewMatrix());
+    mat4 projMatrix = transpose(_camera.projMatrix());
+#else
+    mat4 viewMatrix = _camera.viewMatrix();
+    mat4 projMatrix = _camera.projMatrix();
+#endif
+    
+    // Get the view and projection matrices from the camera as float arrays, and set them on the
+    // renderer as the camera (view).
+    const float* viewArray = value_ptr(viewMatrix);
+    const float* projArray = value_ptr(projMatrix);
+
     _pRenderer->setCamera(viewArray, projArray);
 
     // Create a temporary render buffer.
@@ -1129,6 +1189,7 @@ void Plasma::saveImage(const wstring& filePath, const uvec2& dimensions)
     const void* pData = pRenderBuffer->data(stride);
     int res = ::stbi_write_png(Foundation::w2s(filePath).c_str(), dimensions.x, dimensions.y, 4,
         pData, static_cast<int>(stride));
+    
     AU_ASSERT(res, "Failed to write PNG: %s", Foundation::w2s(filePath).c_str());
 }
 
@@ -1221,7 +1282,7 @@ void Plasma::resetMaterials()
 #endif
 }
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
 // Processes a message for the application window.
 LRESULT Plasma::processMessage(UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1355,12 +1416,20 @@ void Plasma::onFilesDropped(HDROP hDrop)
         (*funcIt).second(filePath);
     }
 }
-
+#endif
+    
+#if defined(INTERACTIVE_PLASMA)
+    
 // Handles key presses.
+#if defined(WIN32)
 void Plasma::onKeyPressed(WPARAM keyCode)
+#else
+void Plasma::onKeyPressed(GCKeyCode keyCode)
+#endif
 {
     // Get the renderer options object.
     Aurora::IValues& options = _pRenderer->options();
+#if defined(WIN32)
 
     // For sequential keys starting with 0, enable the corresponding debug mode, e.g. 2 means
     // debug mode 2 (show the view depth AOV).
@@ -1385,7 +1454,49 @@ void Plasma::onKeyPressed(WPARAM keyCode)
 
         return;
     }
+#endif
 
+    
+#if defined(__APPLE__)
+    // F: Fit the view to the scene, retaining the current direction and up vectors.
+    if(keyCode == GCKeyCodeKeyF) {
+        _camera.fit(_sceneContents.bounds);
+        requestUpdate();
+        _pRenderer->setFrameIndex(0);
+    }
+    // Space: Toggle animation.
+    else if(keyCode == GCKeyCodeSpacebar) {
+        toggleAnimation();
+        _pRenderer->setFrameIndex(0);
+    }
+    // C: Toggle orthographic projection.
+    else if(keyCode == GCKeyCodeKeyC) {
+        _isOrthoProjection = !_isOrthoProjection;
+        _camera.setIsOrtho(_isOrthoProjection);
+        requestUpdate();
+        _pRenderer->setFrameIndex(0);
+    }
+    // S: Save the current image to a file.
+    else if(keyCode == GCKeyCodeKeyS) {
+//        saveImage(L"capture.png", uvec2(1280, 720));
+    }
+    // [: Decrease max trace depth.
+    else if(keyCode == GCKeyCodeOpenBracket) {
+        _traceDepth = glm::max(1, _traceDepth - 1);
+        options.setInt("traceDepth", _traceDepth);
+        requestUpdate();
+        _pRenderer->setFrameIndex(0);
+    }
+    // ]: Increase max trace depth.
+    else if(keyCode == GCKeyCodeCloseBracket) {
+        _traceDepth = glm::min(10, _traceDepth + 1);
+        options.setInt("traceDepth", _traceDepth);
+        requestUpdate();
+        _pRenderer->setFrameIndex(0);
+    }
+
+#else
+    
     switch (keyCode)
     {
     // ESC: Destroy the main window.
@@ -1520,7 +1631,7 @@ void Plasma::onKeyPressed(WPARAM keyCode)
 
     // S: Save the current image to a file.
     case 0x53:
-        saveImage(L"capture.png", uvec2(1920, 1080));
+        saveImage(L"capture.png", uvec2(1280, 720));
         break;
 
     // T: Toggle tone mapping.
@@ -1600,8 +1711,44 @@ void Plasma::onKeyPressed(WPARAM keyCode)
         requestUpdate();
         break;
     }
+#endif
+}
+#endif
+    
+#if defined(__APPLE__)
+// Handles mouse moves.
+void Plasma::onMouseMoved(int xPos, int yPos, bool leftButtonPressed, bool middleButtonPressed, bool rightButtonPressed)
+{
+    // Update the camera.
+    Camera::Inputs inputs = {};
+    inputs.LeftButton     = leftButtonPressed;
+    inputs.MiddleButton   = middleButtonPressed;
+    inputs.RightButton    = rightButtonPressed;
+    _camera.mouseMove(xPos, yPos, inputs);
+
+    // Request an update if the camera is dirty.
+    if(_camera.isDirty()) {
+        requestUpdate();
+        _pRenderer->setFrameIndex(0);
+    }
 }
 
+void Plasma::onMouseWheel(int delta) {
+    // Update the camera.
+    Camera::Inputs inputs = {};
+    inputs.Wheel          = true;
+    _camera.mouseMove(0, delta, inputs);
+
+    // Request an update if the camera is dirty.
+    if (_camera.isDirty()) {
+        requestUpdate();
+        _pRenderer->setFrameIndex(0);
+    }
+}
+    
+#endif
+    
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
 // Handles mouse moves.
 void Plasma::onMouseMoved(int xPos, int yPos, WPARAM buttons)
 {
@@ -1679,6 +1826,21 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance
     return result ? 0 : -1;
 }
 #else  //! INTERACTIVE_PLASMA
+
+#if defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
+
+int main(int argc, const char * argv[]) {
+    @autoreleasepool {
+        // Setup code that might create autoreleased objects goes here.
+    }
+    Plasma app;
+    gpApp       = &app;
+    gArgc       = argc;
+    gpArgv      = argv;
+    return NSApplicationMain(argc, argv);
+}
+#else
 int main(int argc, char* argv[])
 {
     // Create an application object on the stack, and run it. The run() function returns when
@@ -1689,4 +1851,6 @@ int main(int argc, char* argv[])
 
     return result ? 0 : -1;
 }
+#endif
+    
 #endif // INTERACTIVE_PLASMA

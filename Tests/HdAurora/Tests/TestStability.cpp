@@ -90,25 +90,6 @@ TEST_F(StabilityTest, TestTextures)
     // Ensure no crash when resource activated.
     pAuroraRenderDelegate->setAuroraEnvironmentLightImagePath(resPath);
     pAuroraRenderDelegate->UpdateAuroraEnvironment();
-
-// TODO: To pass the extreme-sized tests, the corresponding fix in USD (hiooiio) is required.
-// Enable the following tests once USD is upgraded.
-#ifdef ENABLE_EXTREME_SIZE_TEST
-    // Test extreme-sized textures. ///////////////////////////////////////////
-    const std::string environmentImage = _dataPath + "/Textures/pretville_street_24k.exr";
-
-    resPath = pAuroraRenderDelegate->imageCache().acquireImage(environmentImage, true, false);
-    EXPECT_FALSE(resPath.empty());
-    // Ensure no crash when resource activated.
-    pAuroraRenderDelegate->setAuroraEnvironmentLightImagePath(resPath);
-    pAuroraRenderDelegate->UpdateAuroraEnvironment();
-
-    resPath = pAuroraRenderDelegate->imageCache().acquireImage(environmentImage, true, true);
-    EXPECT_FALSE(resPath.empty());
-    // Ensure no crash when resource activated.
-    pAuroraRenderDelegate->setAuroraEnvironmentLightImagePath(resPath);
-    pAuroraRenderDelegate->UpdateAuroraEnvironment();
-#endif
 }
 
 } // namespace

@@ -171,10 +171,10 @@ MaterialDefaultValues MaterialBase::StandardSurfaceDefaults(
 
 MaterialBase::MaterialBase(
     const string& name, MaterialShaderPtr pShader, MaterialDefinitionPtr pDef) :
-    _textures(pDef->defaults().textureNames),
     _pDef(pDef),
     _pShader(pShader),
     _uniformBuffer(pDef->defaults().propertyDefinitions, pDef->defaults().properties),
+    _textures(pDef->defaults().textureNames),
     _name(name)
 
 {

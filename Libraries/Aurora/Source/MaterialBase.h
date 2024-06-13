@@ -31,7 +31,7 @@ public:
 
     TextureProperties(const vector<TextureIdentifier>& names)
     {
-        for (int i = 0; i < names.size(); i++)
+        for (size_t i = 0; i < names.size(); i++)
         {
             auto& name                     = names[i];
             _textureNameLookup[name.image] = int(_properties.size());

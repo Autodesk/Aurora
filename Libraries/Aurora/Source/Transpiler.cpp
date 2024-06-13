@@ -159,8 +159,8 @@ void Transpiler::setSource(const string& name, const string& code)
     _pFileSystem->setSource(name, code);
 }
 
-bool Transpiler::transpileCode(
-    const string& shaderCode, string& codeOut, string& errorOut, Language target)
+bool Transpiler::transpileCode(const string& shaderCode, string& codeOut, string& errorOut,
+    Language target, const map<string, string>& preprocessorDefines)
 {
     // Dummy file name to use as container for shader code.
     const string codeFileName = "__shaderCode";
@@ -169,7 +169,7 @@ bool Transpiler::transpileCode(
     setSource(codeFileName, shaderCode);
 
     // Transpile the shader code.
-    bool res = transpile(codeFileName, codeOut, errorOut, target);
+    bool res = transpile(codeFileName, codeOut, errorOut, target, preprocessorDefines);
 
     // Clear the shader source to release memory.
     setSource(codeFileName, "");
@@ -177,8 +177,8 @@ bool Transpiler::transpileCode(
     return res;
 }
 
-bool Transpiler::transpile(
-    const string& shaderName, string& codeOut, string& errorOut, Language target)
+bool Transpiler::transpile(const string& shaderName, string& codeOut, string& errorOut,
+    Language target, const map<string, string>& preprocessorDefines)
 {
     // Clear result.
     errorOut.clear();
@@ -188,7 +188,8 @@ bool Transpiler::transpile(
     slang::ICompileRequest* pRequest;
     [[maybe_unused]] const int reqIndex = _pSession->createCompileRequest(&pRequest);
 
-    auto profileId = _pSession->findProfile("sm_6_3");
+    auto profileId = target == Language::GLSL ? _pSession->findProfile("glsl_460")
+                                              : _pSession->findProfile("sm_6_3");
 
     // Set the file system and compile fiags.
     pRequest->setFileSystem(_pFileSystem.get());
@@ -217,6 +218,12 @@ bool Transpiler::transpile(
 
     // Set DIRECTX preprocessor directive.
     pRequest->addPreprocessorDefine("DIRECTX", target == Language::GLSL ? "0" : "1");
+
+    // Add the preprocessor definitions specified by the caller, if any.
+    for (const auto& [key, value] : preprocessorDefines)
+    {
+        pRequest->addPreprocessorDefine(key.c_str(), value.c_str());
+    }
 
     // Transpile the file.
     const SlangResult compileRes = pRequest->compile();

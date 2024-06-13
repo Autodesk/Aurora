@@ -178,7 +178,7 @@ Aurora::Path FixtureBase::loadImage(const string& filename, bool linearize)
     Path path           = "TestImage:" + filename + "-linearize=" + to_string(linearize);
 
     // Set up the pixel data callback
-    imageDesc.getData = [this, path, filename](ImageData& dataOut, AllocateBufferFunction alloc) {
+    imageDesc.getData = [path, filename](ImageData& dataOut, AllocateBufferFunction alloc) {
         // Use STB to load image file.
         int width, height, components;
         unsigned char* pReadPixels = stbi_load(filename.c_str(), &width, &height, &components, 0);

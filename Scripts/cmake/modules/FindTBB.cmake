@@ -5,6 +5,8 @@ endif()
 
 find_path(TBB_INCLUDE_DIRS # Set variable TBB_INCLUDE_DIRS
           tbb/tbb.h        # Find a path with tbb.h
+          HINTS ${TBB_ROOT}
+          PATH_SUFFIXES include
           REQUIRED
 )
 cmake_path(GET TBB_INCLUDE_DIRS PARENT_PATH TBB_INSTALL_PREFIX)
@@ -45,6 +47,13 @@ foreach(_comp ${TBB_COMPOMPONENTS})
       set_target_properties(TBB::${_comp} PROPERTIES
         IMPORTED_LOCATION_RELEASE "${TBB_${_comp}_DLL_RELEASE}"
       )
+    elseif(APPLE)
+      find_file(TBB_${_comp}_LIBRARY_RELEASE ${_comp}.dylib REQUIRED
+        PATHS "${TBB_INSTALL_PREFIX}/lib"
+      )
+      set_target_properties(TBB::${_comp} PROPERTIES
+        IMPORTED_LOCATION_RELEASE "${TBB_${_comp}_LIBRARY_RELEASE}"
+      )
     else() # linux
       cmake_path(GET TBB_${_comp}_LIBRARY_RELEASE FILENAME TBB_${_comp}_SO)
       set_target_properties(TBB::${_comp} PROPERTIES
@@ -71,6 +80,13 @@ foreach(_comp ${TBB_COMPOMPONENTS})
       set_target_properties(TBB::${_comp} PROPERTIES
         IMPORTED_LOCATION_DEBUG "${TBB_${_comp}_DLL_DEBUG}"
       )
+    elseif(APPLE)
+      find_file(TBB_${_comp}_LIBRARY_DEBUG ${_comp}_debug.dylib REQUIRED
+        PATHS "${TBB_INSTALL_PREFIX}/lib"
+      )
+      set_target_properties(TBB::${_comp} PROPERTIES
+        IMPORTED_LOCATION_DEBUG "${TBB_${_comp}_LIBRARY_DEBUG}"
+      )
     else() # linux
       cmake_path(GET TBB_${_comp}_LIBRARY_DEBUG FILENAME TBB_${_comp}_SO)
       set_target_properties(TBB::${_comp} PROPERTIES
@@ -92,6 +108,8 @@ elseif (TBB_LIBRARIES_DEBUG)
   set(TBB_LIBRARIES ${TBB_LIBRARIES_DEBUG})
 endif()
 
+set(TBB_LIBRARY_DIR "${TBB_INSTALL_PREFIX}/lib")
+
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set TBB_FOUND to TRUE
 # if all listed variables are TRUE
@@ -103,6 +121,7 @@ find_package_handle_standard_args(TBB
 
 mark_as_advanced(
     TBB_INCLUDE_DIRS
+    TBB_LIBRARY_DIR
     TBB_LIBRARIES
     TBB_LIBRARIES_RELEASE
     TBB_LIBRARIES_DEBUG

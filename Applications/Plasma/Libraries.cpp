@@ -13,7 +13,7 @@
 // limitations under the License.
 #include "pch.h"
 
-#if defined(INTERACTIVE_PLASMA)
+#if defined(INTERACTIVE_PLASMA) && defined(WIN32)
 // Window global variable from pch.h.
 HWND gWindow = nullptr;
 #endif
@@ -28,6 +28,9 @@ HWND gWindow = nullptr;
 #include <tiny_gltf.h>
 #pragma warning(push)
 #pragma warning(disable : 4996)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
+#pragma clang diagnostic pop
 #pragma warning(pop)

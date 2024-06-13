@@ -1,10 +1,10 @@
 // Sample data UBO.
 // NOTE should be passed as push constants, but this is currently broken in HGI.
-layout(binding = 3) layout(std140) uniform SampleData
-{
-    int sampleIndex;
-    int seedOffset;
-} gSampleData;
+//layout(binding = 3) layout(std140) uniform SampleData
+//{
+//    int sampleIndex;
+//    int seedOffset;
+//} gSampleData;
 
 // Get texture UV from input coordinate.
 vec2 GetTexCoords(ivec2 outCoords)
@@ -24,13 +24,13 @@ void main(void)
     vec3 direct     = result.rgb;
 
     // For all samples except the first, combine direct light texture with previous frame.
-    if (gSampleData.sampleIndex > 0)
+    if (gSampleData_sampleIndex > 0)
     {
         // Get result for previous frame.
         vec4 prevResult = HgiTextureLod_accumulationTexture(texCoords, 0.0);
         
         // Blend between the previous result based on sample index.
-        float t = 1.0 / (gSampleData.sampleIndex + 1);
+        float t = 1.0 / (gSampleData_sampleIndex + 1);
         result = mix(prevResult, result, t);
     }
 

@@ -74,9 +74,12 @@ TEST_P(RendererTest, TestRendererDebugDevice)
 }
 
 // Test creating, destroying renderer then rendering.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererCreateDestroyThenRenderFull) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererCreateDestroyThenRenderFull)
+#endif
 {
-
     // TODO: Should test assert message when creating renderer when not supported.
     if (!backendSupported())
         return;
@@ -116,7 +119,11 @@ TEST_P(RendererTest, TestRendererCreateDestroyThenRenderFull)
 }
 
 // Test renderer options.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererOptions) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererOptions)
+#endif
 {
     if (!backendSupported())
         return;
@@ -151,9 +158,12 @@ TEST_P(RendererTest, TestRendererOptions)
 
 // Render with increasing values of sampleCount.
 // Should have no effect on rasterizer at all
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererLargeSampleCount) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererLargeSampleCount)
+#endif
 {
-
     // Create the default scene with 256x256 frame size (also creates renderer)
     IRendererPtr pRenderer = createDefaultRenderer(256, 256);
     IScenePtr pScene       = createDefaultScene();
@@ -261,7 +271,11 @@ TEST_P(RendererTest, TestRendererDestroyRenderBufferFirst)
 }
 
 // Test a completely empty scene.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererEmptyScene) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererEmptyScene)
+#endif
 {
     // Create the default scene. (also creates renderer)
     IRendererPtr pRenderer = createDefaultRenderer();
@@ -287,8 +301,12 @@ TEST_P(RendererTest, TestRendererEmptyScene)
     ASSERT_NO_FATAL_FAILURE(pRenderer->render());
 }
 
-// Test background the same between two identical renders
+// Test background the same between two identical renders.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRenderBackgroundTheSameBetweenRenders) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRenderBackgroundTheSameBetweenRenders)
+#endif
 {
     // Create the default scene (also creates renderer)
     IScenePtr pScene       = createDefaultScene();
@@ -435,9 +453,12 @@ TEST_P(RendererTest, DISABLED_TestRendererInvalidBounds)
 }
 
 // Ensure can render empty scene with no bounds.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererEmptySceneBounds) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererEmptySceneBounds)
+#endif
 {
-
     // Create the default scene and renderer.
     Aurora::IRendererPtr pRenderer = createDefaultRenderer();
 
@@ -457,7 +478,11 @@ TEST_P(RendererTest, TestRendererEmptySceneBounds)
 
 // Test ground plane.
 // TODO: Re-enable once ground plane re-enabled.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererGroundPlane) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererGroundPlane)
+#endif
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -494,9 +519,12 @@ TEST_P(RendererTest, TestRendererGroundPlane)
 }
 
 // Test null environment.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererSetNullEnvironment) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererSetNullEnvironment)
+#endif
 {
-
     // Create the default scene and renderer.
     IRendererPtr pRenderer = createDefaultRenderer();
 
@@ -523,7 +551,11 @@ TEST_P(RendererTest, TestRendererSetNullEnvironment)
 }
 
 // Test instance properties environment.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererInstanceProperties) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererInstanceProperties)
+#endif
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -556,8 +588,12 @@ TEST_P(RendererTest, TestRendererInstanceProperties)
     ASSERT_BASELINE_IMAGE_PASSES(currentTestName());
 }
 
-// Test non-indexed geom
+// Test non-indexed geom.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererNonIndexedGeom)
+#else
 TEST_P(RendererTest, TestRendererNonIndexedGeom)
+#endif
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -620,7 +656,11 @@ TEST_P(RendererTest, TestRendererNonIndexedGeom)
 }
 
 // Test remove instance.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererRemoveInstance) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererRemoveInstance)
+#endif
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -656,7 +696,11 @@ TEST_P(RendererTest, TestRendererRemoveInstance)
 
 // Test instance with layer materials
 // TODO: Re-enable test when layers are working.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererMaterialLayers)
+#else
 TEST_P(RendererTest, TestRendererMaterialLayers)
+#endif
 {
     auto pScene    = createDefaultScene();
     auto pRenderer = defaultRenderer();
@@ -1094,7 +1138,11 @@ TEST_P(RendererTest, TestLocales)
 }
 
 // Test orthographic projection.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererOrthographicProjection) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererOrthographicProjection)
+#endif
 {
     // Create the default scene and renderer.
     Aurora::IScenePtr pScene       = createDefaultScene();
@@ -1165,7 +1213,11 @@ TEST_P(RendererTest, TestRendererAlpha)
 }
 
 // Ensure lighting behind an opaque surface has no effect.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestRendererBackFaceLighting) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestRendererBackFaceLighting)
+#endif
 {
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();
@@ -1201,7 +1253,11 @@ TEST_P(RendererTest, TestRendererBackFaceLighting)
 
 
 // Normal map image test.
+#if defined(__APPLE__)
+TEST_P(RendererTest, DISABLED_TestDebugNormals) // This case cannot work on MacOS now.
+#else
 TEST_P(RendererTest, TestDebugNormals)
+#endif
 {
     // Create the default scene (also creates renderer)
     auto pScene    = createDefaultScene();

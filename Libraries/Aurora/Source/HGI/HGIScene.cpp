@@ -114,7 +114,7 @@ void HGIScene::rebuildInstanceList()
     // Add instance data for all the instances.
     for (HGIInstance& instance : _instances.active().resources<HGIInstance>())
     {
-        // Get instacne and material.
+        // Get instance and material.
         auto pMtl = instance.material() ? instance.material() : defaultMaterial;
 
         // Create a hit group shader record for instance.
@@ -128,9 +128,10 @@ void HGIScene::rebuildInstanceList()
 
         // Get baseColor image from material.
         HGIImagePtr pBaseColorImage = nullptr;
-        if (pMtl->hasValue("base_color_image"))
+        if (pMtl->textures().findTexture("base_color_image") != -1)
         {
-            pBaseColorImage = dynamic_pointer_cast<HGIImage>(pMtl->asImage("base_color_image"));
+            auto texture = pMtl->textures().getTexture("base_color_image");
+            pBaseColorImage = dynamic_pointer_cast<HGIImage>(texture);
         }
         if (pBaseColorImage)
         {
@@ -142,10 +143,9 @@ void HGIScene::rebuildInstanceList()
 
         // Get specular roughness image from material.
         HGIImagePtr pSpecularRoughnessImage = nullptr;
-        if (pMtl->hasValue("specular_roughness_image"))
+        if (pMtl->textures().findTexture("specular_roughness_image") != -1)
         {
-            pSpecularRoughnessImage =
-                dynamic_pointer_cast<HGIImage>(pMtl->asImage("specular_roughness_image"));
+            pSpecularRoughnessImage = dynamic_pointer_cast<HGIImage>(pMtl->textures().getTexture("specular_roughness_image"));
         }
         if (pSpecularRoughnessImage)
         {
@@ -157,9 +157,9 @@ void HGIScene::rebuildInstanceList()
 
         // Get opacity image from material.
         HGIImagePtr pOpacityImage = nullptr;
-        if (pMtl->hasValue("opacity_image"))
+        if (pMtl->textures().findTexture("opacity_image") != -1)
         {
-            pOpacityImage = dynamic_pointer_cast<HGIImage>(pMtl->asImage("opacity_image"));
+            pOpacityImage = dynamic_pointer_cast<HGIImage>(pMtl->textures().getTexture("opacity_image"));
         }
         if (pOpacityImage)
         {
@@ -171,9 +171,9 @@ void HGIScene::rebuildInstanceList()
 
         // Get normal image from material.
         HGIImagePtr pNormalImage = nullptr;
-        if (pMtl->hasValue("normal_image"))
+        if (pMtl->textures().findTexture("normal_image") != -1)
         {
-            pNormalImage = dynamic_pointer_cast<HGIImage>(pMtl->asImage("normal_image"));
+            pNormalImage = dynamic_pointer_cast<HGIImage>(pMtl->textures().getTexture("normal_image"));
         }
         if (pNormalImage)
         {
@@ -265,11 +265,12 @@ void HGIScene::rebuildResourceBindings()
     //  - Default sampler
     //  - Background image
     //  - Environment light image
-    resourceBindingsDesc.textures.resize(5);
+    resourceBindingsDesc.textures.resize(6);
 
     // Add resource for output image storage texture resource.
     resourceBindingsDesc.textures[0].bindingIndex = 1;
     resourceBindingsDesc.textures[0].textures     = { _pRenderer->directTex() };
+    resourceBindingsDesc.textures[0].samplers     = { _pRenderer->sampler() };
     resourceBindingsDesc.textures[0].resourceType = HgiBindResourceTypeStorageImage;
     resourceBindingsDesc.textures[0].stageUsage   = HgiShaderStageRayGen;
 
@@ -295,6 +296,7 @@ void HGIScene::rebuildResourceBindings()
 
     // Add resource for default sampler resource.
     resourceBindingsDesc.textures[2].bindingIndex = 6;
+    resourceBindingsDesc.textures[2].textures     = { _pDefaultImage->handle() };
     resourceBindingsDesc.textures[2].samplers     = { _pRenderer->sampler() };
     resourceBindingsDesc.textures[2].resourceType = HgiBindResourceTypeSampler;
     resourceBindingsDesc.textures[2].stageUsage =
@@ -304,6 +306,7 @@ void HGIScene::rebuildResourceBindings()
     resourceBindingsDesc.textures[3].bindingIndex = 7;
     resourceBindingsDesc.textures[3].textures     = { pBackgroundImage ? pBackgroundImage->texture()
                                                                        : _pDefaultImage->handle() };
+    resourceBindingsDesc.textures[3].samplers     = { _pRenderer->sampler() };
     resourceBindingsDesc.textures[3].resourceType = HgiBindResourceTypeSampledImage;
     resourceBindingsDesc.textures[3].stageUsage =
         HgiShaderStageRayGen | HgiShaderStageClosestHit | HgiShaderStageMiss;
@@ -312,10 +315,18 @@ void HGIScene::rebuildResourceBindings()
     resourceBindingsDesc.textures[4].bindingIndex = 8;
     resourceBindingsDesc.textures[4].textures     = { pLightImage ? pLightImage->texture()
                                                                   : _pDefaultImage->handle() };
+    resourceBindingsDesc.textures[4].samplers     = { _pRenderer->sampler() };
     resourceBindingsDesc.textures[4].resourceType = HgiBindResourceTypeSampledImage;
     resourceBindingsDesc.textures[4].stageUsage =
         HgiShaderStageRayGen | HgiShaderStageClosestHit | HgiShaderStageMiss;
     ;
+    // accumulation texture
+    resourceBindingsDesc.textures[5].bindingIndex = 9;
+    resourceBindingsDesc.textures[5].textures     = { _pRenderer->accumulationTex() };
+    resourceBindingsDesc.textures[5].samplers     = { _pRenderer->sampler() };
+    resourceBindingsDesc.textures[5].resourceType = HgiBindResourceTypeStorageImage;
+    resourceBindingsDesc.textures[5].stageUsage   = HgiShaderStageRayGen;
+
 
     // 3 buffer resources for:
     //  - frame data UBO
@@ -365,111 +376,72 @@ void HGIScene::createResources()
     defaultTexDesc.usage          = HgiTextureUsageBitsShaderRead;
     _pDefaultImage = HgiTextureHandleWrapper::create(hgi->CreateTexture(defaultTexDesc), hgi);
 
-    string transpiledGLSL;
     string transpilerErrors;
-
-    // Transpile the ray generation shader.
-    if (!_transpiler->transpile(
-            "RayGenShader.slang", transpiledGLSL, transpilerErrors, Transpiler::Language::GLSL))
+    // Common shader declarations required by all stages.
+    string shaderDeclarations;
+    if (hgi->GetAPIName() == HgiTokens->Metal)
     {
-        AU_ERROR("Slang transpiling error on RayGenShader.slang:\n%s", transpilerErrors.c_str());
+        shaderDeclarations = "#define MTL_TRANSLATE_GLSL\n";
+    }
+
+    // Transpile the main entry point shader.
+    string mainEntryPointSource = CommonShaders::g_sMainEntryPoints;
+    _transpiler->setSource("Options.slang", "");
+    _transpiler->setSource("Definitions.slang", "");
+
+    // Create the ray generation shader description including transpiled GLSL source.
+    string rayGenShaderCode;
+    // HgiRenderer can only have one main entry point for each shader source.
+    // Disable the rest of the shader stages and use the ray generation shader.
+    std::map<string, string> rayGenPreDefs = { { "DISABLE_HGI_SHADER_STAGE_MISS", "1" },
+                                               { "DISABLE_HGI_SHADER_STAGE_CLOSEST_HIT", "1" },
+                                               { "DISABLE_HGI_SHADER_STAGE_ANY_HIT", "1" } };
+    if (!_transpiler->transpileCode(
+            mainEntryPointSource, rayGenShaderCode, transpilerErrors, Transpiler::Language::GLSL, rayGenPreDefs))
+    {
+        AU_ERROR("Slang transpiling error on ray generation shader:\n%s", transpilerErrors.c_str());
         AU_DEBUG_BREAK();
         AU_FAIL("Slang transpiling failed, see log in console for details.");
     }
 
-    // Create the ray generation shader description including transpiled GLSL source.
-    string rayGenShaderCode = transpiledGLSL;
+    rayGenShaderCode += HGIShaders::g_sInstanceData;
+    string rayGenShaderDeclarations = shaderDeclarations;
     HgiShaderFunctionDesc raygenShaderDesc;
-    raygenShaderDesc.debugName   = "RayGenShader";
-    raygenShaderDesc.shaderStage = HgiShaderStageRayGen;
-    raygenShaderDesc.shaderCode  = rayGenShaderCode.c_str();
-
+    raygenShaderDesc.debugName              = "RayGenShader";
+    raygenShaderDesc.shaderStage            = HgiShaderStageRayGen;
+    raygenShaderDesc.shaderCode             = rayGenShaderCode.c_str();
+    raygenShaderDesc.shaderCodeDeclarations = rayGenShaderDeclarations.c_str();
     // Compile the shader itself. fail and print errors if the compilation doesn't succeed.
     _rayGenShaderFunc =
         HgiShaderFunctionHandleWrapper::create(hgi->CreateShaderFunction(raygenShaderDesc), hgi);
     if (!_rayGenShaderFunc->handle()->IsValid())
     {
         std::string logString = _rayGenShaderFunc->handle()->GetCompileErrors();
-        AU_ERROR("Error creating shader function for RayGenShader.slang:\n%s", logString.c_str());
+        AU_ERROR("Error creating shader function for RayGenShader:\n%s", logString.c_str());
         AU_DEBUG_BREAK();
         AU_FAIL("Shader function creation failed, see log in console for details.");
-    }
-
-    // Transpile the radiance miss shader.
-    if (!_transpiler->transpile("BackgroundMissShader.slang", transpiledGLSL, transpilerErrors,
-            Transpiler::Language::GLSL))
-    {
-        AU_ERROR(
-            "Slang transpiling error on BackgroundMissShader.slang:\n%s", transpilerErrors.c_str());
-        AU_DEBUG_BREAK();
-        AU_FAIL("Slang transpiling failed, see log in console for details.");
-    }
-
-    // Create the radiance miss shader description including transpiled GLSL source.
-    string backgroundMissShaderCode = transpiledGLSL;
-    HgiShaderFunctionDesc backgroundMissShaderDesc;
-    backgroundMissShaderDesc.debugName   = "BackgroundMissShader";
-    backgroundMissShaderDesc.shaderStage = HgiShaderStageMiss;
-    backgroundMissShaderDesc.shaderCode  = backgroundMissShaderCode.c_str();
-
-    // Compile the shader itself. fail and print errors if the compilation doesn't succeed.
-    _backgroundMissShaderFunc = HgiShaderFunctionHandleWrapper::create(
-        hgi->CreateShaderFunction(backgroundMissShaderDesc), hgi);
-    if (!_backgroundMissShaderFunc->handle()->IsValid())
-    {
-        std::string logString = _backgroundMissShaderFunc->handle()->GetCompileErrors();
-        AU_ERROR("Error creating shader function for BackgroundMissShader.slang:\n%s",
-            logString.c_str());
-        AU_DEBUG_BREAK();
-        AU_FAIL("Shader function creation failed, see log in console for details.");
-    }
-
-    // Transpile the radiance miss shader.
-    if (!_transpiler->transpile("RadianceMissShader.slang", transpiledGLSL, transpilerErrors,
-            Transpiler::Language::GLSL))
-    {
-        AU_ERROR(
-            "Slang transpiling error on RadianceMissShader.slang:\n%s", transpilerErrors.c_str());
-        AU_DEBUG_BREAK();
-        AU_FAIL("Slang transpiling failed, see log in console for details.");
-    }
-
-    // Create the radiance miss shader description including transpiled GLSL source.
-    string radianceMissShaderCode = transpiledGLSL;
-    HgiShaderFunctionDesc radianceMissShaderDesc;
-    radianceMissShaderDesc.debugName   = "RadianceMissShader";
-    radianceMissShaderDesc.shaderStage = HgiShaderStageMiss;
-    radianceMissShaderDesc.shaderCode  = radianceMissShaderCode.c_str();
-
-    // Compile the shader itself. fail and print errors if the compilation doesn't succeed.
-    _radianceMissShaderFunc = HgiShaderFunctionHandleWrapper::create(
-        hgi->CreateShaderFunction(radianceMissShaderDesc), hgi);
-    if (!_radianceMissShaderFunc->handle()->IsValid())
-    {
-        std::string logString = _radianceMissShaderFunc->handle()->GetCompileErrors();
-        AU_ERROR(
-            "Error creating shader function for RadianceMissShader.slang:\n%s", logString.c_str());
-        AU_DEBUG_BREAK();
-        AU_FAIL("Shader function creation failed, see log in console for details.");
-    }
-
-    // Transpile the shadow miss shader.
-    if (!_transpiler->transpile(
-            "ShadowMissShader.slang", transpiledGLSL, transpilerErrors, Transpiler::Language::GLSL))
-    {
-        AU_ERROR(
-            "Slang transpiling error on ShadowMissShader.slang:\n%s", transpilerErrors.c_str());
-        AU_DEBUG_BREAK();
-        AU_FAIL("Slang transpiling failed, see log in console for details.");
     }
 
     // Create the shadow miss shader description including GLSL source.
-    string shadowMissShaderCode = transpiledGLSL;
-    HgiShaderFunctionDesc shadowMissShaderDesc;
-    shadowMissShaderDesc.debugName   = "ShadowMissShader";
-    shadowMissShaderDesc.shaderStage = HgiShaderStageMiss;
-    shadowMissShaderDesc.shaderCode  = shadowMissShaderCode.c_str();
+    string shadowMissShaderCode;
+    // Disable the rest of the shader stages and use the shadow miss shader.
+    std::map<string, string> shadowMissPreDefs = { { "DISABLE_HGI_SHADER_STAGE_RAY_GEN", "1" },
+                                                   { "DISABLE_HGI_SHADER_STAGE_CLOSEST_HIT", "1" },
+                                                   { "DISABLE_HGI_SHADER_STAGE_ANY_HIT", "1" } };
+    if (!_transpiler->transpileCode(
+            mainEntryPointSource, shadowMissShaderCode, transpilerErrors, Transpiler::Language::GLSL, shadowMissPreDefs))
+    {
+        AU_ERROR("Slang transpiling error on shadow miss shader:\n%s", transpilerErrors.c_str());
+        AU_DEBUG_BREAK();
+        AU_FAIL("Slang transpiling failed, see log in console for details.");
+    }
 
+    string shadowMissShaderDeclarations = shaderDeclarations;
+    HgiShaderFunctionDesc shadowMissShaderDesc;
+    shadowMissShaderDesc.debugName              = "ShadowMissShader";
+    shadowMissShaderDesc.shaderStage            = HgiShaderStageMiss;
+    shadowMissShaderDesc.shaderCode             = shadowMissShaderCode.c_str();
+    shadowMissShaderDesc.shaderCodeDeclarations = shadowMissShaderDeclarations.c_str();
     // Compile the shader itself. fail and print errors if the compilation doesn't succeed.
     _shadowMissShaderFunc = HgiShaderFunctionHandleWrapper::create(
         hgi->CreateShaderFunction(shadowMissShaderDesc), hgi);
@@ -477,36 +449,32 @@ void HGIScene::createResources()
     {
         std::string logString = _shadowMissShaderFunc->handle()->GetCompileErrors();
         AU_ERROR(
-            "Error creating shader function for ShadowMissShader.slang:\n%s", logString.c_str());
+            "Error creating shader function for ShadowMissShader:\n%s", logString.c_str());
         AU_DEBUG_BREAK();
         AU_FAIL("Shader function creation failed, see log in console for details.");
     }
 
-    // Create the closest hit shader from template text.
-    string mainEntryPointSource = "#define RADIANCE_HIT 1\n" +
-        regex_replace(CommonShaders::g_sMainEntryPoints, regex("___Material___"), "Default");
-
-    _transpiler->setSource(
-        "InitializeMaterial.slang", CommonShaders::g_sInitializeDefaultMaterialType);
-    _transpiler->setSource("Options.slang", "");
-    _transpiler->setSource("Definitions.slang", "");
-
-    // Transpaile the closest hit shader.
+    // Create the closest hit shader description, appending the the raw instance data GLSL code.
+    string closestHitShaderCode;
+    // Disable the rest of the shader stages and use the closest hit shader.
+    std::map<string, string> closestHitPreDefs = { { "DISABLE_HGI_SHADER_STAGE_RAY_GEN", "1" },
+                                                  { "DISABLE_HGI_SHADER_STAGE_MISS", "1" },
+                                                  { "DISABLE_HGI_SHADER_STAGE_ANY_HIT", "1" } };
     if (!_transpiler->transpileCode(
-            mainEntryPointSource, transpiledGLSL, transpilerErrors, Transpiler::Language::GLSL))
+        mainEntryPointSource, closestHitShaderCode, transpilerErrors, Transpiler::Language::GLSL, closestHitPreDefs))
     {
-        AU_ERROR("Slang transpiling error on closest hit shdaer:\n%s", transpilerErrors.c_str());
+        AU_ERROR("Slang transpiling error on closest hit shader:\n%s", transpilerErrors.c_str());
         AU_DEBUG_BREAK();
         AU_FAIL("Slang transpiling failed, see log in console for details.");
     }
 
-    // Create the closest hit shader description, appending the the raw instance data GLSL code.
-    string closestHitShaderCode = transpiledGLSL + HGIShaders::g_sInstanceData;
+    closestHitShaderCode += HGIShaders::g_sInstanceData;
+    string closestHitShaderDeclarations = shaderDeclarations;
     HgiShaderFunctionDesc closestHitShaderDesc;
-    closestHitShaderDesc.debugName   = "ClosestHitShader";
-    closestHitShaderDesc.shaderStage = HgiShaderStageClosestHit;
-    closestHitShaderDesc.shaderCode  = closestHitShaderCode.c_str();
-
+    closestHitShaderDesc.debugName              = "ClosestHitShader";
+    closestHitShaderDesc.shaderStage            = HgiShaderStageClosestHit;
+    closestHitShaderDesc.shaderCode             = closestHitShaderCode.c_str();
+    closestHitShaderDesc.shaderCodeDeclarations = closestHitShaderDeclarations.c_str();
     // Compile the shader itself. fail and print errors if the compilation doesn't succeed.
     _closestHitShaderFunc = HgiShaderFunctionHandleWrapper::create(
         hgi->CreateShaderFunction(closestHitShaderDesc), hgi);
@@ -517,6 +485,40 @@ void HGIScene::createResources()
         AU_DEBUG_BREAK();
         AU_FAIL("Shader function creation failed, see log in console for details.");
     }
+
+    /* TODO: Add any hit shader.
+    // Create the any hit shader description, appending the the raw instance data GLSL code.
+    string anyHitShaderCode;
+    // Disable the rest of the shader stages and use the any hit shader.
+    std::map<string, string> anyHitPreDefs = { { "DISABLE_HGI_SHADER_STAGE_RAY_GEN", "1" },
+                                              { "DISABLE_HGI_SHADER_STAGE_MISS", "1" },
+                                              { "DISABLE_HGI_SHADER_STAGE_CLOSEST_HIT", "1" } };
+    if (!_transpiler->transpileCode(
+        mainEntryPointSource, anyHitShaderCode, transpilerErrors, Transpiler::Language::GLSL, anyHitPreDefs))
+    {
+        AU_ERROR("Slang transpiling error on any hit shader:\n%s", transpilerErrors.c_str());
+        AU_DEBUG_BREAK();
+        AU_FAIL("Slang transpiling failed, see log in console for details.");
+    }
+
+    anyHitShaderCode += HGIShaders::g_sInstanceData;
+    string anyHitShaderDeclarations = shaderDeclarations;
+    HgiShaderFunctionDesc anyHitShaderDesc;
+    anyHitShaderDesc.debugName   = "AnyHitShader";
+    anyHitShaderDesc.shaderStage = HgiShaderStageAnyHit;
+    anyHitShaderDesc.shaderCode  = anyHitShaderCode.c_str();
+    anyHitShaderDesc.shaderCodeDeclarations = anyHitShaderDeclarations.c_str();
+    // Compile the shader itself. fail and print errors if the compilation doesn't succeed.
+    _anyHitShaderFunc = HgiShaderFunctionHandleWrapper::create(
+        hgi->CreateShaderFunction(anyHitShaderDesc), hgi);
+    if (!_anyHitShaderFunc->handle()->IsValid())
+    {
+        std::string logString = _anyHitShaderFunc->handle()->GetCompileErrors();
+        AU_ERROR("Error creating shader function for any hit shader:\n%s", logString.c_str());
+        AU_DEBUG_BREAK();
+        AU_FAIL("Shader function creation failed, see log in console for details.");
+    }
+    */
 }
 
 void HGIScene::rebuildPipeline()
@@ -541,13 +543,13 @@ void HGIScene::rebuildPipeline()
     //   - background image
     //   - light image
     HgiRayTracingPipelineDescriptorSetLayoutDesc layoutBinding;
-    layoutBinding.resourceBinding.resize(9);
+    layoutBinding.resourceBinding.resize(10);
     // Description of acceleration structure.
     layoutBinding.resourceBinding[0].bindingIndex = 0;
     layoutBinding.resourceBinding[0].count        = 1;
     layoutBinding.resourceBinding[0].resourceType = HgiBindResourceTypeAccelerationStructure;
     layoutBinding.resourceBinding[0].stageUsage   = HgiShaderStageRayGen | HgiShaderStageClosestHit;
-    // Description of output durect light image.
+    // Description of output direct light image.
     layoutBinding.resourceBinding[1].bindingIndex = 1;
     layoutBinding.resourceBinding[1].count        = 1;
     layoutBinding.resourceBinding[1].resourceType = HgiBindResourceTypeStorageImage;
@@ -592,51 +594,61 @@ void HGIScene::rebuildPipeline()
     layoutBinding.resourceBinding[8].resourceType = HgiBindResourceTypeSampledImage;
     layoutBinding.resourceBinding[8].stageUsage =
         HgiShaderStageRayGen | HgiShaderStageClosestHit | HgiShaderStageMiss;
+    // Description of accumulation texture.
+    layoutBinding.resourceBinding[9].bindingIndex = 9;
+    layoutBinding.resourceBinding[9].count        = 1;
+    layoutBinding.resourceBinding[9].resourceType = HgiBindResourceTypeStorageImage;
+    layoutBinding.resourceBinding[9].stageUsage   = HgiShaderStageRayGen;
 
     // Create pipeline description.
     HgiRayTracingPipelineDesc pipelineDesc;
     pipelineDesc.debugName            = "Main Raytracing Pipeline";
     pipelineDesc.maxRayRecursionDepth = 10;
     pipelineDesc.descriptorSetLayouts.push_back(layoutBinding);
-    // 5 shaders (ray gen, background miss, radiance miss, shadow miss, and closest hit)
-    pipelineDesc.shaders.resize(5);
+    // 4 shaders (ray gen, shadow miss, closest hit and any hit)
+    pipelineDesc.shaders.resize(3);
+    //pipelineDesc.shaders.resize(4);
     pipelineDesc.shaders[0].shader     = _rayGenShaderFunc->handle();
     pipelineDesc.shaders[0].entryPoint = "main";
-    pipelineDesc.shaders[1].shader     = _backgroundMissShaderFunc->handle();
+    pipelineDesc.shaders[1].shader     = _shadowMissShaderFunc->handle();
     pipelineDesc.shaders[1].entryPoint = "main";
-    pipelineDesc.shaders[2].shader     = _radianceMissShaderFunc->handle();
+    pipelineDesc.shaders[2].shader     = _closestHitShaderFunc->handle();
     pipelineDesc.shaders[2].entryPoint = "main";
-    pipelineDesc.shaders[3].shader     = _shadowMissShaderFunc->handle();
-    pipelineDesc.shaders[3].entryPoint = "main";
-    pipelineDesc.shaders[4].shader     = _closestHitShaderFunc->handle();
-    pipelineDesc.shaders[4].entryPoint = "main";
+    //pipelineDesc.shaders[3].shader     = _anyHitShaderFunc->handle();
+    //pipelineDesc.shaders[3].entryPoint = "main";
 
     // Three general shader groups (for miss and ray gen) and one triangle shader group for each
     // instance.
-    pipelineDesc.groups.resize(4 + _lstInstances.size());
+    pipelineDesc.groups.resize(2 + _lstInstances.size());
+    //pipelineDesc.groups.resize(2 + (_lstInstances.size() * 2));
     // Ray gen shader group.
     pipelineDesc.groups[0].type          = HgiRayTracingShaderGroupTypeGeneral;
     pipelineDesc.groups[0].generalShader = 0; // Index within shader array above.
-    // Background miss shader group.
+    // Shadow miss shader group.
     pipelineDesc.groups[1].type          = HgiRayTracingShaderGroupTypeGeneral;
     pipelineDesc.groups[1].generalShader = 1; // Index within shader array above.
-    // Radiance miss shader group.
-    pipelineDesc.groups[2].type          = HgiRayTracingShaderGroupTypeGeneral;
-    pipelineDesc.groups[2].generalShader = 2; // Index within shader array above.
-    // Shadow miss shader group.
-    pipelineDesc.groups[3].type          = HgiRayTracingShaderGroupTypeGeneral;
-    pipelineDesc.groups[3].generalShader = 3; // Index within shader array above.
     // Triangle shader groups for each instance.
     for (size_t i = 0; i < _lstInstances.size(); i++)
     {
         size_t shaderRecordStride = sizeof(_lstInstances[i].shaderRecord);
         // Triangle miss shader group with closest hit shader.
-        pipelineDesc.groups[4 + i].type             = HgiRayTracingShaderGroupTypeTriangles;
-        pipelineDesc.groups[4 + i].closestHitShader = 4; // Index within shader array above.
+        pipelineDesc.groups[2 + i].type             = HgiRayTracingShaderGroupTypeTriangles;
+        pipelineDesc.groups[2 + i].closestHitShader = 2; // Index within shader array above.
         // Add the hit group record structure to the shader record (this will copied after the
         // shader handle in the shader binding table.)
-        pipelineDesc.groups[4 + i].pShaderRecord      = &_lstInstances[i].shaderRecord;
-        pipelineDesc.groups[4 + i].shaderRecordLength = shaderRecordStride;
+        pipelineDesc.groups[2 + i].pShaderRecord      = &_lstInstances[i].shaderRecord;
+        pipelineDesc.groups[2 + i].shaderRecordLength = shaderRecordStride;
+
+        /*
+        // Triangle miss shader group with any hit shader.
+        i++;
+        pipelineDesc.groups[2 + i].type         = HgiRayTracingShaderGroupTypeTriangles;
+        pipelineDesc.groups[2 + i].anyHitShader = 3; // Index within shader array above.
+        // Add the hit group record structure to the shader record (this will copied after the
+        // shader handle in the shader binding table.)
+        pipelineDesc.groups[2 + i].pShaderRecord      = &_lstInstances[i].shaderRecord;
+        pipelineDesc.groups[2 + i].shaderRecordLength = shaderRecordStride;
+        */
     }
 
     // Create the pipeline.

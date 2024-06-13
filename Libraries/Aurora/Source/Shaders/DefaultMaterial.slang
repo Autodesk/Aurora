@@ -64,11 +64,11 @@ float4 sampleOpacityTexture(int mtlOffset, float2 uv, float level)
 #else
 // Vulkan GLSL versions are forward declared and implemented in raw GLSL suffix file.
 MaterialConstants getMaterial();
-float4 sampleBaseColorTexture(float2 uv, float level);
-float4 sampleSpecularRoughnessTexture(float2 uv, float level);
-float4 sampleEmissionColorTexture(float2 uv, float level);
-float4 sampleOpacityTexture(float2 uv, float level);
-float4 sampleNormalTexture(float2 uv, float level);
+float4 sampleBaseColorTexture(int /*mtlOffset*/, float2 uv, float level);
+float4 sampleSpecularRoughnessTexture(int /*mtlOffset*/, float2 uv, float level);
+float4 sampleEmissionColorTexture(int /*mtlOffset*/, float2 uv, float level);
+float4 sampleOpacityTexture(int /*mtlOffset*/, float2 uv, float level);
+float4 sampleNormalTexture(int /*mtlOffset*/, float2 uv, float level);
 #endif
 
 // Normal map spaces definitions.
@@ -124,6 +124,9 @@ float3 calculateNormalFromMap(float3 texelValue, int space, float scale, float3 
 export Material evaluateDefaultMaterial(
     ShadingData shading, int headerOffset, out float3 materialNormal, out bool isGeneratedNormal)
 {
+#if !DIRECTX
+    MaterialConstants gGlobalMaterialConstants = getMaterial();
+#endif
     int offset = headerOffset + kMaterialHeaderSize;
 
     // Copy the constant values to the material from the constant buffer.

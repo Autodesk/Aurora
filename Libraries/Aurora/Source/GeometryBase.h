@@ -35,7 +35,9 @@ public:
     bool isIncomplete() { return _incomplete; }
 
     const vector<float>& positions() { return _positions; }
-    const vector<float>& normals() { return _normals; }
+    const vector<float>& normals() {
+        return _normals;
+    }
     const vector<float>& tangents() { return _tangents; }
     const vector<float>& texCoords() { return _texCoords; }
 
@@ -44,6 +46,18 @@ protected:
 
     /*** Private Variables ***/
 
+    enum TriangleFlags {
+        TRIANGLE_FLAGS_EMISSION = 0x1,
+    };
+
+    struct Triangle {
+        float normals[3][4];
+        float diffuse[4];
+        float smoothness;
+        float emissiveStrength;
+        uint32_t flags;     // is emmisive or not
+    };
+    
     std::string _name;
     bool _bIsDirty        = true;
     uint32_t _vertexCount = 0;
@@ -53,6 +67,7 @@ protected:
     vector<float> _texCoords;
     uint32_t _indexCount = 0;
     vector<uint32_t> _indices;
+    vector<Triangle> _primitiveData;
     bool _incomplete = false;
 
     /*** DirectX 12 Objects ***/

@@ -86,6 +86,10 @@ void RendererBase::setCamera(
     _lensRadius    = lensRadius;
 }
 
+void RendererBase::setFrameIndex(int frameIndex) {
+    _frameIndex = frameIndex;
+}
+
 // Note that this handles strings differently than the implementation in SceneBase.
 void RendererBase::propertiesToValues(const Properties& properties, IValues& values)
 {
@@ -151,6 +155,7 @@ bool RendererBase::updateFrameDataGPUStruct(FrameData* pStaging)
     frameData.isOrthoProjection = _cameraProj[3][3] == 1.0f;
     frameData.focalDistance     = _focalDistance;
     frameData.lensRadius        = _lensRadius;
+    frameData.frameIndex        = _frameIndex++;
 
     // Get the scene size, specifically the maximum distance between any two points in the scene.
     // This is computed as the distance between the min / max corners of the bounding box.
@@ -227,7 +232,7 @@ bool RendererBase::updateAccumulationGPUStruct(uint32_t sampleIndex, Accumulatio
     settings.isDenoisingEnabled = _values.asBoolean(kLabelIsDenoisingEnabled) ? 1 : 0;
 
     // If there are no changes compared local CPU copy, then do nothing and return false.
-    if (memcmp(&_accumData, &settings, sizeof(PostProcessing)) == 0)
+    if (memcmp(&_accumData, &settings, sizeof(Accumulation)) == 0)
         return false; // No changes.
 
     // Update local CPU copy.

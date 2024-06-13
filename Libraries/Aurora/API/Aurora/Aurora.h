@@ -1162,6 +1162,8 @@ public:
     // TODO: Remove. This has been replaced by GM types.
     virtual void setCamera(const float* view, const float* proj, float focalDistance = 1.0f,
         float lensRadius = 0.0f) = 0;
+    
+    virtual void setFrameIndex(int frameIndex) = 0;
 
     // Render the current scene.
     virtual void render(uint32_t sampleStart = 0, uint32_t sampleCount = 1) = 0;

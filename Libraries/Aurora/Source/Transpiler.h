@@ -37,11 +37,12 @@ public:
     ~Transpiler();
 
     // Transpile a file with given name (looked up from map of file text strings)
-    bool transpile(const string& shaderName, string& codeOut, string& errorOut, Language target);
+    bool transpile(const string& shaderName, string& codeOut, string& errorOut, Language target,
+        const map<string, string>& preprocessorDefines = {});
 
     // Transpile a string containing shader code.
-    bool transpileCode(
-        const string& shaderCode, string& codeOut, string& errorOut, Language target);
+    bool transpileCode(const string& shaderCode, string& codeOut, string& errorOut, Language target,
+        const map<string, string>& preprocessorDefines = {});
 
     // Set a source file in the file text string map.
     void setSource(const string& name, const string& code);

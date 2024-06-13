@@ -26,6 +26,8 @@ interface IGeometry
     bool hasTexCoords();
     bool hasNormals();
     bool hasTangents();
+    bool isOpaque();
+    int getBufferOffset();
 };
 
 

@@ -1,4 +1,5 @@
 # Ignore build directories.
+build/
 Build/
 Build.*/
 _build/
@@ -8,6 +9,8 @@ _externals/
 # Ignore script generated files
 Scripts/cmake/externalsConfig.cmake
 __pycache__
+.DS_Store
+.venv
 
 # Ignore IDE cache folders
 .vs/

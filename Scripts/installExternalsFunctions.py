@@ -88,6 +88,13 @@ def Windows():
     return platform.system() == "Windows"
 def Linux():
     return platform.system() == "Linux"
+def MacOS():
+    return platform.system() == "Darwin"
+def Arm():
+    return platform.processor() == "arm"
+
+if MacOS():
+    import apple_utils
 
 def GetLocale():
     return sys.stdout.encoding or locale.getdefaultlocale()[1] or "UTF-8"
@@ -173,6 +180,11 @@ def GetPythonInfo(context):
                 version=sysconfig.get_config_var("py_version_nodot"))
         elif Linux():
             return sysconfig.get_config_var("LDLIBRARY")
+        elif MacOS():
+            return "libpython{version}.dylib".format(
+                version=(sysconfig.get_config_var('LDVERSION') or
+                         sysconfig.get_config_var('VERSION') or
+                         pythonVersion))
         else:
             raise RuntimeError("Platform not supported")
 
@@ -207,6 +219,9 @@ def GetPythonInfo(context):
                                          _GetPythonLibraryFilename(context))
             if os.path.isfile(pythonLibPath):
                 break
+    elif MacOS():
+        pythonLibPath = os.path.join(pythonBaseDir, "lib",
+                                     _GetPythonLibraryFilename(context))
     else:
         raise RuntimeError("Platform not supported")
 
@@ -252,6 +267,7 @@ def Run(cmd, logCommandOutput = True):
 
         # Let exceptions escape from subprocess calls -- higher level
         # code will handle them.
+        # TODO: Add space between arguments.
         if logCommandOutput:
             p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT)
@@ -329,7 +345,7 @@ def CopyDirectory(context, srcDir, destDir, destPrefix = ''):
     shutil.copytree(srcDir, instDestDir)
 
 def FormatMultiProcs(numJobs, generator):
-    tag = "-j"
+    tag = "-j " # Xcode could not recognize -j{procs} but require -j {procs}.
     if generator:
         if "Visual Studio" in generator:
             tag = "/M:" # This will build multiple projects at once.
@@ -379,6 +395,25 @@ def RunCMake(context, clean, instFolder= None, extraArgs = None,  configExtraArg
 
         context.cmakePrefixPaths.add(instDir)
 
+        # On MacOS, enable the use of @rpath for relocatable builds.
+        osx_rpath = None
+        if MacOS():
+            osx_rpath = "-DCMAKE_MACOSX_RPATH=ON"
+
+            # For macOS cross compilation, set the Xcode architecture flags.
+            targetArch = apple_utils.GetTargetArch(context)
+
+            if context.targetNative or targetArch == apple_utils.GetHostArch():
+                extraArgs.append('-DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=YES')
+            else:
+                extraArgs.append('-DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO')
+
+            extraArgs.append('-DCMAKE_OSX_ARCHITECTURES={0}'.format(targetArch))
+
+            # Ignore Homebrew packages when searching with the find...() commands.
+            extraArgs.append('-DCMAKE_IGNORE_PATH="/opt/homebrew"')
+            extraArgs.append('-DCMAKE_IGNORE_PREFIX_PATH="/opt/homebrew"')
+
         with CurrentWorkingDirectory(buildDir):
             # We use -DCMAKE_BUILD_TYPE for single-configuration generators
             # (Ninja, make), and --config for multi-configuration generators
@@ -389,6 +424,7 @@ def RunCMake(context, clean, instFolder= None, extraArgs = None,  configExtraArg
                 '-DCMAKE_PREFIX_PATH="{prefixPaths}" '
                 '-DCMAKE_BUILD_TYPE={config} '
                 '-DCMAKE_DEBUG_POSTFIX="d" '
+                '{osx_rpath} '
                 '{generator} '
                 '{toolset} '
                 '{extraArgs} '
@@ -398,6 +434,7 @@ def RunCMake(context, clean, instFolder= None, extraArgs = None,  configExtraArg
                         prefixPaths=';'.join(context.cmakePrefixPaths),
                         config=config,
                         srcDir=srcDir,
+                        osx_rpath=(osx_rpath or ""),
                         generator=(generator or ""),
                         toolset=(toolset or ""),
                         extraArgs=(" ".join(extraArgs) if extraArgs else ""),
@@ -528,6 +565,7 @@ def DownloadURL(url, context, force, extractDir = None, dontExtract = None, dest
         try:
             if tarfile.is_tarfile(filename):
                 archive = tarfile.open(filename)
+                PrintInfo("Archive {0} is tarfile.".format(filename))
                 if extractDir:
                     rootDir = extractDir
                 else:
@@ -537,6 +575,7 @@ def DownloadURL(url, context, force, extractDir = None, dontExtract = None, dest
                                if not any((fnmatch.fnmatch(m.name, p)
                                            for p in dontExtract)))
             elif zipfile.is_zipfile(filename):
+                PrintInfo("Archive {0} is zipfile.".format(filename))
                 archive = zipfile.ZipFile(filename)
                 if extractDir:
                     rootDir = extractDir
@@ -603,6 +642,14 @@ def GitClone(url, tag, cloneDir, context):
             elif not IsGitFolder(cloneDir):
                 raise RuntimeError("Failed to clone repo {url} ({tag}): non-git folder {folder} exists".format(
                                     url=url, tag=tag, folder=cloneDir))
+            elif os.path.isdir(cloneDir):
+                PrintInfo("{0} already exists, updating..."
+                          .format(os.path.abspath(cloneDir)))
+                with CurrentWorkingDirectory(cloneDir):
+                    Run("git fetch")
+                    Run("git checkout {head}".format(head=tag))
+                    Run('git submodule update --init --recursive --jobs {procs}'
+                        .format(procs=min(64, context.numJobs)))
             return os.path.abspath(cloneDir)
     except Exception as e:
         raise RuntimeError("Failed to clone repo {url} ({tag}): {err}".format(
@@ -618,11 +665,19 @@ def GitCloneSHA(url, sha, cloneDir, context):
                     Run("git checkout {sha}".format(sha=sha))
             elif not IsGitFolder(cloneDir):
                 raise RuntimeError("Failed to clone repo {url} ({tag}): non-git folder {folder} exists".format(
-                                    url=url, tag=tag, folder=cloneDir))
+                                    url=url, tag=sha, folder=cloneDir))
+            elif os.path.isdir(cloneDir):
+                PrintInfo("{0} already exists, updating..."
+                          .format(os.path.abspath(cloneDir)))
+                with CurrentWorkingDirectory(cloneDir):
+                    Run("git fetch")
+                    Run("git checkout {head}".format(head=sha))
+                    Run('git submodule update --init --recursive --jobs {procs}'
+                        .format(procs=min(64, context.numJobs)))
             return os.path.abspath(cloneDir)
     except Exception as e:
         raise RuntimeError("Failed to clone repo {url} ({tag}): {err}".format(
-                            url=url, tag=tag, err=e))
+                            url=url, tag=sha, err=e))
 
 def WriteExternalsConfig(context, externals):
     win32Header = """

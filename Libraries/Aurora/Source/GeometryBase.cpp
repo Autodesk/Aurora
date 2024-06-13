@@ -122,6 +122,84 @@ GeometryBase::GeometryBase(const std::string& name, const GeometryDescriptor& de
             _texCoords[i * 2u + 1u] = coord;
         }
     }
+
+    // TODO: Following code is temporary and will be removed once Metal support is done.
+    float diffuse[4]{1.0f, 1.0f, 1.0f, 1.0f};
+    float smoothness = 0.f;
+    float emissiveStrength = 0.f;
+    uint32_t flags = 0;
+
+    if(_name.find("CornellBox_tallBox") != std::string::npos) {
+        smoothness = 0.95f;
+    }
+    else if(_name.find("CornellBox_light") != std::string::npos) {
+        flags = TRIANGLE_FLAGS_EMISSION;
+        emissiveStrength = 2.f;
+    }
+    else if(_name.find("CornellBox_leftWall") != std::string::npos) {
+        diffuse[0] = 1.f;
+        diffuse[1] = 0.f;
+        diffuse[2] = 0.f;
+        diffuse[3] = 1.f;
+    }
+    else if(_name.find("CornellBox_rightWall") != std::string::npos) {
+        diffuse[0] = 0.f;
+        diffuse[1] = 1.f;
+        diffuse[2] = 0.f;
+        diffuse[3] = 1.f;
+    }
+    else if(_name.find("CornellBox_floor") != std::string::npos) {
+        smoothness = 0.7f;
+    }
+    else if(_name.find("Torus") != std::string::npos) {
+        smoothness = 1.f;
+    }
+    else if(_name.find("Sphere") != std::string::npos) {
+        smoothness = 0.8f;
+//        diffuse[0] = 156.f / 255.f;
+//        diffuse[1] = 176.f / 255.f;
+//        diffuse[2] = 215.f / 255.f;
+        diffuse[0] = 1.f;
+        diffuse[1] = 1.f;
+        diffuse[2] = 1.f;
+        diffuse[3] = 1.f;
+    }
+    
+
+    for(uint32_t i = 0; i < _indexCount / 3; ++i) {
+        uint32_t v0 = _indices[i * 3 + 0];
+        uint32_t v1 = _indices[i * 3 + 1];
+        uint32_t v2 = _indices[i * 3 + 2];
+        Triangle triangle;
+
+        if(!_normals.empty())
+        {
+            triangle.normals[0][0] = _normals[v0 * 3 + 0];
+            triangle.normals[0][1] = _normals[v0 * 3 + 1];
+            triangle.normals[0][2] = _normals[v0 * 3 + 2];
+            triangle.normals[0][3] = 0.0f;
+
+            triangle.normals[1][0] = _normals[v1 * 3 + 0];
+            triangle.normals[1][1] = _normals[v1 * 3 + 1];
+            triangle.normals[1][2] = _normals[v1 * 3 + 2];
+            triangle.normals[1][3] = 0.0f;
+
+            triangle.normals[2][0] = _normals[v2 * 3 + 0];
+            triangle.normals[2][1] = _normals[v2 * 3 + 1];
+            triangle.normals[2][2] = _normals[v2 * 3 + 2];
+            triangle.normals[2][3] = 0.0f;
+        }
+
+        triangle.diffuse[0] = diffuse[0];
+        triangle.diffuse[1] = diffuse[1];
+        triangle.diffuse[2] = diffuse[2];
+        triangle.diffuse[3] = diffuse[3];
+        triangle.smoothness = smoothness;
+        triangle.emissiveStrength = emissiveStrength;
+        triangle.flags = flags;
+
+        _primitiveData.push_back(triangle);
+    }
 }
 
 END_AURORA

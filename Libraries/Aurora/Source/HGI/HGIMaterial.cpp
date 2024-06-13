@@ -40,7 +40,7 @@ void HGIMaterial::update()
 {
     // Build a structure from values map into staging buffer.
     void* pStaging = _ubo->handle()->GetCPUStagingAddress();
-    ::memcpy_s(pStaging, uniformBuffer().size(), uniformBuffer().data(), uniformBuffer().size());
+    memcpy(pStaging, uniformBuffer().data(), uniformBuffer().size());
 
     // Transfer staging buffer to GPU.
     pxr::HgiBlitCmdsUniquePtr blitCmds = _pRenderer->hgi()->CreateBlitCmds();

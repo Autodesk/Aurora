@@ -42,6 +42,8 @@ layout(shaderRecordEXT, std430) buffer InstanceShaderRecord
     uint hasNormals;
     uint hasTangents;
     uint hasTexCoords;
+    uint isOpaque;
+    int instanceBufferOffset;
 } instance;
 
 
@@ -89,33 +91,43 @@ bool instanceHasTexCoords_0() {
     return instance.hasTexCoords!=0;
 }
 
+// Implementation for forward declared geometry accessor function in PathTracingCommon.slang.
+bool instanceIsOpaque_0() {
+    return instance.isOpaque!=0;
+}
+
+// Implementation for forward declared geometry accessor function in PathTracingCommon.slang.
+int getInstanceBufferOffset_0() {
+    return instance.instanceBufferOffset;
+}
+
 // Implementation for forward declared material accessor function in Material.hlsli.
 MaterialConstants_0 getMaterial_0() {
     return instance.material.m[0];
 }
 
 // Implementation for forward declared texture sample function in Material.hlsli.
-vec4 sampleBaseColorTexture_0(vec2 uv, float level) {
+vec4 sampleBaseColorTexture_0(int /*mtlOffset*/, vec2 uv, float level) {
     return texture(textureSamplers[nonuniformEXT(instance.baseColorTextureIndex)], uv);
 }
 
 // Implementation for forward declared texture sample function in Material.hlsli.
-vec4 sampleSpecularRoughnessTexture_0(vec2 uv, float level) {
+vec4 sampleSpecularRoughnessTexture_0(int /*mtlOffset*/, vec2 uv, float level) {
     return texture(textureSamplers[nonuniformEXT(instance.specularRoughnessTextureIndex)], uv);
 }
 
 // Implementation for forward declared texture sample function in Material.hlsli.
-vec4 sampleEmissionColorTexture_0(vec2 uv, float level) {
+vec4 sampleEmissionColorTexture_0(int /*mtlOffset*/, vec2 uv, float level) {
     // TODO: Implement emission color in HGI backend.
     return vec4(0,0,0,0);
 }
 
 // Implementation for forward declared texture sample function in Material.hlsli.
-vec4 sampleNormalTexture_0(vec2 uv, float level) {
+vec4 sampleNormalTexture_0(int /*mtlOffset*/, vec2 uv, float level) {
     return texture(textureSamplers[nonuniformEXT(instance.normalTextureIndex)], uv);
 }
 
 // Implementation for forward declared texture sample function in Material.hlsli.
-vec4 sampleOpacityTexture_0(vec2 uv, float level) {
+vec4 sampleOpacityTexture_0(int /*mtlOffset*/, vec2 uv, float level) {
     return texture(textureSamplers[nonuniformEXT(instance.opacityTextureIndex)], uv);
 }

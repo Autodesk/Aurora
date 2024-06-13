@@ -74,6 +74,7 @@ public:
         float lensRadius = 0.0f) override;
     void setCamera(
         const float* view, const float* proj, float focalDistance, float lensRadius) override;
+    void setFrameIndex(int frameIndex) override;
 
     /*** Functions ***/
 
@@ -115,49 +116,52 @@ protected:
 
         // Whether the camera is using an orthographic projection. Otherwise a perspective
         // projection is assumed.
-        int isOrthoProjection;
+        int isOrthoProjection = 0;
 
         // The distance from the camera for sharpest focus, for depth of field.
-        float focalDistance;
+        float focalDistance = 0.f;
 
         // The diameter of the lens for depth of field. If this is zero, there is no depth of field,
         // i.e. pinhole camera.
-        float lensRadius;
+        float lensRadius = 0.f;
 
         // The size of the scene, specifically the maximum distance between any two points in the
         // scene.
-        float sceneSize;
+        float sceneSize = 0.f;
 
         // Whether shadow evaluation should treat all objects as opaque, as a performance
         // optimization.
-        int isForceOpaqueShadowsEnabled;
+        int isForceOpaqueShadowsEnabled = 0;
 
         // Whether to write the NDC depth result to an output texture.
-        int isDepthNDCEnabled;
+        int isDepthNDCEnabled = 0;
 
         // Whether to render the diffuse material component only.
-        int isDiffuseOnlyEnabled;
+        int isDiffuseOnlyEnabled = 0;
 
         // Whether to display shading errors as bright colored samples.
-        int isDisplayErrorsEnabled;
+        int isDisplayErrorsEnabled = 0;
 
         // Whether denoising is enabled, which affects how path tracing is performed.
-        int isDenoisingEnabled;
+        int isDenoisingEnabled = 0;
 
         // Whether to write the AOV data required for denoising.
-        int isDenoisingAOVsEnabled;
+        int isDenoisingAOVsEnabled = 0;
 
         // The maximum recursion level (or path length) when tracing rays.
-        int traceDepth;
+        int traceDepth = 0;
 
         // The maximum luminance for path tracing samples, for simple firefly clamping.
-        float maxLuminance;
+        float maxLuminance = 0.f;
 
         // Pad to 16 byte boundary.
         vec2 _padding1;
 
         // Current light data for scene (duplicated each frame in flight.)
         SceneBase::LightData lights;
+        
+        // frameIndex
+        int frameIndex;
     };
 
     // Accumulation settings GPU data.
@@ -215,6 +219,7 @@ protected:
     mat4 _cameraProj;
     float _focalDistance = 1.0f;
     float _lensRadius    = 0.0f;
+    int _frameIndex      = 0;
 
     // Asset manager for loading external assets.
     unique_ptr<AssetManager> _pAssetMgr;

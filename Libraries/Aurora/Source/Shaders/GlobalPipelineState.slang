@@ -90,23 +90,12 @@ StructuredBuffer<AliasEntry> gEnvironmentAliasMap : register(t1);
 ConstantBuffer<GroundPlane> gGroundPlane : register(b3);
 RaytracingAccelerationStructure gNullScene : register(t4);
 
-// Material properties for all scene materials are stored in this ByteAddressBuffer, and accessed with Material_XXX()
-// functions, specific to the material type, using the offset included in the instance data for each ray hit.
-ByteAddressBuffer gGlobalMaterialConstants : register(t5);
-
-// Instance properties for all scene instances are stored in this ByteAddressBuffer.  This is the instance transform matrix and layer properties, if any.
-ByteAddressBuffer gGlobalInstanceBuffer : register(t6);
-
-// Instance properties for all scene instances are stored in this ByteAddressBuffer.  This is the instance transform matrix and layer properties, if any.
-ByteAddressBuffer gLayerGeometryBuffer : register(t7);
-
-// Transform matrices for all the instances.
-ByteAddressBuffer gTransformMatrixBuffer : register(t8);
-
-// Material textures for all the scene materials.  Looked up using indices stored in material header.
-Texture2D<float4> gGlobalMaterialTextures[] : register(t9);
-
+#if DIRECTX
 // Material textures for all the scene materials.  Looked up using indices stored in material header.
 SamplerState gSamplerArray[] : register(s0);
+#else
+// The global sampler state, used by default for texture sampling.
+[[vk::binding(6)]] SamplerState gDefaultSampler : register(s0);
+#endif
 
 #endif // PATHTRACINGCOMMON_H

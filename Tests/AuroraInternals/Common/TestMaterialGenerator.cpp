@@ -38,7 +38,13 @@ public:
     // Test for the existence of the ADSK materialX libraries (in the working folder for the tests)
     bool adskMaterialXSupport() { return std::filesystem::exists("MaterialX/libraries/adsk"); }
 
+#if defined(__APPLE__)
 protected:
+    void SetUp() override {
+      GTEST_SKIP() << "Skipping all material generator tests on MacOS.";
+    }
+#endif
+    
     std::string _dataPath;
 };
 

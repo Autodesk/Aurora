@@ -108,7 +108,9 @@ Aurora::Path HdAuroraImageCache::acquireImage(
         // Pad to RGBA if required.
         if (paddingRequired)
         {
-            for (size_t idx = 0; idx < image->GetWidth() * image->GetWidth(); idx++)
+            const size_t totalSize = static_cast<size_t>(image->GetWidth()) *
+                static_cast<size_t>(image->GetWidth());
+            for (size_t idx = 0; idx < totalSize; idx++)
             {
                 pPixelData[idx * 4 + 0] = pUnpaddedPixels[idx * 3 + 0];
                 pPixelData[idx * 4 + 1] = pUnpaddedPixels[idx * 3 + 1];

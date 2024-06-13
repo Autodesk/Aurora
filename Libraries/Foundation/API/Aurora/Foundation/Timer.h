@@ -178,8 +178,8 @@ public:
             if (isDone)
             {
                 _timer.reset();
-                samples = samples = computeSampleCount(_activeFrameTime);
-                sampleStart       = 0;
+                samples = computeSampleCount(_activeFrameTime);
+                sampleStart = 0;
                 _sampleStart += samples;
 
                 return samples;

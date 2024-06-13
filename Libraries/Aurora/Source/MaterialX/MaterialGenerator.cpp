@@ -162,14 +162,14 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
 
     // Create set of the generated BSDF inputs.
     set<string> bsdfInputs;
-    for (int i = 0; i < res.bsdfInputs.size(); i++)
+    for (size_t i = 0; i < res.bsdfInputs.size(); i++)
     {
         bsdfInputs.insert(res.bsdfInputs[i].name);
     }
 
     // Create set of the textures used by the generated setup function.
-    map<string, int> textures;
-    for (int i = 0; i < res.textures.size(); i++)
+    map<string, size_t> textures;
+    for (size_t i = 0; i < res.textures.size(); i++)
     {
         textures[res.textures[i].image] = i;
     }
@@ -212,7 +212,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
 
     // Create sampler structs for each of the textures in the materialX material.
     vector<string> samplerNames;
-    for (int i = 0; i < res.textureDefaults.size(); i++)
+    for (size_t i = 0; i < res.textureDefaults.size(); i++)
     {
         string samplerName = "sampler" + to_string(i);
         // Create sampler from Nth texture and sampler.
@@ -229,7 +229,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     generatedMtlxSetupFunction += "\t" + res.materialStructName + " setupMaterialStruct;\n";
 
     // Fill struct using the byte address buffer accessors.
-    for (int i = 0; i < res.materialProperties.size(); i++)
+    for (size_t i = 0; i < res.materialProperties.size(); i++)
     {
         generatedMtlxSetupFunction += "\tsetupMaterialStruct." +
             res.materialProperties[i].variableName + " = " + res.materialStructName + "_" +
@@ -244,7 +244,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     generatedMtlxSetupFunction += "setupMaterialStruct";
 
     // Add code for all the texture arguments.
-    for (int i = 0; i < samplerNames.size(); i++)
+    for (size_t i = 0; i < samplerNames.size(); i++)
     {
         // Add texture name.
         generatedMtlxSetupFunction += ",\n";
@@ -264,7 +264,7 @@ shared_ptr<MaterialDefinition> MaterialGenerator::generate(const string& documen
     }
 
     // Add the BSDF inputs that will be output from setup function.
-    for (int i = 0; i < res.bsdfInputs.size(); i++)
+    for (size_t i = 0; i < res.bsdfInputs.size(); i++)
     {
         generatedMtlxSetupFunction += ",\n";
         if (res.bsdfInputs[i].name.compare("normal") == 0)

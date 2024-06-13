@@ -1,5 +1,7 @@
 project(Aurora)
 
+set(AURORA_OPTIONAL_LIBRARIES)
+
 if(ENABLE_DIRECTX_BACKEND)
     # Add the preprocessor definition for directX backend flag.
     add_compile_definitions(DIRECTX_SUPPORT=1)
@@ -25,11 +27,20 @@ if(ENABLE_HGI_BACKEND)
 
     find_package(pxr REQUIRED) # Pixar Universal Scene Description
 
-    if (NOT TARGET pxr::hgiVulkan)
-        message(FATAL_ERROR "USD hgiVulkan library is required to build Aurora with HGI backend enabled.")
+    if (APPLE)
+        if (NOT TARGET pxr::hgiMetal)
+            message(FATAL_ERROR "USD hgiMetal library is required to build Aurora with HGI backend enabled for Mac.")
+        endif()
+
+        list(APPEND AURORA_OPTIONAL_LIBRARIES "-framework Metal")
+    else()
+        if (NOT TARGET pxr::hgiVulkan)
+            message(FATAL_ERROR "USD hgiVulkan library is required to build Aurora with HGI backend enabled.")
+        endif()
+
+        find_package(Vulkan REQUIRED) # Vulkan SDK
     endif()
 
-    find_package(Vulkan REQUIRED) # Vulkan SDK
 else()
     add_compile_definitions(HGI_SUPPORT=0)
 endif()
@@ -373,6 +384,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     PDB_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"    
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+    INSTALL_RPATH "${TBB_LIBRARY_DIR};${PXR_LIBRARY_DIRS};${INSTALL_RPATH}"
     # Follow the USD convention of lower-case initial on libraries.
     OUTPUT_NAME "aurora"
 )
@@ -399,6 +413,12 @@ else()
     set(D3D12_TARGETS "")
 endif()
 
+if(APPLE)
+    find_library(METAL_FRAMEWORK Metal)
+else()
+    set(METAL_FRAMEWORK "")
+endif()
+
 target_link_libraries(${PROJECT_NAME}
 PRIVATE
     Foundation
@@ -409,6 +429,8 @@ PRIVATE
     stb::stb
     glm::glm
     Slang::Slang
+    ${AURORA_OPTIONAL_LIBRARIES}
+    ${METAL_FRAMEWORK}
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -445,6 +467,10 @@ if(ENABLE_DIRECTX_BACKEND)
     )
 
     # TODO: do we have Vulkan computer shaders amd need to do similiar things for them?
+endif()
+
+if(APPLE)
+    set_source_files_properties(Source/HGI/HGIRenderer.cpp PROPERTIES LANGUAGE OBJCXX)
 endif()
 
 install(TARGETS ${PROJECT_NAME}

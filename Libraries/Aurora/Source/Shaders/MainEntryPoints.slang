@@ -24,6 +24,11 @@
 // =================================================================================================
 // Ray Gen Shader
 // =================================================================================================
+// HgiVulkan can only have one main entry point for the shader source.
+// To share this file between different renderers, we leverage preprocessors and
+// enable one shader stage at a time.
+// TODO: Consider to use separate shader files for each shader stage.
+#ifndef DISABLE_HGI_SHADER_STAGE_RAY_GEN
 // Must match root signature defined in PTShaderLibrary::initRootSignatures and the descriptors 
 // uploaded to the heap in PTRenderer::updateOutputResources and PTRenderer::updateDenoisingResources.
 [[vk::binding(1)]] RWTexture2D<float4> gResult : register(u0);
@@ -72,7 +77,7 @@ struct Output
 }
 
 // The ray generation shader, iteratively shades the entire ray path.
-[ shader("raygeneration")]
+[shader("raygeneration")]
 void RayGenShader()
 {
     // Get the max trace depth from frame settings.
@@ -536,21 +541,23 @@ void RayGenShader()
         gGlossy[screenCoords] = glossyPacked;
     }
 }
+#endif // DISABLE_HGI_SHADER_STAGE_RAY_GEN
 
 // =================================================================================================
 // Shadow miss shader
 // =================================================================================================
-
+#ifndef DISABLE_HGI_SHADER_STAGE_MISS
 // Shadow miss results sets the visibility to WHITE.
 [shader("miss")]void ShadowMissShader(inout ShadowRayPayload rayPayload)
 {
     rayPayload.visibility = WHITE;
 }
+#endif // DISABLE_HGI_SHADER_STAGE_MISS
 
 // =================================================================================================
 // Instance closest-hit shader
 // =================================================================================================
-
+#ifndef DISABLE_HGI_SHADER_STAGE_CLOSEST_HIT
 // Closest hit shader for instance rays.  Just returns the shading data.
 [shader("closesthit")]void InstanceClosestHitShader(
     inout InstanceRayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit)
@@ -578,9 +585,11 @@ void RayGenShader()
     rayPayload.distance = RayTCurrent();
 
     // Return the offset within global instance buffer.
-    rayPayload.instanceBufferOffset = gInstanceBufferOffset;
+    rayPayload.instanceBufferOffset = gGeometry.getBufferOffset();
 }
+#endif // DISABLE_HGI_SHADER_STAGE_CLOSEST_HIT
 
+#ifndef DISABLE_HGI_SHADER_STAGE_ANY_HIT
 [shader("anyhit")]void InstanceShadowAnyHitShader(
         inout ShadowRayPayload rayPayload, in BuiltInTriangleIntersectionAttributes hit)
 {
@@ -588,7 +597,7 @@ void RayGenShader()
     // If the material is opaque, set the visibility to zero, accept the hit, and stop searching for
     // hits, as the shadow ray is completely blocked. Doing this here is a performance optimization,
     // as it avoids calling the full material initialization below, which can be expensive.
-    if (gIsOpaque)
+    if (gGeometry.isOpaque())
     {
         rayPayload.visibility = BLACK;
         AcceptHitAndEndSearch();
@@ -600,7 +609,7 @@ void RayGenShader()
         computeShadingData(gGeometry, triangleIndex, hit.barycentrics, ObjectToWorld3x4());
 
     // Get material buffer offset from instance data header.
-    int materialBufferOffset = instanceMaterialBufferOffset(gInstanceBufferOffset);
+    int materialBufferOffset = instanceMaterialBufferOffset(gGeometry.getBufferOffset());
     
     // Retrieve the shader index for intersected surface material.
     // This is stored in the material header in the global material byte buffer,
@@ -638,3 +647,4 @@ void RayGenShader()
     // above.
 
 }
+#endif // DISABLE_HGI_SHADER_STAGE_ANY_HIT

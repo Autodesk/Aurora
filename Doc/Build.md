@@ -7,30 +7,30 @@ Several prerequisites must be installed before building Aurora.
 ### Windows
 On windows the following packages should be installed and added to the system PATH environment variable:
 * [Microsoft Visual Studio 2019](https://my.visualstudio.com/Downloads?q=visual%20studio%202019) or [2022](https://my.visualstudio.com/Downloads?q=visual%20studio%202022).
-* CMake 3.26.11 ([installer](https://github.com/Kitware/CMake/releases/download/v3.26.1/cmake-3.26.1-windows-x86_64.msi)).
-* Python 3.9.13 ([installer](https://www.python.org/downloads/release/python-3913)) and the following Python packages:
+* CMake 3.29.3 or later ([installer](https://github.com/Kitware/CMake/releases/download/v3.29.7/cmake-3.29.7-windows-x86_64.msi)).
+* Python 3.11 or later ([installer](https://www.python.org/downloads/release/python-3119/)) and the following Python packages:
   * PySide6: install with `pip3 install pyside6`.
   * PyOpenGL: install with `pip3 install PyOpenGL`.
+  * Jinja2: install with `pip3 install Jinja2`.
 
 * NASM 2.16 ([installer](https://www.nasm.us/pub/nasm/releasebuilds/2.16.01/win64/nasm-2.16.01-installer-x64.exe)).
 * [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). This should be accessible via the `VULKAN_SDK` environment variable.
 
-### Linux
-The following dependencies are required on Linux.  The versions listed are the recommended version for Ubuntu 20.04:
-* zlib1g-dev: 1.2.11
-* libjpeg-turbo8-dev: 2.0.3
-* libtiff-dev: 4.1.0
-* libpng-dev: 1.6.37
-* libglm-dev: 0.9.9.7
-* libglew-dev: 2.1.0
-* libglfw3-dev: 3.3.2
-* libgtest-dev: 1.10.0
-* libgmock-dev: 1.10.0
+### MacOS
+The following tools should be installed and accessible through PATH environment variable:
+* Xcode 15.4 or later.
+  * Xcode Command Line Tools: install by running `xcode-select --install`.
+* Git with LFS: set up by running `git lfs install`.
+* CMake 3.29.3 or later ([installer](https://github.com/Kitware/CMake/releases/download/v3.29.7/cmake-3.29.7-macos-universal.dmg)).
+* Python 3.11 or later.
 
-On Ubuntu 20.04, these can be installed with the following Advanced Package Tool command:
+### Linux
+On Ubuntu 22.04, the dependencies can be installed with the following Advanced Package Tool command:
 ```
-sudo apt-get -y install zlib1g-dev libjpeg-turbo8-dev libtiff-dev libpng-dev libglm-dev libglew-dev libglfw3-dev libgtest-dev libgmock-dev
+sudo apt-get -y install zlib1g-dev libjpeg-turbo8-dev libtiff-dev libpng-dev libglm-dev libglew-dev libglfw3-dev libgtest-dev libgmock-dev libxt-dev
 ```
+
+Tools including git, g++/clang, CMake, Python, [VulkanSDK](https://vulkan.lunarg.com/) are also requested.
 
 ## Building Aurora
 
@@ -53,6 +53,8 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
 
    - Use the `--build-variant` option to choose the build configuration of externals. It can be `Debug`, `Release` (default), or `All`.
 
+   - On MacOS, you can specify the build target with `--build-target`. It can be `native`, `x86_64`, `arm64`, or `universal`.
+
    - Use the `-h` option with the script to see available options.
 
 4. **Generating projects:** Run CMake in *AURORA_DIR* to generate build projects, e.g. a Visual Studio solution.
@@ -64,7 +66,7 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
    - You can use CMake on the command line or the GUI (cmake-gui). The CMake command to generate projects is as follows:
 
      ```
-     cmake -S . -B {AURORA_BUILD_DIR} -D CMAKE_BUILD_TYPE={CONFIGURATION} -D EXTERNALS_ROOT={EXTERNALS_ROOT}
+     cmake -S . -B {AURORA_BUILD_DIR} -G {GENERATOR} -D CMAKE_BUILD_TYPE={CONFIGURATION} -D EXTERNALS_ROOT={EXTERNALS_ROOT}
      ```
 
      As noted above, the value for `EXTERNALS_ROOT` must be specified as an absolute path.
@@ -73,11 +75,13 @@ Aurora includes a script that retrieves and builds dependencies ("externals") fr
 
    - On Windows, `CMAKE_BUILD_TYPE` is ignored during the cmake configuration. You are required to specify the build configuration with `--config {CONFIGURATION}` during the cmake build.
 
-   - You can optionally specify the desired graphics API backend as described below, e.g. `-D ENABLE_HGI_BACKEND=ON`.
+   - You can optionally specify the desired graphics API backend as described below, e.g. `-D ENABLE_HGI_BACKEND=ON`. Note that Plasma with Vulkan backend does not support interactive mode yet. If more than one backend is enabled, you can designate the desired one, e.g. `--renderer hgi`, when executing Plasma.
 
    - On Windows, you may need to specify the toolchain and architecture with `-G "Visual Studio 16 2019" -A x64` or `-G "Visual Studio 17 2022" -A x64`.
 
-5. **Building:** You can load the *Aurora.sln* Visual Studio solution file from the Aurora build directory, and build Aurora using the build configuration used with the *installExternals.py* script (see below), or use CMake.
+   - On MacOS, you can specify the toolchain with `-G "Xcode"`. This will also help to generate environment variables, etc. needed by Plasma.
+
+5. **Building:** You can load the *Aurora.sln* Visual Studio solution file (Windows) / *Aurora.xcodeproj* Xcode project file (MacOS) from the Aurora build directory, and build Aurora using the build configuration used with the *installExternals.py* script (see below), or use CMake.
 
    - The CMake command to build Aurora is as follows:
 

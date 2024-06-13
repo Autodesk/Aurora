@@ -32,7 +32,7 @@ ByteAddressBuffer gTexCoords : register(t4, space1);
 // Must match CPU struct HitGroupShaderRecord in PTScene.cpp.
 cbuffer gInstanceData : register(b0, space1)
 {
-    bool gHasNormals;           // Are there normals?
+    bool gHasNormals;          // Are there normals?
     bool gHasTangents;         // Are there tangents?
     bool gHasTexCoords;        // Are there texture coordinates?
     bool gIsOpaque;            // Is the geometry opaque?
@@ -69,13 +69,25 @@ bool instanceHasNormals()
 {
     return gHasNormals;
 }
+
 bool instanceHasTangents()
 {
     return gHasTangents;
 }
+
 bool instanceHasTexCoords()
 {
     return gHasTexCoords;
+}
+
+bool instanceIsOpaque()
+{
+    return gIsOpaque;
+}
+
+int getInstanceBufferOffset()
+{
+    return gInstanceBufferOffset;
 }
 
 #else
@@ -90,6 +102,8 @@ float2 getTexCoordForVertex(int bufferLocation);
 bool instanceHasNormals();
 bool instanceHasTangents();
 bool instanceHasTexCoords();
+bool instanceIsOpaque();
+int getInstanceBufferOffset();
 
 #endif
 
@@ -104,6 +118,8 @@ struct Geometry : IGeometry
     bool hasTexCoords() { return instanceHasTexCoords(); }
     bool hasNormals() { return instanceHasNormals(); }
     bool hasTangents() { return instanceHasTangents(); }
+    bool isOpaque() { return instanceIsOpaque(); }
+    int getBufferOffset() { return getInstanceBufferOffset(); }
 } gGeometry;
 
 #endif

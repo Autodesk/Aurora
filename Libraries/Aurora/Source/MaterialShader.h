@@ -17,6 +17,8 @@
 #include "Properties.h"
 #include "UniformBuffer.h"
 
+#include <list>
+
 BEGIN_AURORA
 
 class MaterialShader;
@@ -28,7 +30,7 @@ struct MaterialShaderSource
 {
     MaterialShaderSource(const string& id = "", const string& setupSource = "",
         const string& definitionsSource = "", const string& bsdfSource = "") :
-        uniqueId(id), setup(setupSource), definitions(definitionsSource), bsdf(bsdfSource)
+        uniqueId(id), setup(setupSource), bsdf(bsdfSource), definitions(definitionsSource)
     {
     }
 
@@ -194,7 +196,7 @@ protected:
     bool isValid() { return _pShaderLibrary != nullptr; }
 
     vector<EntryPoint> _entryPoints;
-    map<string, int> _entryPointNameLookup;
+    map<string, size_t> _entryPointNameLookup;
     vector<string> _entryPointsTypes;
 
     // The shader library this type is part of.

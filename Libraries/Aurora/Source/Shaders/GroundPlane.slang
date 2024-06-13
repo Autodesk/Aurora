@@ -20,8 +20,6 @@
 #include "RayTrace.slang"
 #include "GlobalPipelineState.slang"
 
-// TODO: Re-enable ground plane.
-
 // Shades a matte reflection effect with the specified properties.
 int setupMatteReflectionIndirectLightRay(float opacity, float3 color, float roughness, float3 rayDir, float3 normal,
     float3 tangent, float3 bitangent, float3 position, uint maxDepth, inout Random rng, out float3 indirectRayDirec, out float3 indirectRayOrigin, out float3 indirectColorOut)

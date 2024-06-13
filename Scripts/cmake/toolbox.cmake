@@ -42,10 +42,20 @@ macro(minify_shaders header shader_folder shaders)
     endforeach()
 
     # Add a custom command to create minified shader.
-    add_custom_command(
-        OUTPUT ${header}
-        COMMAND ${Python3_EXECUTABLE} ${SCRIPTS_DIR}/minifyShadersFolder.py ${shader_folder} ${header} ${Slang_COMPILER}
-        COMMENT "Minifying path tracing shaders to ${header}"
-        DEPENDS ${shaders}
-    )
+    if(APPLE OR UNIX)
+        # XXX: Disable slangc on MacOS & Linux for now.
+        add_custom_command(
+            OUTPUT ${header}
+            COMMAND ${Python3_EXECUTABLE} ${SCRIPTS_DIR}/minifyShadersFolder.py ${shader_folder} ${header}
+            COMMENT "Minifying path tracing shaders to ${header}"
+            DEPENDS ${shaders}
+        )
+    else()
+        add_custom_command(
+            OUTPUT ${header}
+            COMMAND ${Python3_EXECUTABLE} ${SCRIPTS_DIR}/minifyShadersFolder.py ${shader_folder} ${header} ${Slang_COMPILER}
+            COMMENT "Minifying path tracing shaders to ${header}"
+            DEPENDS ${shaders}
+        )
+    endif()
 endmacro()

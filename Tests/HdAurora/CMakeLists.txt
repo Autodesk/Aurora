@@ -44,6 +44,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY "${LIBRARY_OUTPUT_DIR}"
     PDB_OUTPUT_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+    INSTALL_RPATH "${TBB_LIBRARY_DIR};${PXR_LIBRARY_DIRS};${INSTALL_RPATH}"
     VS_DEBUGGER_WORKING_DIRECTORY "${RUNTIME_OUTPUT_DIR}"
     VS_DEBUGGER_ENVIRONMENT "${VS_DEBUGGING_ENV}"
     XCODE_SCHEME_ENVIRONMENT "${XCODE_DEBUGGING_ENV}")
@@ -72,6 +75,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${HDAURORA_SOURCE_DIR} ${TEST
 
 # Add default compile definitions (set in root CMakefile)
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${DEFAULT_COMPILE_DEFINITIONS})
+
+if(APPLE)
+    # Copy glew dylib to the runtime directory as it cannot be loaded through rpath.
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GLEW_ROOT}/lib/*.dylib ${RUNTIME_OUTPUT_DIR}
+    )
+endif()
 
 # Run gtest discover tests function.
 gtest_discover_tests(${PROJECT_NAME}

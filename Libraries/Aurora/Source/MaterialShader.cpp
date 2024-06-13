@@ -15,13 +15,13 @@ BEGIN_AURORA
 
 MaterialShader::MaterialShader(MaterialShaderLibrary* pShaderLibrary, int libraryIndex,
     const MaterialShaderDefinition& def, const vector<string> entryPoints) :
+    _entryPointsTypes(entryPoints),
     _pShaderLibrary(pShaderLibrary),
     _libraryIndex(libraryIndex),
-    _entryPointsTypes(entryPoints),
     _def(def)
 {
     // Initialize ref. counts to zero.
-    for (int i = 0; i < entryPoints.size(); i++)
+    for (size_t i = 0; i < entryPoints.size(); i++)
     {
         _entryPointNameLookup[entryPoints[i]] = i;
         _entryPoints.push_back({ entryPoints[i], 0 });
@@ -251,7 +251,7 @@ bool MaterialShaderLibrary::update(CompileShader compileFunction, DestroyShader 
 void MaterialShaderLibrary::forceRebuildAll()
 {
     // Add all active shaders to compilation pending list.
-    for (int i = 0; i < _shaderState.size(); i++)
+    for (size_t i = 0; i < _shaderState.size(); i++)
     {
         MaterialShaderPtr pShader = _shaderState[i].first.lock();
         if (pShader)

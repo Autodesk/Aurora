@@ -45,7 +45,7 @@ bool isImageSRGB(stbi_uc const* buffer, int len)
     }
 
     // Setup PNG reading structure.
-    stbi__png p;
+    [[maybe_unused]] stbi__png p;
     p.s        = &s;
     p.expanded = nullptr;
     p.idata    = nullptr;

@@ -28,7 +28,7 @@ using namespace pxr;
 
 BEGIN_AURORA
 
-const vector<string> DefaultEntryPoints = { "RADIANCE_HIT" };
+const vector<string> DefaultEntryPoints = { "INITIALIZE_MATERIAL_EXPORT" };
 
 HGIRenderer::HGIRenderer(uint32_t activeFrameCount) :
     RendererBase(activeFrameCount), _shaderLibrary(DefaultEntryPoints)
@@ -44,7 +44,7 @@ HGIRenderer::HGIRenderer(uint32_t activeFrameCount) :
     _pAssetMgr->enableVerticalFlipOnImageLoad(!_values.asBoolean(kLabelIsFlipImageYEnabled));
 
     MaterialShaderSource defaultMaterialSource(
-        "Default", CommonShaders::g_sInitializeDefaultMaterialType);
+        "Default", CommonShaders::g_sMainEntryPoints);
 
     // Create the material definition for default shader.
     _pDefaultMaterialDefinition = make_shared<MaterialDefinition>(defaultMaterialSource,
@@ -55,9 +55,10 @@ HGIRenderer::HGIRenderer(uint32_t activeFrameCount) :
     _pDefaultMaterialDefinition->getShaderDefinition(shaderDef);
     _pDefaultMaterialShader = _shaderLibrary.acquire(shaderDef);
 
-    // Ensure the radiance hit entry point is compiled for default shader.
-    _pDefaultMaterialShader->incrementRefCount("RADIANCE_HIT");
+    // Ensure the instance hit entry point is compiled for default shader.
+    _pDefaultMaterialShader->incrementRefCount("INITIALIZE_MATERIAL_EXPORT");
 }
+
 HGIRenderer::~HGIRenderer()
 {
     // Ensure scene deleted before resources are destroyed.
@@ -154,10 +155,28 @@ void HGIRenderer::createResources()
 
     // Use the HGI code generation to add shader inputs to post-processing shader function.
     HgiShaderFunctionAddWritableTexture(
-        &postProcessComputeDesc, "outTexture", 2, HgiFormatFloat32Vec4);
-    HgiShaderFunctionAddTexture(&postProcessComputeDesc, "accumulationTexture");
+        &postProcessComputeDesc, "outTexture", /*bindIndex = */0, /*dimensions = */2, HgiFormatFloat32Vec4);
+    HgiShaderFunctionAddTexture(&postProcessComputeDesc, "accumulationTexture", /*bindIndex = */1);
     HgiShaderFunctionAddStageInput(&postProcessComputeDesc, "hd_GlobalInvocationID", "uvec3",
         HgiShaderKeywordTokens->hdGlobalInvocationID);
+    
+//    layout(binding = 3) layout(std140) uniform PostProcesssing
+//    {
+//        vec3 brightness;
+//        int debugMode;
+//        vec2 range;
+//        bool isDenoisingEnabled;
+//        bool isToneMappingEnabled;
+//        bool isGammaCorrectionEnabled;
+//        bool isAlphaEnabled;
+//    } gSettings;
+    HgiShaderFunctionAddConstantParam(&postProcessComputeDesc, "gSettings_brightness", "vec3");
+    HgiShaderFunctionAddConstantParam(&postProcessComputeDesc, "gSettings_debugMode", "int");
+    HgiShaderFunctionAddConstantParam(&postProcessComputeDesc, "gSettings_range", "vec2");
+    HgiShaderFunctionAddConstantParam(&postProcessComputeDesc, "gSettings_isDenoisingEnabled", "bool");
+    HgiShaderFunctionAddConstantParam(&postProcessComputeDesc, "gSettings_isToneMappingEnabled", "bool");
+    HgiShaderFunctionAddConstantParam(&postProcessComputeDesc, "gSettings_isGammaCorrectionEnabled", "bool");
+    HgiShaderFunctionAddConstantParam(&postProcessComputeDesc, "gSettings_isAlphaEnabled", "bool");
 
     // Create post-processing shader function, abort application if compilation fails.
     _postProcessComputeShader = HgiShaderFunctionHandleWrapper::create(
@@ -185,11 +204,20 @@ void HGIRenderer::createResources()
     accumComputeDesc.computeDescriptor.localSize = GfVec3i(8, 8, 1);
 
     // Use the HGI code generation to add shader inputs to accumulation shader function.
-    HgiShaderFunctionAddWritableTexture(&accumComputeDesc, "outTexture", 2, HgiFormatFloat32Vec4);
-    HgiShaderFunctionAddTexture(&accumComputeDesc, "accumulationTexture");
-    HgiShaderFunctionAddTexture(&accumComputeDesc, "directLightTexture");
+    HgiShaderFunctionAddWritableTexture(
+        &accumComputeDesc, "outTexture", /*bindIndex = */0, /*dimensions = */2, HgiFormatFloat32Vec4);
+    HgiShaderFunctionAddTexture(&accumComputeDesc, "accumulationTexture", /*bindIndex = */1);
+    HgiShaderFunctionAddTexture(&accumComputeDesc, "directLightTexture", /*bindIndex = */2);
     HgiShaderFunctionAddStageInput(&accumComputeDesc, "hd_GlobalInvocationID", "uvec3",
         HgiShaderKeywordTokens->hdGlobalInvocationID);
+    
+//    layout(binding = 3) layout(std140) uniform SampleData
+//    {
+//        int sampleIndex;
+//        int seedOffset;
+//    } gSampleData;
+    HgiShaderFunctionAddConstantParam(&accumComputeDesc, "gSampleData_sampleIndex", "int");
+    HgiShaderFunctionAddConstantParam(&accumComputeDesc, "gSampleData_seedOffset", "int");
 
     // Create accumulation shader function, abort application if compilation fails.
     _accumComputeShader = HgiShaderFunctionHandleWrapper::create(
@@ -222,6 +250,7 @@ void HGIRenderer::createResources()
     accumTexBind.bindingIndex = 0;
     accumTexBind.stageUsage   = HgiShaderStageCompute;
     accumTexBind.textures.push_back(_pAccumulationTex->handle());
+    accumTexBind.samplers.push_back(sampler());
     accumTexBind.resourceType = HgiBindResourceTypeStorageImage;
 
     // Create binding description for final render target as storage texture.
@@ -229,6 +258,7 @@ void HGIRenderer::createResources()
     finalTexBind.bindingIndex = 0;
     finalTexBind.stageUsage   = HgiShaderStageCompute;
     finalTexBind.textures     = { renderBuffer()->storageTex() };
+    finalTexBind.samplers.push_back(sampler());
     finalTexBind.resourceType = HgiBindResourceTypeStorageImage;
 
     // Create binding description for direct light texture as input texture.
@@ -265,7 +295,7 @@ void HGIRenderer::createResources()
     _accumulationComputeResourceBindings = HgiResourceBindingsHandleWrapper::create(
         hgi()->CreateResourceBindings(resourceDesc), hgi());
 
-    // Create resource descriptoin for post-processing compute shader.
+    // Create resource description for post-processing compute shader.
     HgiResourceBindingsDesc postProcessResourceDesc;
     postProcessResourceDesc.debugName = "PostProcessComputeShaderResources";
     postProcessResourceDesc.buffers.push_back(std::move(bufferDesc1));
@@ -433,7 +463,7 @@ void HGIRenderer::render(uint32_t sampleStart, uint32_t sampleCount)
         hgi()->SubmitCmds(rtCmds.get());
 
         // Create accumulation compute commands for frame.
-        HgiComputeCmdsUniquePtr computeCmds = hgi()->CreateComputeCmds();
+        HgiComputeCmdsUniquePtr computeCmds = hgi()->CreateComputeCmds({});
         computeCmds->PushDebugGroup("Accumulation Compute Commands");
         computeCmds->BindResources(_accumulationComputeResourceBindings->handle());
         computeCmds->BindPipeline(_accumulationComputePipeline->handle());
@@ -446,7 +476,7 @@ void HGIRenderer::render(uint32_t sampleStart, uint32_t sampleCount)
         // If this is the last frame, run the post processing compute shader, to get final image.
         if (i == sampleCount - 1)
         {
-            HgiComputeCmdsUniquePtr postProcessComputeCmds = hgi()->CreateComputeCmds();
+            HgiComputeCmdsUniquePtr postProcessComputeCmds = hgi()->CreateComputeCmds({});
             postProcessComputeCmds->PushDebugGroup("Post Process Compute Commands");
             postProcessComputeCmds->BindResources(_postProcessComputeResourceBindings->handle());
             postProcessComputeCmds->BindPipeline(_postProcessComputePipeline->handle());
@@ -457,6 +487,7 @@ void HGIRenderer::render(uint32_t sampleStart, uint32_t sampleCount)
         // End HGI frame rendering.
         hgi()->EndFrame();
     }
+   
 }
 
 void HGIRenderer::waitForTask()

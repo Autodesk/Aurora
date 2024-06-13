@@ -45,6 +45,7 @@ public:
     HgiBufferHandleWrapper::Pointer texCoordBuffer;
     HgiBufferHandleWrapper::Pointer indexBuffer;
     HgiBufferHandleWrapper::Pointer transformBuffer;
+    HgiBufferHandleWrapper::Pointer primitiveDataBuffer;
     HgiAccelerationStructureGeometryHandleWrapper::Pointer geom;
     HgiAccelerationStructureHandleWrapper::Pointer accelStructure;
 

@@ -103,7 +103,7 @@ void SceneBase::createDefaultResources()
     ImageDescriptor imageDesc;
     imageDesc.isEnvironment = false;
     imageDesc.linearize     = true;
-    imageDesc.getData       = [this](ImageData& dataOut, AllocateBufferFunction alloc) {
+    imageDesc.getData       = [this](ImageData& dataOut, [[maybe_unused]] AllocateBufferFunction alloc) {
         dataOut.pPixelBuffer = _defaultImagePixels.data();
         dataOut.bufferSize   = _defaultImagePixels.size();
         dataOut.dimensions   = { 2, 2 };

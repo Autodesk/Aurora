@@ -27,7 +27,7 @@ public:
     /*** Lifetime Management ***/
 
     HGILight(HGIScene* pScene, const string& lightType, int index);
-    ~HGILight() {};
+    ~HGILight() { _pScene = nullptr; };
 
     /*** Functions ***/
     FixedValues& values() override { return *this; }

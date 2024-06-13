@@ -1,15 +1,15 @@
 // Post processing data UBO.
 // NOTE should be passed as push constants, but this is currently broken in HGI.
-layout(binding = 3) layout(std140) uniform PostProcesssing
-{
-    vec3 brightness;
-    int debugMode;
-    vec2 range;
-    bool isDenoisingEnabled;
-    bool isToneMappingEnabled;
-    bool isGammaCorrectionEnabled;
-    bool isAlphaEnabled;
-} gSettings;
+//layout(binding = 3) layout(std140) uniform PostProcesssing
+//{
+//    vec3 brightness;
+//    int debugMode;
+//    vec2 range;
+//    bool isDenoisingEnabled;
+//    bool isToneMappingEnabled;
+//    bool isGammaCorrectionEnabled;
+//    bool isAlphaEnabled;
+//} gSettings;
 
 // Get texture UV from input coordinate.
 vec2 GetTexCoords(ivec2 outCoords)
@@ -51,18 +51,19 @@ void main(void)
     vec2 texCoords = GetTexCoords(outCoords);
     vec3 color       = HgiTextureLod_accumulationTexture(texCoords, 0.0).rgb;
 
-    // Apply brightness.
-    color *= gSettings.brightness;
+
+//    // Apply brightness.
+//    color *= gSettings_brightness;
 
     // Apply ACES tone mapping or simple saturation.
-    if (gSettings.isToneMappingEnabled)
+    if (gSettings_isToneMappingEnabled)
     {
         color = toneMapACES(color);
     }
 
     // Apply gamma correction.
     // NOTE: Gamma correction must be performed here as UAV textures don't support sRGB write.
-    if (gSettings.isGammaCorrectionEnabled)
+    if (gSettings_isGammaCorrectionEnabled)
     {
         color = linearTosRGB(clamp(color,0.0,1.0));
     }
