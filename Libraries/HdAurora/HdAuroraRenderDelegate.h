@@ -1,4 +1,4 @@
-// Copyright 2023 Autodesk, Inc.
+// Copyright 2024 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ class HdAuroraRenderPass;
 class HdAuroraRenderBuffer;
 class HdAuroraImageCache;
 
-// Functoin used to update a Hydra render setting.
-using UpdateRenderSettingFunction = std::function<bool(VtValue const& value)>;
+// Function used to update a Hydra render setting.
+using UpdateRenderSettingFunction = function<bool(VtValue const& value)>;
 
 class HdAuroraRenderDelegate final : public HdRenderDelegate
 {
@@ -29,36 +29,35 @@ public:
     HdAuroraRenderDelegate(HdRenderSettingsMap const& settings = {});
     ~HdAuroraRenderDelegate() override;
 
-    void SetDrivers(pxr::HdDriverVector const& drivers) override;
+    void SetDrivers(HdDriverVector const& drivers) override;
 
-    const pxr::TfTokenVector& GetSupportedRprimTypes() const override;
-    const pxr::TfTokenVector& GetSupportedSprimTypes() const override;
-    const pxr::TfTokenVector& GetSupportedBprimTypes() const override;
+    const TfTokenVector& GetSupportedRprimTypes() const override;
+    const TfTokenVector& GetSupportedSprimTypes() const override;
+    const TfTokenVector& GetSupportedBprimTypes() const override;
 
-    pxr::HdRprim* CreateRprim(pxr::TfToken const& typeId, pxr::SdfPath const& rprimId) override;
-    pxr::HdSprim* CreateSprim(pxr::TfToken const& typeId, pxr::SdfPath const& sprimId) override;
-    pxr::HdBprim* CreateBprim(pxr::TfToken const& typeId, pxr::SdfPath const& bprimId) override;
+    HdRprim* CreateRprim(TfToken const& typeId, SdfPath const& rprimId) override;
+    HdSprim* CreateSprim(TfToken const& typeId, SdfPath const& sprimId) override;
+    HdBprim* CreateBprim(TfToken const& typeId, SdfPath const& bprimId) override;
 
-    void DestroyRprim(pxr::HdRprim* rPrim) override;
-    void DestroySprim(pxr::HdSprim* sprim) override;
-    void DestroyBprim(pxr::HdBprim* bprim) override;
+    void DestroyRprim(HdRprim* rPrim) override;
+    void DestroySprim(HdSprim* sprim) override;
+    void DestroyBprim(HdBprim* bprim) override;
 
-    pxr::HdSprim* CreateFallbackSprim(pxr::TfToken const& typeId) override;
-    pxr::HdBprim* CreateFallbackBprim(pxr::TfToken const& typeId) override;
+    HdSprim* CreateFallbackSprim(TfToken const& typeId) override;
+    HdBprim* CreateFallbackBprim(TfToken const& typeId) override;
 
-    pxr::HdInstancer* CreateInstancer(
-        pxr::HdSceneDelegate* delegate, pxr::SdfPath const& id) override;
-    void DestroyInstancer(pxr::HdInstancer* instancer) override;
+    HdInstancer* CreateInstancer(HdSceneDelegate* delegate, SdfPath const& id) override;
+    void DestroyInstancer(HdInstancer* instancer) override;
 
-    pxr::HdRenderParam* GetRenderParam() const override;
+    HdRenderParam* GetRenderParam() const override;
 
     HdAovDescriptor GetDefaultAovDescriptor(TfToken const& name) const override;
 
-    pxr::HdRenderPassSharedPtr CreateRenderPass(
-        pxr::HdRenderIndex* index, pxr::HdRprimCollection const& collection) override;
+    HdRenderPassSharedPtr CreateRenderPass(
+        HdRenderIndex* index, HdRprimCollection const& collection) override;
 
-    pxr::HdResourceRegistrySharedPtr GetResourceRegistry() const override;
-    void CommitResources(pxr::HdChangeTracker* tracker) override;
+    HdResourceRegistrySharedPtr GetResourceRegistry() const override;
+    void CommitResources(HdChangeTracker* tracker) override;
     void SetRenderSetting(TfToken const& key, VtValue const& value) override;
     VtValue GetRenderSetting(TfToken const& key) const override;
 
@@ -66,7 +65,7 @@ public:
     Aurora::IScenePtr GetScene() { return _auroraScene; }
 
     // Update the scene bounds with the AABB for a single mesh.
-    void UpdateBounds(const pxr::GfVec3f& min, const GfVec3f& max);
+    void UpdateBounds(const GfVec3f& min, const GfVec3f& max);
     // Reset the scene bounds.
     // This will reset them to invalid values, so the next call to UpdateBounds will set the bounds.
     void ResetBounds();
@@ -77,12 +76,12 @@ public:
     bool SampleRestartNeeded() const { return _sampleRestartNeeded; }
     void SetSampleRestartNeeded(bool needed) { _sampleRestartNeeded = needed; }
 
-    void ActivateRenderPass(HdAuroraRenderPass* pRenderPass,
-        const std::map<TfToken, HdAuroraRenderBuffer*>& pRenderBuffers);
+    void ActivateRenderPass(
+        HdAuroraRenderPass* pRenderPass, const map<TfToken, HdAuroraRenderBuffer*>& pRenderBuffers);
     void RenderPassDestroyed(HdAuroraRenderPass* pRenderPass);
 
     // Returns Hydra graphics interface
-    pxr::Hgi* GetHgi() { return _hgi; }
+    Hgi* GetHgi() { return _hgi; }
 
     // Settings for shared buffers.
     // NOTE: This determines whether the GetRawResource() function of the HgiTexture object created
@@ -95,10 +94,10 @@ public:
     };
 
     RenderBufferSharingType GetRenderBufferSharingType() { return _renderBufferSharingType; }
-    std::mutex& rendererMutex() { return _rendererMutex; }
+    mutex& rendererMutex() { return _rendererMutex; }
     // Get the primIndex mutex, required to access prim. index via GetSprimSubtree as this is not
     // thread safe.
-    std::mutex& primIndexMutex() { return _primIndexMutex; }
+    mutex& primIndexMutex() { return _primIndexMutex; }
     HdAuroraImageCache& imageCache() { return *_pImageCache; }
 
     void setAuroraEnvironmentLightImagePath(const Aurora::Path& path)
@@ -116,8 +115,8 @@ public:
     void UpdateAuroraEnvironment();
 
 private:
-    std::mutex _rendererMutex;
-    std::mutex _primIndexMutex;
+    mutex _rendererMutex;
+    mutex _primIndexMutex;
 
     map<TfToken, UpdateRenderSettingFunction> _settingFunctions;
     Aurora::IRendererPtr _auroraRenderer;
@@ -141,13 +140,13 @@ private:
     GfVec3f _backgroundTopColor           = GfVec3f(1.0f, 1.0f, 1.0f);
     GfVec3f _backgroundBottomColor        = GfVec3f(1.0f, 1.0f, 1.0f);
     glm::mat4 _auroraEnvironmentLightTransform;
-    std::string _backgroundImageFilePath;
+    string _backgroundImageFilePath;
     Aurora::Path _auroraEnvironmentBackgroundImagePath;
     Aurora::Path _auroraEnvironmentLightImagePath;
     Aurora::Path _auroraEnvironmentPath;
 
     RenderBufferSharingType _renderBufferSharingType = RenderBufferSharingType::NONE;
-    pxr::Hgi* _hgi;
+    Hgi* _hgi;
 };
 
 // A class that manages ground plane data, including an Aurora ground plane object.

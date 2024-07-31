@@ -101,8 +101,8 @@ ZLIB = Dependency(ZLIB_INSTALL_FOLDER, ZLIB_PACKAGE_NAME, InstallZlib, ZLIB_URL,
 ############################################################
 # boost
 
-BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.tar.gz"
-# Use a sub-version in the version string to force reinstallation, even if 1.78.0 installed.
+BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.gz"
+# Use a sub-version in the version string to force reinstallation, even if 1.85.0 installed.
 BOOST_VERSION_STRING = BOOST_URL+".a"
 
 if Linux():
@@ -112,7 +112,7 @@ elif Windows():
     # subdirectory, which we have to account for here. In theory, specifying
     # "layout=system" would make the Windows install match Linux, but that
     # causes problems for other dependencies that look for boost.
-    BOOST_VERSION_FILE = "include/boost-1_78/boost/version.hpp"
+    BOOST_VERSION_FILE = "include/boost-1_85/boost/version.hpp"
 
 BOOST_INSTALL_FOLDER = "boost"
 BOOST_PACKAGE_NAME = "Boost"
@@ -249,10 +249,11 @@ BOOST = Dependency(BOOST_INSTALL_FOLDER, BOOST_PACKAGE_NAME, InstallBoost, BOOST
 # Intel TBB
 
 if Windows():
-    TBB_URL = "https://github.com/oneapi-src/oneTBB/releases/download/2019_U6/tbb2019_20190410oss_win.zip"
-    TBB_ROOT_DIR_NAME = "tbb2019_20190410oss"
+    TBB_URL = "https://github.com/oneapi-src/oneTBB/releases/download/v2020.3/tbb-2020.3-win.zip"
+    TBB_ROOT_DIR_NAME = "tbb"
 else:
-    TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/2019_U6.tar.gz"
+    # Use point release with fix https://github.com/oneapi-src/oneTBB/pull/833
+    TBB_URL = "https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2020.3.1.zip"
 
 TBB_INSTALL_FOLDER = "tbb"
 TBB_PACKAGE_NAME = "TBB"
@@ -300,7 +301,7 @@ TBB = Dependency(TBB_INSTALL_FOLDER, TBB_PACKAGE_NAME, InstallTBB, TBB_URL, "inc
 ############################################################
 # JPEG
 
-JPEG_URL = "https://github.com/libjpeg-turbo/libjpeg-turbo/archive/1.5.1.zip"
+JPEG_URL = "https://github.com/libjpeg-turbo/libjpeg-turbo/archive/2.0.1.zip"
 JPEG_INSTALL_FOLDER = "libjpeg"
 JPEG_PACKAGE_NAME = "JPEG"
 
@@ -347,7 +348,7 @@ TIFF = Dependency(TIFF_INSTALL_FOLDER, TIFF_PACKAGE_NAME, InstallTIFF, TIFF_URL,
 ############################################################
 # PNG
 
-PNG_URL = "https://github.com/glennrp/libpng/archive/refs/tags/v1.6.29.tar.gz"
+PNG_URL = "https://github.com/glennrp/libpng/archive/refs/tags/v1.6.38.zip"
 PNG_INSTALL_FOLDER = "libpng"
 PNG_PACKAGE_NAME = "PNG"
 
@@ -360,14 +361,13 @@ PNG = Dependency(PNG_INSTALL_FOLDER, PNG_PACKAGE_NAME, InstallPNG, PNG_URL, "inc
 ############################################################
 # GLM
 
-GLM_URL = "https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.zip"
+GLM_URL = "https://github.com/g-truc/glm/archive/refs/tags/1.0.1.zip"
 GLM_INSTALL_FOLDER = "glm"
 GLM_PACKAGE_NAME = "glm"
 
 def InstallGLM(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(GLM_URL, context, force)):
         CopyDirectory(context, "glm", "glm", GLM_INSTALL_FOLDER)
-        CopyDirectory(context, "cmake/glm", "cmake/glm", GLM_INSTALL_FOLDER)
 
 GLM = Dependency(GLM_INSTALL_FOLDER, GLM_PACKAGE_NAME, InstallGLM, GLM_URL, "glm/glm.hpp")
 
@@ -375,7 +375,7 @@ GLM = Dependency(GLM_INSTALL_FOLDER, GLM_PACKAGE_NAME, InstallGLM, GLM_URL, "glm
 # STB
 
 STB_URL = "https://github.com/nothings/stb.git"
-STB_SHA = "5736b15f7ea0ffb08dd38af21067c314d6a3aae9" # master on 2023-01-29
+STB_SHA = "013ac3beddff3dbffafd5177e7972067cd2b5083" # master on 2024-06-01
 STB_INSTALL_FOLDER = "stb"
 STB_PACKAGE_NAME = "stb"
 
@@ -389,7 +389,7 @@ STB = Dependency(STB_INSTALL_FOLDER, STB_PACKAGE_NAME, InstallSTB, STB_SHA, "inc
 ############################################################
 # TinyGLTF
 
-TinyGLTF_URL = "https://github.com/syoyo/tinygltf/archive/refs/tags/v2.5.0.zip"
+TinyGLTF_URL = "https://github.com/syoyo/tinygltf/archive/refs/tags/v2.9.2.zip"
 TinyGLTF_INSTALL_FOLDER = "tinygltf"
 TinyGLTF_PACKAGE_NAME = "TinyGLTF"
 
@@ -415,7 +415,7 @@ TINYOBJLOADER = Dependency(TinyObjLoader_INSTALL_FOLDER, TinyObjLoader_PACKAGE_N
 ############################################################
 # TinyEXR
 
-TinyEXR_URL = "https://github.com/syoyo/tinyexr/archive/refs/tags/v1.0.2.zip"
+TinyEXR_URL = "https://github.com/syoyo/tinyexr/archive/refs/tags/v1.0.8.zip"
 TinyEXR_INSTALL_FOLDER = "tinyexr"
 TinyEXR_PACKAGE_NAME = "tinyexr"
 TinyEXR_INSTALL_FOLDER = "tinyexr"
@@ -470,10 +470,7 @@ URIPARSER = Dependency(URIPARSER_INSTALL_FOLDER, URIPARSER_PACKAGE_NAME, Install
 ############################################################
 # IlmBase/OpenEXR
 
-if Windows():
-    OPENEXR_URL = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v2.5.2.zip"
-else:
-    OPENEXR_URL = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v2.4.3.zip"
+OPENEXR_URL = "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v3.1.11.zip"
 
 OPENEXR_INSTALL_FOLDER = "OpenEXR"
 OPENEXR_PACKAGE_NAME = "OpenEXR"
@@ -498,7 +495,9 @@ OPENEXR = Dependency(OPENEXR_INSTALL_FOLDER, OPENEXR_PACKAGE_NAME, InstallOpenEX
 
 ############################################################
 # OpenImageIO
-OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/refs/tags/v2.4.5.0.zip"
+
+# Update to a newer version than the one adopted by OpenUSD to avoid using deprecated boost methods.
+OIIO_URL = "https://github.com/OpenImageIO/oiio/archive/refs/tags/v2.5.11.0.zip"
 
 OIIO_INSTALL_FOLDER = "OpenImageIO"
 OIIO_PACKAGE_NAME = "OpenImageIO"
@@ -509,6 +508,7 @@ def InstallOpenImageIO(context, force, buildArgs):
 
         extraArgs = ['-DOIIO_BUILD_TOOLS=OFF',
                      '-DOIIO_BUILD_TESTS=OFF',
+                     '-DBUILD_DOCS=OFF',
                      '-DUSE_PYTHON=OFF',
                      '-DSTOP_ON_WARNING=OFF',
                      '-DUSE_PTEX=OFF']
@@ -544,7 +544,7 @@ OPENIMAGEIO = Dependency(OIIO_INSTALL_FOLDER, OIIO_PACKAGE_NAME, InstallOpenImag
 ############################################################
 # OpenSubdiv
 
-OPENSUBDIV_URL = "https://github.com/PixarAnimationStudios/OpenSubdiv/archive/v3_4_4.zip"
+OPENSUBDIV_URL = "https://github.com/PixarAnimationStudios/OpenSubdiv/archive/v3_6_0.zip"
 OPENSUBDIV_INSTALL_FOLDER = "OpenSubdiv"
 OPENSUBDIV_PACKAGE_NAME = "OpenSubdiv"
 
@@ -597,7 +597,7 @@ OPENSUBDIV = Dependency(OPENSUBDIV_INSTALL_FOLDER, OPENSUBDIV_PACKAGE_NAME, Inst
 ############################################################
 # MaterialX
 
-MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.38.8.zip"
+MATERIALX_URL = "https://github.com/AcademySoftwareFoundation/MaterialX/archive/v1.38.10.zip"
 MATERIALX_INSTALL_FOLDER = "MaterialX"
 MATERIALX_PACKAGE_NAME = "MaterialX"
 
@@ -612,7 +612,7 @@ MATERIALX = Dependency(MATERIALX_INSTALL_FOLDER, MATERIALX_PACKAGE_NAME, Install
 
 ############################################################
 # USD
-USD_URL = "https://github.com/autodesk-forks/USD/archive/refs/tags/v22.08-Aurora-v22.11.zip"
+USD_URL = "https://github.com/autodesk-forks/USD/archive/refs/tags/v24.08-Aurora-v24.08.zip"
 USD_INSTALL_FOLDER = "USD"
 USD_PACKAGE_NAME = "pxr"
 
@@ -620,16 +620,16 @@ def InstallUSD(context, force, buildArgs):
     with CurrentWorkingDirectory(DownloadURL(USD_URL, context, force)):
 
 # USD_URL = "https://github.com/autodesk-forks/USD.git"
-# USD_TAG = "v22.08-Aurora-v22.11"
+# USD_TAG = "v24.08-Aurora-v24.08"
+# USD_FOLDER = "USD-" + USD_TAG
 # USD_INSTALL_FOLDER = "USD"
 # USD_PACKAGE_NAME = "pxr"
 
 # def InstallUSD(context, force, buildArgs):
-#     USD_FOLDER = "USD-"+USD_TAG
 #     with CurrentWorkingDirectory(GitClone(USD_URL, USD_TAG, USD_FOLDER, context)):
 
         # We need to apply patch to make USD build with our externals configuration
-        ApplyGitPatch(context, "USD.patch")
+        # ApplyGitPatch(context, "USD.patch")
 
         extraArgs = []
 
@@ -826,7 +826,7 @@ CXXOPTS = Dependency(CXXOPTS_INSTALL_FOLDER, CXXOPTS_PACKAGE_NAME, InstallCXXOPT
 ############################################################
 # GTEST
 
-GTEST_URL = "https://github.com/google/googletest/archive/refs/tags/release-1.12.1.zip"
+GTEST_URL = "https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip"
 GTEST_INSTALL_FOLDER = "gtest"
 GTEST_PACKAGE_NAME = "GTest"
 

@@ -110,7 +110,7 @@ static bool writeBuffer(const OIIO::ImageBuf& buffer, const string& fileName)
         return false;
 
     // Open the OIIO output image (return false if failed)
-    // Flawfinder: ignore (Bug in Flawfinder which flags anything called "open", see OGSMOD-832)
+    // Flawfinder: ignore (Bug in Flawfinder which flags anything called "open")
     if (!pImgOut->open(fileName.c_str(), buffer.spec()))
         return false;
 
@@ -191,7 +191,7 @@ Result compare(const uint8_t* renderedPixels, size_t width, size_t height,
         // reloaded like this. The comparison *should* succeed without having to do this.
         OIIO::ImageBuf readbackOutputImageBuffer;
         readbackOutputImageBuffer.reset(outputFile);
-        // Flawfinder: ignore (Bug in Flawfinder which flags anything called "read", see OGSMOD-832)
+        // Flawfinder: ignore (Bug in Flawfinder which flags anything called "read").
         if (!readbackOutputImageBuffer.read())
         {
             return Result(Result::Status::FileIOError, outputFile, baselineFile);
@@ -200,7 +200,7 @@ Result compare(const uint8_t* renderedPixels, size_t width, size_t height,
         // Read the baseline file into an OIIO image buffer.
         OIIO::ImageBuf baselineImageBuffer;
         baselineImageBuffer.reset(baselineFile);
-        // Flawfinder: ignore (Bug in Flawfinder which flags anything called "read", see OGSMOD-832)
+        // Flawfinder: ignore (Bug in Flawfinder which flags anything called "read").
         if (!baselineImageBuffer.read())
         {
             return Result(Result::Status::FileIOError, outputFile, baselineFile);

@@ -261,8 +261,7 @@ TEST_P(MaterialTest, TestMaterialClearMaterialProperty)
     pScene->setMaterialProperties(material, matProps);
 
     // Render the scene and check baseline image.
-    // On rasteriser this will appear incorrect (the previous color will still be used, see
-    // OGSMOD-858)
+    // On rasterizer this will appear incorrect (the previous color will still be used).
     ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_AfterClear", "Materials");
 }
 
@@ -446,7 +445,7 @@ TEST_P(MaterialTest, TestMaterialBasicMaterialProperties)
             currentTestName() + "_Roughness_" + mtlType, "Materials");
 
         // Test diffuse_roughness (X-axis) against specular_roughness (Y-axis), with tiny metalness
-        // value. This should be no different to zero but is very different (see OGSMOD-867)
+        // value. This should be no different to zero but is very different.
         for (uint32_t i = 0; i < gridHeight; i++)
         {
             // Calculate the V coordinate from Y grid position.
@@ -745,7 +744,7 @@ TEST_P(MaterialTest, TestMaterialAdvancedMaterialProperties)
         }
 
         // Render the scene and check baseline image.
-        // TODO: The PT does not support this currently (see OGSMOD-699)
+        // TODO: The PT does not support this currently.
         ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(currentTestName() + "_Coat_" + mtlType, "Materials");
 
         // Test coat_affect_color (X-axis) against coat_affect_roughness (Y-axis.)
@@ -784,7 +783,7 @@ TEST_P(MaterialTest, TestMaterialAdvancedMaterialProperties)
         }
 
         // Render the scene and check baseline image.
-        // TODO: The PT does not support this currently (see OGSMOD-699)
+        // TODO: The PT does not support this currently.
         ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(
             currentTestName() + "_CoatAffect_" + mtlType, "Materials");
 
@@ -821,7 +820,7 @@ TEST_P(MaterialTest, TestMaterialAdvancedMaterialProperties)
         }
 
         // Render the scene and check baseline image.
-        // TODO: PT does not support transmission currently (see OGSMOD-699)
+        // TODO: PT does not support transmission currently.
         ASSERT_BASELINE_IMAGE_PASSES_IN_FOLDER(
             currentTestName() + "_Transmission_" + mtlType, "Materials");
     }

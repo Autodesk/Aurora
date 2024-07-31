@@ -1,5 +1,5 @@
-void setupMaterial_a07c7c12bcd815f6(
-	Material_a07c7c12bcd815f6 material,
+void setupMaterial_e757910544ff95e9(
+	Material_e757910544ff95e9 material,
 	sampler2D base_color_image_image_parameter,
 	out vec3 base_color)
 {
@@ -35,10 +35,15 @@ vec3 base_color_image_default1 = vec3(0, 0, 0)//};
 	//Temp input variables for geomprop_UV0 
 	vec2 nodeOutTmp_geomprop_UV0_out; //Temp output variable for out 
 	int nodeTmp_geomprop_UV0_index; //Temp input variable for index 
+	// Graph input UV0
+	//{
+int geomprop_UV0_index1 = 0//};
+;
+	nodeTmp_geomprop_UV0_index = geomprop_UV0_index1;// Output connection
 	// Graph input function call texcoord (See definition IM_texcoord_vector2_genglsl)
 {
 	//{
-    vec2 geomprop_UV0_out1 = vertexData.texCoord;
+    vec2 geomprop_UV0_out1 = vertexData.texCoord.xy;
 //};
 	nodeOutTmp_geomprop_UV0_out = geomprop_UV0_out1;// Output connection
 	nodeTmp_base_color_image_texcoord = geomprop_UV0_out1;// Output connection

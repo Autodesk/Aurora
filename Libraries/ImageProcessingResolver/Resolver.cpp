@@ -1,3 +1,6 @@
+// Copyright 2024 Autodesk, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -20,7 +23,9 @@
 #define TINYEXR_USE_MINIZ 1
 #define TINYEXR_IMPLEMENTATION
 #pragma warning(push)
-#pragma warning(disable : 4706)
+#pragma warning(disable : 4706) // assignment within conditional expression
+#pragma warning(disable : 4245) // signed/unsigned mismatch
+#pragma warning(disable : 4702) // unreachable code
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #include "tinyexr.h"
@@ -185,7 +190,10 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
             }
 
             // Create a temp buffer for the source image pixels.
-            size_t sizeInBytes = image->GetWidth() * image->GetHeight() * image->GetBytesPerPixel();
+            // NOTE: Multiplying int values may exceed INT_MAX. Cast to size_t for security.
+            size_t sizeInBytes = static_cast<size_t>(image->GetWidth()) *
+                static_cast<size_t>(image->GetHeight()) *
+                static_cast<size_t>(image->GetBytesPerPixel());
             std::vector<unsigned char> tempBuf(sizeInBytes);
             // Read the source image into the temp buffer.
             pxr::HioImage::StorageSpec imageData;
@@ -276,7 +284,7 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
             unsigned char* pBuffer;
             const char* pErr;
             int len = SaveEXRToMemory((const float*)pPixels, imageData.width, imageData.height,
-                nChannels, 0, (const unsigned char**)&pBuffer, &pErr);
+                nChannels, 0, &pBuffer, &pErr);
 
             // If successful create an ArAsset from the EXR in memory.
             if (len)
@@ -296,7 +304,7 @@ std::shared_ptr<ArAsset> ImageProcessingResolverPlugin::_OpenAsset(
         return cacheEntry.pAsset;
     }
 
-    // If not an imageProcesing URI run the default _OpenAsset Function.
+    // If not an imageProcessing URI run the default _OpenAsset Function.
     std::shared_ptr<ArAsset> pRes = ArDefaultResolver::_OpenAsset(resolvedPath);
     return pRes;
 }

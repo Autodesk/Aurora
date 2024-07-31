@@ -25,6 +25,8 @@ using namespace std;
 
 // GLM used by all renderers tests
 #define GLM_FORCE_CTOR_INIT
+// Enable glm experimental for transform.hpp.
+#define GLM_ENABLE_EXPERIMENTAL
 #pragma warning(push)
 #pragma warning(disable : 4127) // nameless struct/union
 #pragma warning(disable : 4201) // conditional expression is not constant

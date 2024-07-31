@@ -52,15 +52,11 @@ PRIVATE
     cxxopts::cxxopts
     stb::stb
     tinyobjloader::tinyobjloader
+    tinygltf::tinygltf
     Foundation
     Aurora
     ${WINSDK_LIB}
     ${CMAKE_DL_LIBS}
-)
-
-target_include_directories(${PROJECT_NAME}
-PRIVATE
-    "${TinyGLTF_INCLUDE_DIR}"
 )
 
 if(WIN32 AND ENABLE_INTERACTIVE_PLASMA)

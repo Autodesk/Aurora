@@ -53,6 +53,8 @@ using namespace std;
 // GLM - OpenGL Mathematics
 // NOTE: This is a math library, and not specific to OpenGL.
 #define GLM_FORCE_CTOR_INIT
+// Enable glm experimental for transform.hpp.
+#define GLM_ENABLE_EXPERIMENTAL
 #pragma warning(push)
 #pragma warning(disable : 4127) // nameless struct/union
 #pragma warning(disable : 4201) // conditional expression is not constant

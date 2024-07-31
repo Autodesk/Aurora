@@ -76,10 +76,10 @@ void HdAuroraRendererPlugin::DeleteRenderDelegate(HdRenderDelegate* renderDelega
     delete renderDelegate;
 }
 
-// The extra arguments to IsSupported were added with Hydra version 50.  As we need to support
-// both USD 23.08.01 and older versions, make arguments conditional at compile time.
-#if HD_API_VERSION >= 50
-bool HdAuroraRendererPlugin::IsSupported(bool /*gpuEnabled*/, TfToken /* hgiToken*/) const
+// The extra arguments to IsSupported were added with Hydra version 46. As we need to support
+// both USD 24.08 and older versions, make arguments conditional at compile time.
+#if HD_API_VERSION >= 46
+bool HdAuroraRendererPlugin::IsSupported(bool /*gpuEnabled*/) const
 #else
 bool HdAuroraRendererPlugin::IsSupported() const
 #endif

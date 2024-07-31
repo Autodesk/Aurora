@@ -202,7 +202,6 @@ protected:
 
 // TODO: Destruction via shared_ptr is not safe, we should have some kind of kill list system, but
 // can't seem to get it to work.
-// See OGSMOD-1912
 #if 0
     vector<IImagePtr> _imageDestroyList;
 #endif

@@ -1,94 +1,98 @@
 diff --git a/cmake/modules/FindOpenEXR.cmake b/cmake/modules/FindOpenEXR.cmake
-index 639a01cf1..d57af1d79 100644
+index 7cf5d4681..633c4383e 100644
 --- a/cmake/modules/FindOpenEXR.cmake
 +++ b/cmake/modules/FindOpenEXR.cmake
-@@ -56,6 +56,10 @@ if(OPENEXR_INCLUDE_DIR)
-   endif()
- endif()
- 
-+if(CMAKE_BUILD_TYPE STREQUAL Debug)
-+  SET(LIB_POSTFIX ${CMAKE_DEBUG_POSTFIX})
-+endif()
-+
- foreach(OPENEXR_LIB
-     Half
-     Iex
-@@ -70,8 +74,8 @@ foreach(OPENEXR_LIB
+@@ -52,9 +52,11 @@ foreach(OPENEXR_LIB
+     # OpenEXR libraries may be suffixed with the version number, so we search
      # using both versioned and unversioned names.
+     set(DEBUG_POSTFIX )
+-    if(DEFINED PXR_USE_DEBUG_BUILD)
+-        if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND ${PXR_USE_DEBUG_BUILD} MATCHES ON)
++    if(CMAKE_BUILD_TYPE STREQUAL Debug)
++        if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+             set(DEBUG_POSTFIX _d)
++        else()
++            set(DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+         endif()
+     endif()
      find_library(OPENEXR_${OPENEXR_LIB}_LIBRARY
-         NAMES
--            ${OPENEXR_LIB}-${OPENEXR_MAJOR_VERSION}_${OPENEXR_MINOR_VERSION}
--            ${OPENEXR_LIB}
-+            ${OPENEXR_LIB}-${OPENEXR_MAJOR_VERSION}_${OPENEXR_MINOR_VERSION}${LIB_POSTFIX}
-+            ${OPENEXR_LIB}${LIB_POSTFIX}
-         HINTS
-             "${OPENEXR_LOCATION}"
-             "$ENV{OPENEXR_LOCATION}"
 diff --git a/cmake/modules/FindOpenImageIO.cmake b/cmake/modules/FindOpenImageIO.cmake
-index 9df47ff23..7d2811b84 100644
+index 4d2ff1ec4..c8045efdf 100644
 --- a/cmake/modules/FindOpenImageIO.cmake
 +++ b/cmake/modules/FindOpenImageIO.cmake
-@@ -22,6 +22,10 @@
- # language governing permissions and limitations under the Apache License.
+@@ -5,6 +5,15 @@
+ # https://openusd.org/license.
  #
  
++set(DEBUG_POSTFIX )
 +if(CMAKE_BUILD_TYPE STREQUAL Debug)
-+  SET(LIB_POSTFIX ${CMAKE_DEBUG_POSTFIX})
++    if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
++        set(DEBUG_POSTFIX _d)
++    else()
++        set(DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
++    endif()
 +endif()
 +
  if(UNIX)
      find_path(OIIO_BASE_DIR
              include/OpenImageIO/oiioversion.h
-@@ -31,7 +35,7 @@ if(UNIX)
+@@ -13,14 +22,8 @@ if(UNIX)
+             "$ENV{OIIO_LOCATION}"
              "/opt/oiio"
      )
+-    set(LIBNAME libOpenImageIO.so)
+-    if(DEFINED PXR_USE_DEBUG_BUILD)
+-        if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND ${PXR_USE_DEBUG_BUILD} MATCHES ON)
+-            set(LIBNAME libOpenImageIO_d.dylib)
+-        endif()
+-    endif()
      find_path(OIIO_LIBRARY_DIR
--            libOpenImageIO.so
-+            libOpenImageIO${LIB_POSTFIX}.so
+-            ${LIBNAME}
++            libOpenImageIO${DEBUG_POSTFIX}.so
          HINTS
              "${OIIO_LOCATION}"
              "$ENV{OIIO_LOCATION}"
-@@ -49,7 +53,7 @@ elseif(WIN32)
+@@ -38,7 +41,7 @@ elseif(WIN32)
              "$ENV{OIIO_LOCATION}"
      )
      find_path(OIIO_LIBRARY_DIR
 -            OpenImageIO.lib
-+            OpenImageIO${LIB_POSTFIX}.lib
++            OpenImageIO${DEBUG_POSTFIX}.lib
          HINTS
              "${OIIO_LOCATION}"
              "$ENV{OIIO_LOCATION}"
-@@ -81,7 +85,7 @@ foreach(OIIO_LIB
-     )
+@@ -63,12 +66,6 @@ find_path(OIIO_INCLUDE_DIR
+ )
  
-     find_library(OIIO_${OIIO_LIB}_LIBRARY
--            ${OIIO_LIB}
-+            ${OIIO_LIB}${LIB_POSTFIX}
-         HINTS
-             "${OIIO_LOCATION}"
-             "$ENV{OIIO_LOCATION}"
+ list(APPEND OIIO_INCLUDE_DIRS ${OIIO_INCLUDE_DIR})
+-set(DEBUG_POSTFIX )
+-if(DEFINED PXR_USE_DEBUG_BUILD)
+-    if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND ${PXR_USE_DEBUG_BUILD} MATCHES ON)
+-      set(DEBUG_POSTFIX _d)
+-    endif()
+-endif()
+ foreach(OIIO_LIB
+     OpenImageIO${DEBUG_POSTFIX}
+     OpenImageIO_Util${DEBUG_POSTFIX}
 diff --git a/cmake/modules/FindOpenSubdiv.cmake b/cmake/modules/FindOpenSubdiv.cmake
-index 686af9b16..7cbdb0f47 100644
+index 77bdb27ca..2fe33e220 100644
 --- a/cmake/modules/FindOpenSubdiv.cmake
 +++ b/cmake/modules/FindOpenSubdiv.cmake
-@@ -27,15 +27,14 @@ IF(NOT OPENSUBDIV_ROOT_DIR AND NOT $ENV{OPENSUBDIV_ROOT_DIR} STREQUAL "")
-     SET(OPENSUBDIV_ROOT_DIR $ENV{OPENSUBDIV_ROOT_DIR})
- ENDIF()
- 
--SET(_opensubdiv_FIND_COMPONENTS
--    osdCPU
--)
--if(OPENSUBDIV_USE_GPU)
--    list(APPEND
--        _opensubdiv_FIND_COMPONENTS
--        osdGPU)
-+if(CMAKE_BUILD_TYPE STREQUAL Debug)
-+  SET(LIB_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+@@ -75,12 +75,16 @@ if(OPENSUBDIV_INCLUDE_DIR AND EXISTS "${OPENSUBDIV_INCLUDE_DIR}/opensubdiv/versi
+     )
  endif()
  
-+SET(_opensubdiv_FIND_COMPONENTS osdCPU${LIB_POSTFIX})
-+if(OPENSUBDIV_USE_GPU)
-+    list(APPEND _opensubdiv_FIND_COMPONENTS osdGPU${LIB_POSTFIX})
++if(CMAKE_BUILD_TYPE STREQUAL Debug)
++  SET(LIB_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 +endif()
- 
- SET(_opensubdiv_SEARCH_DIRS
-     ${OPENSUBDIV_ROOT_DIR}
++
+ SET(_opensubdiv_LIBRARIES)
+ FOREACH(COMPONENT ${_opensubdiv_FIND_COMPONENTS})
+   STRING(TOUPPER ${COMPONENT} UPPERCOMPONENT)
+   FIND_LIBRARY(OPENSUBDIV_${UPPERCOMPONENT}_LIBRARY
+     NAMES
+-      ${COMPONENT}
++      ${COMPONENT}${LIB_POSTFIX}
+     HINTS
+       ${_opensubdiv_SEARCH_DIRS}
+     PATH_SUFFIXES

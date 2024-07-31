@@ -59,6 +59,8 @@ public:
     /// Returns the OpenGL id / name of the texture.
     uint32_t GetTextureId() const { return _textureId; }
 
+    void SubmitLayoutChange(HgiTextureUsage /*newLayout*/) override { return; }
+
 private:
     HgiHdAuroraTextureGL()                                       = delete;
     HgiHdAuroraTextureGL& operator=(const HgiHdAuroraTextureGL&) = delete;
@@ -209,6 +211,8 @@ public:
     }
 
     uint64_t GetRawResource() const override { return reinterpret_cast<uint64_t>(_sharedDXHandle); }
+
+    void SubmitLayoutChange(HgiTextureUsage /*newLayout*/) override { return; }
 
 private:
     HgiHdAuroraTextureDX()                                       = delete;

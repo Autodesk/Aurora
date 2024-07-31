@@ -1,4 +1,4 @@
-// Copyright 2023 Autodesk, Inc.
+// Copyright 2024 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,11 @@ Aurora::Path HdAuroraImageCache::acquireImage(
         imageData.depth   = 1;
         imageData.flipped = _isYFlipped;
         imageData.format  = image->GetFormat();
+
+        // NOTE: Multiplying int values may exceed INT_MAX. Cast to size_t for security.
+        const size_t widthSizeT  = image->GetWidth();
+        const size_t heightSizeT = image->GetHeight();
+        const size_t bppSizeT    = image->GetBytesPerPixel();
         bool paddingRequired =
             hioFormat == HioFormatUNorm8Vec3srgb || hioFormat == HioFormatUNorm8Vec3;
 
@@ -69,17 +74,18 @@ Aurora::Path HdAuroraImageCache::acquireImage(
         uint8_t* pPixelData;
         if (paddingRequired)
         {
-            hioFormat          = hioFormat == HioFormatUNorm8Vec3srgb ? HioFormatUNorm8Vec4srgb
-                                                                      : HioFormatUNorm8Vec4;
-            dataOut.bufferSize = image->GetWidth() * image->GetHeight() * 4;
-            pUnpaddedPixels.reset(
-                new uint8_t[image->GetWidth() * image->GetHeight() * image->GetBytesPerPixel()]);
+            hioFormat = hioFormat == HioFormatUNorm8Vec3srgb ? HioFormatUNorm8Vec4srgb
+                                                             : HioFormatUNorm8Vec4;
+
+            const size_t newPixelSize = 4;
+            dataOut.bufferSize        = widthSizeT * heightSizeT * newPixelSize;
+            pUnpaddedPixels.reset(new uint8_t[widthSizeT * heightSizeT * bppSizeT]);
             imageData.data = pUnpaddedPixels.get();
             pPixelData     = static_cast<uint8_t*>(alloc(dataOut.bufferSize));
         }
         else
         {
-            dataOut.bufferSize = image->GetWidth() * image->GetHeight() * image->GetBytesPerPixel();
+            dataOut.bufferSize = widthSizeT * heightSizeT * bppSizeT;
             pPixelData         = static_cast<uint8_t*>(alloc(dataOut.bufferSize));
             imageData.data     = pPixelData;
         }

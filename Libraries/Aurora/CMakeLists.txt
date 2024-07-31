@@ -426,7 +426,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE ${DEFAULT_COMPILE_DEFINITIONS
 if(ENABLE_DIRECTX_BACKEND)
     # Compile the standalone compute shaders.
     # NOTE: These are compiled with DXC at build time unlike all the other shaders.
-    # TODO: Runtime compile this too, see OGSMOD-1215.
+    # TODO: Runtime compile this too.
     set_source_files_properties(Source/DirectX/Shaders/Accumulation.hlsl PROPERTIES
         VS_SHADER_TYPE Compute
         VS_SHADER_MODEL 6.3

@@ -1,4 +1,4 @@
-// Copyright 2023 Autodesk, Inc.
+// Copyright 2024 Autodesk, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,8 +59,8 @@ namespace Aurora
 /// \param pFileNameOut File name of the loaded resource containing the (used as hint for subsequent
 /// processing)
 /// \return True if loaded successfully.
-using LoadResourceFunction =
-    function<bool(const string& uri, vector<unsigned char>* pBufferOut, string* pFileNameOut)>;
+using LoadResourceFunction = std::function<bool(
+    const std::string& uri, std::vector<unsigned char>* pBufferOut, std::string* pFileNameOut)>;
 
 // Math objects.
 using vec2 = glm::vec2;
@@ -282,39 +282,40 @@ struct PropertyValue
     }
 
     /// Convert value to string.
-    string toString() const
+    std::string toString() const
     {
         // Compare based on type value.
         switch (type)
         {
         case Type::Bool:
-            return to_string(_bool);
+            return std::to_string(_bool);
         case Type::Int:
-            return to_string(_int);
+            return std::to_string(_int);
         case Type::Float:
-            return to_string(_float);
+            return std::to_string(_float);
         case Type::Float2:
-            return to_string(_float2.x) + ", " + to_string(_float2.y);
+            return std::to_string(_float2.x) + ", " + std::to_string(_float2.y);
         case Type::Float3:
-            return to_string(_float3.x) + ", " + to_string(_float3.y) + ", " + to_string(_float3.z);
+            return std::to_string(_float3.x) + ", " + std::to_string(_float3.y) + ", " +
+                std::to_string(_float3.z);
         case Type::Float4:
-            return to_string(_float4.x) + ", " + to_string(_float4.y) + ", " +
-                to_string(_float4.z) + ", " + to_string(_float4.w);
+            return std::to_string(_float4.x) + ", " + std::to_string(_float4.y) + ", " +
+                std::to_string(_float4.z) + ", " + std::to_string(_float4.w);
         case Type::Matrix4:
-            return to_string(_matrix4[0][0]) + ", " + to_string(_matrix4[0][1]) + ", " +
-                to_string(_matrix4[0][2]) + ", " + to_string(_matrix4[0][3]) + ", " +
-                to_string(_matrix4[1][0]) + ", " + to_string(_matrix4[1][1]) + ", " +
-                to_string(_matrix4[1][2]) + ", " + to_string(_matrix4[1][3]) + ", " +
-                to_string(_matrix4[2][0]) + ", " + to_string(_matrix4[2][1]) + ", " +
-                to_string(_matrix4[2][2]) + ", " + to_string(_matrix4[2][3]) + ", " +
-                to_string(_matrix4[3][0]) + ", " + to_string(_matrix4[3][1]) + ", " +
-                to_string(_matrix4[3][2]) + ", " + to_string(_matrix4[3][3]);
+            return std::to_string(_matrix4[0][0]) + ", " + std::to_string(_matrix4[0][1]) + ", " +
+                std::to_string(_matrix4[0][2]) + ", " + std::to_string(_matrix4[0][3]) + ", " +
+                std::to_string(_matrix4[1][0]) + ", " + std::to_string(_matrix4[1][1]) + ", " +
+                std::to_string(_matrix4[1][2]) + ", " + std::to_string(_matrix4[1][3]) + ", " +
+                std::to_string(_matrix4[2][0]) + ", " + std::to_string(_matrix4[2][1]) + ", " +
+                std::to_string(_matrix4[2][2]) + ", " + std::to_string(_matrix4[2][3]) + ", " +
+                std::to_string(_matrix4[3][0]) + ", " + std::to_string(_matrix4[3][1]) + ", " +
+                std::to_string(_matrix4[3][2]) + ", " + std::to_string(_matrix4[3][3]);
 
         case Type::String:
             return _string;
         case Type::Strings:
         {
-            string res;
+            std::string res;
             // If any string does not match equality is false.
             for (size_t i = 0; i < _strings.size(); i++)
             {
@@ -456,7 +457,7 @@ struct VertexDescription
 /// GetAttributeDataFunction.
 struct AttributeData
 {
-    /// Pointer to actual vertex or index atttribute data.
+    /// Pointer to actual vertex or index attribute data.
     const void* address = nullptr;
 
     /// Offset in bytes to start of attribute data.
@@ -812,10 +813,10 @@ protected:
 MAKE_AURORA_PTR(IMaterial);
 
 // Definition of an instance layer (material+geometry)
-using LayerDefinition = pair<IMaterialPtr, IGeometryPtr>;
+using LayerDefinition = std::pair<IMaterialPtr, IGeometryPtr>;
 
 // Array of layer definitions.
-using LayerDefinitions = vector<LayerDefinition>;
+using LayerDefinitions = std::vector<LayerDefinition>;
 
 /// A class representing an instance of geometry, including a per-instance material and transform.
 class AURORA_API IInstance
@@ -900,7 +901,7 @@ public:
     ///
     /// \param atPath The Aurora path at which the image will be created.
     /// \param filePath The path to the image file, if the string is empty, then atPath is used.
-    virtual void setImageFromFilePath(const Path& atPath, const string& filePath = "",
+    virtual void setImageFromFilePath(const Path& atPath, const std::string& filePath = "",
         bool linearize = true, bool isEnvironment = false) = 0;
 
     /// Set the properties for sampler with given path.
@@ -1024,7 +1025,7 @@ public:
     /// \param lightType Type of light (one of strings in
     /// Aurora::Names::LightTypes).
     /// \return A smart pointer to the new lights.
-    virtual ILightPtr addLightPointer(const string& lightType) = 0;
+    virtual ILightPtr addLightPointer(const std::string& lightType) = 0;
 
 protected:
     virtual ~IScene() = default; // hidden destructor
@@ -1174,7 +1175,7 @@ public:
     virtual const std::vector<std::string>& builtInMaterials() = 0;
 
     /// \desc Set the callback function used to load resources, such as textures, from a URI.
-    /// \param func Callback function to be used for all subsquent loading.
+    /// \param func Callback function to be used for all subsequent loading.
     virtual void setLoadResourceFunction(LoadResourceFunction func) = 0;
 
 protected:
@@ -1185,7 +1186,7 @@ MAKE_AURORA_PTR(IRenderer);
 // Gets the logger for the Aurora library, used to report console output and errors.
 AURORA_API Foundation::Log& logger();
 
-// Creates a renderer with the specified baclend and number of simultaneously active tasks.
+// Creates a renderer with the specified backend and number of simultaneously active tasks.
 AURORA_API IRendererPtr createRenderer(
     IRenderer::Backend type = IRenderer::Backend::Default, uint32_t taskCount = 3);
 

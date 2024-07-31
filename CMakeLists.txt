@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.24)
-# 3.24 is required to have Vulkan::shaderc_combined
+cmake_minimum_required(VERSION 3.29)
+# 3.29 is required to have boost 1.85
 
 
 # Forbid the in-source build
@@ -17,7 +17,7 @@ if(USD_usdviewq_LIBRARY_RELEASE OR USD_usdviewq_LIBRARY_DEBUG)
 endif()
 
 # Set the project name and project variables
-project(Aurora VERSION 24.03.0.0)
+project(Aurora VERSION 24.08.0.0)
 
 # Create a folder for the version header files
 set(VERSION_FOLDER "${PROJECT_BINARY_DIR}/VersionFiles")
