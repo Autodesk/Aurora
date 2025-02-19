@@ -101,7 +101,7 @@ ZLIB = Dependency(ZLIB_INSTALL_FOLDER, ZLIB_PACKAGE_NAME, InstallZlib, ZLIB_URL,
 ############################################################
 # boost
 
-BOOST_URL = "https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.gz"
+BOOST_URL = "https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz"
 # Use a sub-version in the version string to force reinstallation, even if 1.85.0 installed.
 BOOST_VERSION_STRING = BOOST_URL+".a"
 
